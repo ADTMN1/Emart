@@ -1,0 +1,389 @@
+import * as React from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  ChevronRight,
+  Home as HomeIcon,
+  Truck,
+  ShieldCheck,
+  Package,
+  Heart,
+  ChevronDown,
+  Info,
+  CheckCircle2,
+  ArrowRight,
+} from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { Card, CardContent } from '@/components/ui/Card'
+import { EmptyCart } from '@/components/ui/States'
+import { Select } from '@/components/ui/Select'
+import { products } from '@/data/mockData'
+import { cn, formatCurrency } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
+
+interface CartItem {
+  id: string
+  productId: string
+  quantity: number
+}
+
+const initialCart: CartItem[] = [
+  { id: 'c1', productId: products[0].id, quantity: 1 },
+  { id: 'c2', productId: products[2].id, quantity: 1 },
+  { id: 'c3', productId: products[4].id, quantity: 2 },
+]
+
+const Cart: React.FC = () => {
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const [items, setItems] = React.useState<CartItem[]>(initialCart)
+  const [shipCountry, setShipCountry] = React.useState('US')
+  const [shippingMethod, setShippingMethod] = React.useState('dhl')
+
+  const cartItems = items
+    .map((i) => ({ ...i, product: products.find((p) => p.id === i.productId)! }))
+    .filter((i) => i.product)
+
+  const subtotal = cartItems.reduce(
+    (sum, i) => sum + i.product.estimatedPriceUsd * i.quantity,
+    0,
+  )
+  const proxyFees = cartItems.reduce(
+    (sum, i) => sum + Math.round(i.product.serviceFee * 0.007) * i.quantity,
+    0,
+  )
+  const domestic = cartItems.reduce(
+    (sum, i) => sum + Math.round(i.product.domesticShipping * 0.007) * i.quantity,
+    0,
+  )
+  const shipping = shippingMethod === 'sea' ? 18 : shippingMethod === 'sal' ? 28 : shippingMethod === 'ems' ? 42 : 58
+  const insurance = Math.round(subtotal * 0.02)
+  const total = subtotal + proxyFees + domestic + shipping + insurance
+
+  const updateQty = (id: string, qty: number) => {
+    if (qty < 1) return removeItem(id)
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.min(10, qty) } : i)))
+  }
+
+  const removeItem = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+    toast({ variant: 'info', title: 'Item removed', description: 'Item has been removed from your cart.' })
+  }
+
+  const saveForLater = (id: string) => {
+    removeItem(id)
+    toast({ variant: 'success', title: 'Saved for later', description: 'You can find this in your favorites.' })
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="container-page py-12 min-h-[60vh]">
+        <div className="max-w-xl mx-auto">
+          <EmptyCart onShop={() => navigate('/marketplace')} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-background">
+      <div className="container-page py-6 border-b border-border">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
+          <ChevronRight className="h-3 w-3" />
+          <span className="text-foreground font-medium">Cart</span>
+        </div>
+      </div>
+
+      <div className="container-page py-6 lg:py-10">
+        <div className="flex items-start justify-between mb-6 flex-wrap gap-3">
+          <div>
+            <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
+              <ShoppingCart className="h-7 w-7 text-primary" />
+              Your Cart
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {cartItems.reduce((s, i) => s + i.quantity, 0)} items · Ready for checkout
+            </p>
+          </div>
+          <Button variant="outline" size="md" asChild>
+            <Link to="/marketplace">
+              Continue Shopping
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
+          <div className="lg:col-span-2 space-y-4">
+            {cartItems.map((item) => (
+              <Card key={item.id}>
+                <CardContent className="p-4 lg:p-5 flex gap-4 lg:gap-5">
+                  <Link
+                    to={`/product/${item.product.id}`}
+                    className="w-24 h-24 lg:w-32 lg:h-32 shrink-0 rounded-xl overflow-hidden bg-muted border border-border"
+                  >
+                    <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
+                  </Link>
+
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          to={`/product/${item.product.id}`}
+                          className="font-semibold text-foreground leading-snug line-clamp-2 hover:text-primary transition-colors"
+                        >
+                          {item.product.name}
+                        </Link>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Badge variant="outline" size="sm">{item.product.source}</Badge>
+                          <Badge variant="success" size="sm" dot>{item.product.condition}</Badge>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-bold text-lg">
+                          {formatCurrency(item.product.estimatedPriceUsd * item.quantity, 'USD')}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {formatCurrency(item.product.price * item.quantity, 'JPY')}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-auto pt-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center border border-border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => updateQty(item.id, item.quantity - 1)}
+                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="h-8 min-w-10 text-center font-bold text-sm flex items-center justify-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQty(item.id, item.quantity + 1)}
+                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => saveForLater(item.id)}
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-secondary transition-colors"
+                          title="Save for later"
+                        >
+                          <Heart className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                          title="Remove"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Package className="h-3.5 w-3.5" />
+                        Ships separately
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            <Card className="bg-primary-50/40 border-primary-200">
+              <CardContent className="p-5 flex items-start gap-3.5">
+                <div className="h-9 w-9 rounded-xl bg-primary-100 text-primary flex items-center justify-center shrink-0">
+                  <WarehouseIcon />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm">Items stored separately in our warehouse</div>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    Request consolidation at checkout to combine orders into one shipment and save up to 70% on international shipping. Free storage for up to 45 days.
+                  </p>
+                </div>
+                <button className="text-xs font-bold text-primary shrink-0 self-start">
+                  Learn more
+                </button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <aside className="space-y-5 lg:sticky lg:top-24 self-start">
+            <Card>
+              <CardContent className="p-5 lg:p-6 space-y-5">
+                <h3 className="font-display text-lg font-bold">Order Summary</h3>
+
+                <div className="space-y-2">
+                  {[
+                    {
+                      label: 'Subtotal',
+                      value: formatCurrency(subtotal, 'USD'),
+                      info: `${cartItems.reduce((s, i) => s + i.quantity, 0)} items`,
+                    },
+                    {
+                      label: 'Service Fees (7%)',
+                      value: formatCurrency(proxyFees, 'USD'),
+                      info: 'Buyer protection included',
+                      icon: ShieldCheck,
+                    },
+                    {
+                      label: 'Domestic Shipping',
+                      value: formatCurrency(domestic, 'USD'),
+                      info: `Shipping to our warehouse`,
+                      icon: Truck,
+                    },
+                  ].map((row) => (
+                    <div key={row.label} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-1.5 text-foreground/80">
+                        {row.icon && <row.icon className="h-3.5 w-3.5 text-muted-foreground" />}
+                        <span className="font-medium">{row.label}</span>
+                        <Info className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">{row.value}</div>
+                        {row.info && <div className="text-[10px] text-muted-foreground">{row.info}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="h-px bg-border/70" />
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 block">
+                    Shipping to
+                  </label>
+                  <Select value={shipCountry} onChange={(e) => setShipCountry(e.target.value)}>
+                    <option value="US">🇺🇸 United States</option>
+                    <option value="UK">🇬🇧 United Kingdom</option>
+                    <option value="CA">🇨🇦 Canada</option>
+                    <option value="AU">🇦🇺 Australia</option>
+                    <option value="DE">🇩🇪 Germany</option>
+                    <option value="FR">🇫🇷 France</option>
+                    <option value="SG">🇸🇬 Singapore</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 block">
+                    Shipping Method
+                  </label>
+                  <div className="space-y-2">
+                    {[
+                      { id: 'dhl', name: 'DHL Express', days: '3-5 days', price: 58 },
+                      { id: 'ems', name: 'EMS', days: '5-8 days', price: 42 },
+                      { id: 'sal', name: 'SAL', days: '10-14 days', price: 28 },
+                      { id: 'sea', name: 'Sea Mail', days: '25-40 days', price: 18 },
+                    ].map((m) => (
+                      <label
+                        key={m.id}
+                        className={cn(
+                          'flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all',
+                          shippingMethod === m.id
+                            ? 'border-primary bg-primary-50/50 ring-2 ring-primary/15'
+                            : 'border-border bg-white hover:border-border/80',
+                        )}
+                      >
+                        <input
+                          type="radio"
+                          name="ship"
+                          value={m.id}
+                          checked={shippingMethod === m.id}
+                          onChange={() => setShippingMethod(m.id)}
+                          className="h-4 w-4 text-primary focus:ring-primary"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-sm">{m.name}</span>
+                            <span className="font-bold text-sm">
+                              {formatCurrency(m.price, 'USD')}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            {m.days} · Fully tracked
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-1.5 text-foreground/80 font-medium">
+                    <ShieldCheck className="h-3.5 w-3.5 text-success" />
+                    Shipping Insurance (2%)
+                  </div>
+                  <span className="font-semibold">{formatCurrency(insurance, 'USD')}</span>
+                </div>
+
+                <div className="h-px bg-border/70" />
+
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm font-bold text-foreground/80">Estimated Total</span>
+                  <div>
+                    <div className="font-display text-2xl font-extrabold text-foreground">
+                      {formatCurrency(total, 'USD')}
+                    </div>
+                    <div className="text-xs text-right text-muted-foreground">
+                      Taxes & duties may apply at customs
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  size="xl"
+                  className="w-full shadow-lg shadow-primary/25"
+                  onClick={() => {
+                    toast({ variant: 'success', title: 'Proceeding to checkout' })
+                    setTimeout(() => navigate('/checkout'), 500)
+                  }}
+                >
+                  Proceed to Checkout
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 -mx-2">
+                  {['Visa', 'MC', 'Amex', 'PayPal', 'Apple Pay', 'G Pay'].map((p) => (
+                    <span key={p} className="px-2 py-1 rounded-md bg-muted text-[10px] font-bold text-muted-foreground/80">
+                      {p}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="flex items-start gap-2 pt-1">
+                  <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Your purchase is covered by our 100% Buyer Protection Guarantee. Free cancellations before items are purchased.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function WarehouseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+      <path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z" />
+      <path d="M6 18h12" />
+      <path d="M6 14h12" />
+      <path d="M6 10h12" />
+    </svg>
+  )
+}
+
+export default Cart
