@@ -36,6 +36,8 @@ import { Input, SearchInput, UrlInput } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
+import { Marquee } from '@/components/ui/Marquee'
+
 import {
   categories,
   products,
@@ -121,33 +123,44 @@ const Home: React.FC = () => {
   return (
     <div className="bg-background">
       {/* ===================== HERO ===================== */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-hero-pattern" />
-        <div className="absolute inset-0 bg-gradient-to-b from-primary-50/40 via-transparent to-transparent" />
-        <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-secondary-100/40 blur-3xl" />
-        <div className="absolute top-1/2 -left-32 h-96 w-96 rounded-full bg-primary-100/50 blur-3xl" />
+      <section className="relative overflow-hidden min-h-[600px] lg:min-h-[700px]">
+        {/* Background Image with Overlay */}
+        <div className="absolute inset-0">
+          <img 
+            src="/images/1.jpg" 
+            alt="E-commerce background" 
+            className="w-full h-full object-cover"
+          />
+          {/* Light overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
+          {/* Pattern overlay */}
+          <div className="absolute inset-0 bg-hero-pattern opacity-5" />
+        </div>
+        
+        {/* Decorative blurs */}
+        <div className="absolute -top-24 -right-24 h-96 w-96 rounded-full bg-secondary-400/20 blur-3xl" />
+        <div className="absolute top-1/2 -left-32 h-96 w-96 rounded-full bg-primary-400/20 blur-3xl" />
 
         <div className="container-page relative py-16 lg:py-24">
-          <div className="grid lg:grid-cols-5 gap-12 lg:gap-8 items-center">
-            <div className="lg:col-span-3 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-50 border border-primary-100 mb-6 animate-fade-in">
-                <Sparkles className="h-3.5 w-3.5 text-secondary" />
-                <span className="text-xs font-bold text-primary-700 tracking-wide">
-                  TRUSTED BY 250,000+ CUSTOMERS WORLDWIDE
-                </span>
-              </div>
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 animate-fade-in">
+              <Sparkles className="h-3.5 w-3.5 text-secondary-300" />
+              <span className="text-xs font-bold text-white tracking-wide">
+                TRUSTED BY 250,000+ CUSTOMERS WORLDWIDE
+              </span>
+            </div>
 
-              <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight text-foreground leading-[1.05] text-balance animate-slide-up">
-                Buy from Global Markets,
-                <br />
-                <span className="text-primary"> delivered to you.</span>
-              </h1>
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight text-white leading-[1.05] text-balance animate-slide-up">
+              Buy from Global Markets,
+              <br />
+              <span className="text-secondary-300"> delivered to you.</span>
+            </h1>
 
-              <p className="mt-6 text-lg lg:text-xl text-muted-foreground leading-relaxed max-w-xl text-balance animate-slide-up" style={{ animationDelay: '80ms' }}>
-                Shop millions of authentic products from global marketplaces — with complete transparency, buyer protection, and consolidated international shipping.
-              </p>
+            <p className="mt-6 text-lg lg:text-xl text-white/90 leading-relaxed max-w-2xl mx-auto text-balance animate-slide-up" style={{ animationDelay: '80ms' }}>
+              Shop millions of authentic products from global marketplaces — with complete transparency, buyer protection, and consolidated international shipping.
+            </p>
 
-              <form onSubmit={handleSearch} className="mt-8 animate-slide-up" style={{ animationDelay: '160ms' }}>
+            <form onSubmit={handleSearch} className="mt-8 animate-slide-up max-w-2xl mx-auto" style={{ animationDelay: '160ms' }}>
                 <div className="inline-flex rounded-xl bg-muted p-1.5 mb-4 gap-1">
                   <button
                     type="button"
@@ -180,14 +193,14 @@ const Home: React.FC = () => {
                 <div className="relative flex flex-col sm:flex-row gap-3 items-stretch">
                   {activeTab === 'search' ? (
                     <SearchInput
-                      placeholder="Try: vintage Rolex, Pokémon cards, Sony headphones..."
+                      placeholder="Search products: Rolex, Pokémon cards, Sony..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       wrapperClassName="flex-1"
                     />
                   ) : (
                     <UrlInput
-                      placeholder="Paste a product link from any marketplace..."
+                      placeholder="Paste product URL from any marketplace"
                       value={urlQuery}
                       onChange={(e) => setUrlQuery(e.target.value)}
                       wrapperClassName="flex-1"
@@ -199,91 +212,97 @@ const Home: React.FC = () => {
                   </Button>
                 </div>
 
-                <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+                <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/80">
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
                     <span className="font-medium">100% Buyer Protection</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
                     <span className="font-medium">Transparent 7-10% Service Fee</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
                     <span className="font-medium">Free 45-Day Storage</span>
                   </div>
                 </div>
               </form>
             </div>
 
-            <div className="lg:col-span-2 relative hidden lg:block">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-br from-secondary-200/50 via-transparent to-primary-200/50 rounded-3xl blur-2xl" />
-                <div className="relative grid grid-cols-2 gap-4">
-                  <div className="space-y-4 pt-8">
-                    <div className="aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-black/5">
-                      <img
-                        src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=vintage%20seiko%20automatic%20watch%20luxury%20product%20photography%20grey%20marble%20background%20soft%20lighting&image_size=portrait_4_3"
-                        alt="Vintage watch"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="bg-white rounded-2xl p-4 shadow-xl ring-1 ring-black/5 flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center text-success shrink-0">
-                        <ShieldCheck className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-foreground">Item Verified</div>
-                        <div className="text-[11px] text-muted-foreground">Warehouse inspection</div>
-                      </div>
-                    </div>
+            {/* Stats */}
+            <div className="mt-16 lg:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 max-w-4xl mx-auto">
+              {[
+                { v: '12M+', l: 'Products Available' },
+                { v: '250K+', l: 'Happy Customers' },
+                { v: '180+', l: 'Countries Shipped' },
+                { v: '4.9/5', l: 'Average Rating' },
+              ].map((s) => (
+                <div key={s.l} className="bg-white/90 backdrop-blur-sm border border-white/50 rounded-2xl p-5 lg:p-6 text-center shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="font-display text-2xl lg:text-3xl font-extrabold text-primary-700">
+                    {s.v}
                   </div>
-                  <div className="space-y-4">
-                    <div className="bg-white rounded-2xl p-4 shadow-xl ring-1 ring-black/5 flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-secondary/15 flex items-center justify-center text-secondary shrink-0">
-                        <Truck className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-foreground">3-5 Days</div>
-                        <div className="text-[11px] text-muted-foreground">Express shipping</div>
-                      </div>
-                    </div>
-                    <div className="aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl ring-1 ring-black/5">
-                      <img
-                        src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=studio%20ghibli%20my%20neighbor%20totoro%20authentic%20plush%20doll%20product%20photo%20clean%20white%20background&image_size=portrait_4_3"
-                        alt="Ghibli plush"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  <div className="mt-1 text-xs lg:text-sm font-medium text-gray-600">
+                    {s.l}
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
+        </section>
 
-          {/* Stats */}
-          <div className="mt-16 lg:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
-            {[
-              { v: '12M+', l: 'Products Available' },
-              { v: '250K+', l: 'Happy Customers' },
-              { v: '180+', l: 'Countries Shipped' },
-              { v: '4.9/5', l: 'Average Rating' },
-            ].map((s) => (
-              <div key={s.l} className="bg-white/70 backdrop-blur border border-border/60 rounded-2xl p-5 lg:p-6 text-center">
-                <div className="font-display text-2xl lg:text-3xl font-extrabold text-primary">
-                  {s.v}
-                </div>
-                <div className="mt-1 text-xs lg:text-sm font-medium text-muted-foreground">
-                  {s.l}
-                </div>
+      {/* ===================== BREAKING NEWS MARQUEE ===================== */}
+      <section className="border-y border-border bg-gradient-to-r from-primary-600 via-primary-700 to-primary-600 text-white overflow-hidden">
+        <div className="py-3.5">
+          <Marquee speed="normal">
+            <div className="flex items-center gap-8 text-sm font-medium">
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary-500 text-white text-xs font-bold uppercase">
+                  🔥 Hot
+                </span>
+                <span>Flash Sale: Up to 50% OFF on Electronics</span>
               </div>
-            ))}
-          </div>
+              <span className="text-white/40 text-xl">•</span>
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
+                  ✈️ New
+                </span>
+                <span>Free Express Shipping on Orders $200+</span>
+              </div>
+              <span className="text-white/40 text-xl">•</span>
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
+                  🎁 Gift
+                </span>
+                <span>First-Time Buyers Get $20 Credit</span>
+              </div>
+              <span className="text-white/40 text-xl">•</span>
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-xs font-bold uppercase">
+                  ⭐ Trending
+                </span>
+                <span>Limited Edition Pokémon Cards Available Now</span>
+              </div>
+              <span className="text-white/40 text-xl">•</span>
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
+                  💎 Premium
+                </span>
+                <span>Exclusive Japanese Watches from $1,500</span>
+              </div>
+              <span className="text-white/40 text-xl">•</span>
+              <div className="flex items-center gap-2.5 whitespace-nowrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-600 text-white text-xs font-bold uppercase">
+                  ✓ Verified
+                </span>
+                <span>All Sellers 100% Authenticated & Insured</span>
+              </div>
+            </div>
+          </Marquee>
         </div>
       </section>
 
       {/* ===================== MARKETPLACE SOURCES BAR ===================== */}
-      <section className="border-y border-border bg-muted/30">
+      <section className="border-b border-border bg-muted/30">
         <div className="container-page py-6 flex flex-col md:flex-row items-center justify-center md:justify-between gap-4">
           <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Shop directly from top global marketplaces
@@ -332,7 +351,7 @@ const Home: React.FC = () => {
                 <Link
                   key={cat.id}
                   to={`/categories?id=${cat.id}`}
-                  className="group flex flex-col items-center p-4 lg:p-5 rounded-2xl bg-white border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 text-center"
+                  className="group flex flex-col items-center p-4 lg:p-5 rounded-2xl bg-gray-50 border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 text-center"
                 >
                   <div
                     className={cn(
@@ -427,12 +446,12 @@ const Home: React.FC = () => {
                     key={step.id}
                     className="relative group"
                   >
-                    <div className="relative flex flex-col items-center text-center p-5 rounded-2xl bg-white border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 h-full">
+                    <div className="relative flex flex-col items-center text-center p-5 rounded-2xl bg-gray-50 border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 h-full">
                       <div className="relative">
                         <div className="h-16 w-16 lg:h-20 lg:w-20 rounded-2xl bg-gradient-to-br from-primary-50 to-primary-100 border border-primary-100 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                           <Icon className="h-8 w-8 lg:h-9 lg:w-9 text-primary" />
                         </div>
-                        <div className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-secondary text-white text-xs font-bold flex items-center justify-center shadow-md ring-4 ring-white">
+                        <div className="absolute -top-2 -right-2 h-7 w-7 rounded-full bg-secondary text-white text-xs font-bold flex items-center justify-center shadow-md ring-4 ring-gray-50">
                           {step.id}
                         </div>
                       </div>
@@ -442,7 +461,7 @@ const Home: React.FC = () => {
                       </p>
                     </div>
                     {idx < howItWorksSteps.length - 1 && (
-                      <div className="hidden lg:flex absolute top-10 -right-2 z-10 h-6 w-6 rounded-full bg-white border border-border items-center justify-center shadow-sm">
+                      <div className="hidden lg:flex absolute top-10 -right-2 z-10 h-6 w-6 rounded-full bg-gray-50 border border-border items-center justify-center shadow-sm">
                         <ChevronRight className="h-3.5 w-3.5 text-primary" />
                       </div>
                     )}
@@ -504,7 +523,7 @@ const Home: React.FC = () => {
             <div className="order-2 lg:order-1">
               <div className="relative aspect-square max-w-lg mx-auto lg:mx-0">
                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary-100 to-secondary-100" />
-                <div className="absolute inset-4 rounded-2xl bg-white shadow-xl ring-1 ring-black/5 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-4 rounded-2xl bg-gray-50 shadow-xl ring-1 ring-black/5 flex items-center justify-center overflow-hidden">
                   <img
                     src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=international%20shipping%20package%20boxes%20warehouse%20global%20logistics%20clean%20professional%20photo&image_size=square_hd"
                     alt="International shipping"
@@ -512,7 +531,7 @@ const Home: React.FC = () => {
                   />
                 </div>
 
-                <div className="absolute -left-2 bottom-10 bg-white rounded-xl p-3.5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 animate-slide-up">
+                <div className="absolute -left-2 bottom-10 bg-gray-50 rounded-xl p-3.5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 animate-slide-up">
                   <div className="h-9 w-9 rounded-lg bg-success/10 text-success flex items-center justify-center">
                     <Globe2 className="h-4.5 w-4.5" />
                   </div>
@@ -522,7 +541,7 @@ const Home: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="absolute -right-2 top-10 bg-white rounded-xl p-3.5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 animate-slide-up" style={{ animationDelay: '100ms' }}>
+                <div className="absolute -right-2 top-10 bg-gray-50 rounded-xl p-3.5 shadow-xl ring-1 ring-black/5 flex items-center gap-3 animate-slide-up" style={{ animationDelay: '100ms' }}>
                   <div className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                     <Clock className="h-4.5 w-4.5" />
                   </div>
@@ -657,7 +676,7 @@ const Home: React.FC = () => {
                     'rounded-xl border transition-all overflow-hidden',
                     openFaq === i
                       ? 'border-primary-200 bg-primary-50/30 shadow-md'
-                      : 'border-border bg-white hover:border-border/80',
+                      : 'border-border bg-gray-50 hover:border-border/80',
                   )}
                 >
                   <button

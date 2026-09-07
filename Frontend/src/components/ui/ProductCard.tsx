@@ -149,11 +149,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           >
             {product.name}
           </h3>
-          {!compact && product.nameJp && (
-            <p className="mt-0.5 text-xs text-muted-foreground/80 line-clamp-1">
-              {truncate(product.nameJp, 40)}
-            </p>
-          )}
         </Link>
 
         {!compact && product.rating !== undefined && (

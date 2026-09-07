@@ -21,11 +21,31 @@ const navLinks = [
   { to: '/categories', label: 'Categories', icon: ChevronDown, hasDropdown: true },
 ]
 
+const marketplaces = [
+  { name: 'Mercari', to: '/marketplace?source=mercari' },
+  { name: 'Yahoo Auctions', to: '/marketplace?source=yahoo' },
+  { name: 'Rakuten', to: '/marketplace?source=rakuten' },
+  { name: 'Amazon', to: '/marketplace?source=amazon' },
+  { name: 'eBay', to: '/marketplace?source=ebay' },
+]
+
+const categoryLinks = [
+  { name: 'Electronics', to: '/marketplace?cat=electronics' },
+  { name: 'Fashion', to: '/marketplace?cat=fashion' },
+  { name: 'Watches', to: '/marketplace?cat=watches' },
+  { name: 'Collectibles', to: '/marketplace?cat=collectibles' },
+  { name: 'Figures', to: '/marketplace?cat=figures' },
+  { name: 'Beauty', to: '/marketplace?cat=beauty' },
+  { name: 'Home & Living', to: '/marketplace?cat=home' },
+  { name: 'Sports', to: '/marketplace?cat=sports' },
+]
+
 export const Navbar: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState('')
+  const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -38,7 +58,20 @@ export const Navbar: React.FC = () => {
 
   React.useEffect(() => {
     setMobileOpen(false)
+    setOpenDropdown(null)
   }, [location])
+
+  const handleDropdownToggle = (label: string) => {
+    setOpenDropdown(openDropdown === label ? null : label)
+  }
+
+  const handleDropdownMouseEnter = (label: string) => {
+    setOpenDropdown(label)
+  }
+
+  const handleDropdownMouseLeave = () => {
+    setOpenDropdown(null)
+  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -87,25 +120,46 @@ export const Navbar: React.FC = () => {
               <nav className="hidden lg:flex items-center gap-1">
                 {navLinks.map((link) => {
                   const Icon = link.icon
+                  const isOpen = openDropdown === link.label
+                  const menuItems = link.label === 'Shop Global' ? marketplaces : link.label === 'Categories' ? categoryLinks : []
+                  
                   return (
-                    <NavLink
+                    <div
                       key={link.to + link.label}
-                      to={link.to}
-                      end={link.to === '/'}
-                      className={({ isActive }) =>
-                        cn(
-                          'relative flex items-center gap-1.5 px-3.5 h-10 font-semibold text-sm transition-colors rounded-lg',
-                          isActive
+                      className="relative"
+                      onMouseEnter={() => link.hasDropdown && handleDropdownMouseEnter(link.label)}
+                      onMouseLeave={handleDropdownMouseLeave}
+                    >
+                      <button
+                        onClick={() => link.hasDropdown ? handleDropdownToggle(link.label) : navigate(link.to)}
+                        className={cn(
+                          'relative flex items-center gap-1.5 px-3.5 h-10 font-semibold text-sm transition-colors rounded-lg w-full',
+                          location.pathname === link.to
                             ? 'text-primary bg-primary-50'
                             : 'text-foreground/80 hover:text-primary hover:bg-muted',
-                        )
-                      }
-                    >
-                      {link.label}
-                      {link.hasDropdown && (
-                        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                        )}
+                      >
+                        {link.label}
+                        {link.hasDropdown && (
+                          <ChevronDown className={cn('h-3.5 w-3.5 opacity-70 transition-transform', isOpen && 'rotate-180')} />
+                        )}
+                      </button>
+                      
+                      {link.hasDropdown && isOpen && (
+                        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-border rounded-xl shadow-lg py-2 z-50">
+                          {menuItems.map((item) => (
+                            <Link
+                              key={item.name}
+                              to={item.to}
+                              className="flex items-center gap-2 px-4 py-2.5 text-sm text-foreground/80 hover:text-primary hover:bg-primary-50 transition-colors"
+                              onClick={() => setOpenDropdown(null)}
+                            >
+                              {item.name}
+                            </Link>
+                          ))}
+                        </div>
                       )}
-                    </NavLink>
+                    </div>
                   )
                 })}
               </nav>

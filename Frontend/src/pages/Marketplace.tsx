@@ -27,13 +27,64 @@ const Marketplace: React.FC = () => {
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = React.useState(false)
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(params.get('cat') || null)
+  const [selectedSubcategory, setSelectedSubcategory] = React.useState<string | null>(params.get('sub') || null)
+
+  // Filter products based on search query, category, and subcategory
+  const filteredProducts = React.useMemo(() => {
+    let filtered = [...products]
+    
+    // Filter by search query
+    const searchQuery = params.get('q')?.toLowerCase()
+    if (searchQuery) {
+      filtered = filtered.filter(p => 
+        p.name.toLowerCase().includes(searchQuery) ||
+        p.description.toLowerCase().includes(searchQuery) ||
+        p.tags.some(tag => tag.toLowerCase().includes(searchQuery))
+      )
+    }
+    
+    // Filter by category
+    if (selectedCategory) {
+      filtered = filtered.filter(p => p.category === selectedCategory)
+    }
+    
+    // Filter by source (marketplace)
+    const sourceParam = params.get('source')
+    if (sourceParam) {
+      const sourceMap: Record<string, string> = {
+        mercari: 'Marketplace A',
+        yahoo: 'Marketplace B',
+        rakuten: 'Marketplace C',
+        amazon: 'Marketplace D',
+        ebay: 'Marketplace E',
+      }
+      const mappedSource = sourceMap[sourceParam]
+      if (mappedSource) {
+        filtered = filtered.filter(p => p.source === mappedSource)
+      }
+    }
+    
+    // Filter by subcategory (would need subcategory field in product data)
+    if (selectedSubcategory) {
+      // For now, this is a placeholder - would need subcategory mapping
+    }
+    
+    return filtered
+  }, [params, selectedCategory, selectedSubcategory])
 
   React.useEffect(() => {
-    if (params.get('q')) {
+    if (params.get('q') || params.get('cat')) {
       setIsLoading(true)
       const t = setTimeout(() => setIsLoading(false), 500)
       return () => clearTimeout(t)
     }
+  }, [params])
+
+  // Update selected category from URL params
+  React.useEffect(() => {
+    setSelectedCategory(params.get('cat') || null)
+    setSelectedSubcategory(params.get('sub') || null)
   }, [params])
 
   const toggleFavorite = (id: string) => {
@@ -50,6 +101,22 @@ const Marketplace: React.FC = () => {
     const next = new URLSearchParams(params)
     if (query.trim()) next.set('q', query.trim())
     else next.delete('q')
+    setParams(next)
+  }
+
+  const handleCategoryClick = (categoryId: string) => {
+    const next = new URLSearchParams(params)
+    if (selectedCategory === categoryId) {
+      next.delete('cat')
+      setSelectedCategory(null)
+    } else {
+      next.set('cat', categoryId)
+      setSelectedCategory(categoryId)
+      // Clear search query and source when selecting a category
+      next.delete('q')
+      next.delete('source')
+      setQuery('')
+    }
     setParams(next)
   }
 
@@ -120,12 +187,21 @@ const Marketplace: React.FC = () => {
                   {categories.map((c) => (
                     <button
                       key={c.id}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors group"
+                      onClick={() => handleCategoryClick(c.id)}
+                      className={cn(
+                        'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors group',
+                        selectedCategory === c.id
+                          ? 'bg-primary text-white'
+                          : 'hover:bg-muted text-foreground/80 group-hover:text-foreground'
+                      )}
                     >
-                      <span className="font-medium text-foreground/80 group-hover:text-foreground">
+                      <span className="font-medium">
                         {c.name}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className={cn(
+                        'text-xs',
+                        selectedCategory === c.id ? 'text-white/70' : 'text-muted-foreground'
+                      )}>
                         {(c.count / 1000).toFixed(0)}K
                       </span>
                     </button>
@@ -247,7 +323,7 @@ const Marketplace: React.FC = () => {
                   <ProductCardSkeleton key={i} />
                 ))}
               </div>
-            ) : products.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <NoSearchResults query={params.get('q') || undefined} />
             ) : (
               <div className={cn(
@@ -256,7 +332,7 @@ const Marketplace: React.FC = () => {
                   ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4'
                   : 'flex flex-col',
               )}>
-                {products.map((p) => (
+                {filteredProducts.map((p) => (
                   <ProductCard
                     key={p.id}
                     product={p}
