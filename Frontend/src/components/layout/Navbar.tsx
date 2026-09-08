@@ -10,14 +10,19 @@ import {
   MapPin,
   Store,
   Heart,
+  LogOut,
+  Package,
 } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useAuth } from '@/contexts/AuthContext'
 
 export const Navbar: React.FC = () => {
   const { t } = useLanguage()
+  const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const [userDropdownOpen, setUserDropdownOpen] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
@@ -25,6 +30,11 @@ export const Navbar: React.FC = () => {
   const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('[Navbar] Auth state:', { isLoading, isAuthenticated, hasUser: !!user });
+  }, [isLoading, isAuthenticated, user]);
 
   const navLinks = [
     { to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
@@ -210,30 +220,108 @@ export const Navbar: React.FC = () => {
                 </span>
               </Link>
 
-              <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-border">
-                <Link
-                  to="/login"
-                  className="p-2.5 rounded-lg hover:bg-muted text-foreground"
-                  aria-label="Account"
-                >
-                  <User className="h-5 w-5" />
-                </Link>
-              </div>
+              {isLoading ? (
+                // Loading skeleton
+                <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-border">
+                  <div className="h-8 w-8 rounded-full bg-muted animate-pulse"></div>
+                  <div className="flex flex-col gap-1">
+                    <div className="h-3 w-16 bg-muted animate-pulse rounded"></div>
+                    <div className="h-2 w-12 bg-muted animate-pulse rounded"></div>
+                  </div>
+                </div>
+              ) : isAuthenticated && user ? (
+                <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-border relative">
+                  <button
+                    onClick={() => setUserDropdownOpen((o) => !o)}
+                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted text-foreground transition-colors"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center border border-primary/20">
+                      {user.firstName ? user.firstName[0].toUpperCase() : user.email[0].toUpperCase()}
+                    </div>
+                    <div className="flex flex-col items-start leading-none text-left">
+                      <span className="text-xs font-semibold text-foreground max-w-[100px] truncate">
+                        {user.firstName || user.email.split('@')[0]}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{user.role}</span>
+                    </div>
+                    <ChevronDown className={cn("h-3.5 w-3.5 opacity-70 transition-transform", userDropdownOpen && "rotate-180")} />
+                  </button>
 
-              <div className="hidden sm:flex sm:flex-col items-start leading-none ml-1">
-                <Link
-                  to="/login"
-                  className="text-xs font-semibold text-foreground hover:text-primary"
-                >
-                  {t('navbar.signIn')}
-                </Link>
-                <Link
-                  to="/register"
-                  className="text-[11px] text-muted-foreground hover:text-primary"
-                >
-                  {t('navbar.joinFree')}
-                </Link>
-              </div>
+                  {userDropdownOpen && (
+                    <div
+                      className="absolute top-full right-0 mt-2 w-56 bg-[#F5F8FC] border border-border rounded-xl shadow-lg py-2 z-50 animate-in fade-in slide-in-from-top-1"
+                      onMouseLeave={() => setUserDropdownOpen(false)}
+                    >
+                      <div className="px-4 py-2 border-b border-border mb-1">
+                        <p className="text-xs font-semibold text-foreground truncate">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'EMART User'}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                      <Link
+                        to="/account"
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-foreground hover:bg-primary-50 hover:text-primary transition-colors"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <User className="h-4 w-4" />
+                        Account Settings
+                      </Link>
+                      <Link
+                        to="/orders"
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-foreground hover:bg-primary-50 hover:text-primary transition-colors"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <Package className="h-4 w-4" />
+                        My Orders
+                      </Link>
+                      <Link
+                        to="/warehouse"
+                        className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-foreground hover:bg-primary-50 hover:text-primary transition-colors"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <Store className="h-4 w-4" />
+                        Warehouse Packages
+                      </Link>
+                      <div className="my-1 border-t border-border" />
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false)
+                          logout()
+                        }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors text-left"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-border">
+                    <Link
+                      to="/login"
+                      className="p-2.5 rounded-lg hover:bg-muted text-foreground"
+                      aria-label="Account"
+                    >
+                      <User className="h-5 w-5" />
+                    </Link>
+                  </div>
+
+                  <div className="hidden sm:flex sm:flex-col items-start leading-none ml-1">
+                    <Link
+                      to="/login"
+                      className="text-xs font-semibold text-foreground hover:text-primary"
+                    >
+                      {t('navbar.signIn')}
+                    </Link>
+                    <Link
+                      to="/register"
+                      className="text-[11px] text-muted-foreground hover:text-primary"
+                    >
+                      {t('navbar.joinFree')}
+                    </Link>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -320,13 +408,41 @@ export const Navbar: React.FC = () => {
           </Link>
         </nav>
 
-        <div className="p-4 border-t border-border gap-3 grid grid-cols-2">
-          <Button variant="outline" asChild size="lg">
-            <Link to="/login">{t('navbar.signIn')}</Link>
-          </Button>
-          <Button variant="primary" asChild size="lg">
-            <Link to="/register">{t('navbar.joinFree')}</Link>
-          </Button>
+        <div className="p-4 border-t border-border">
+          {isAuthenticated && user ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 px-2 py-1">
+                <div className="h-9 w-9 rounded-full bg-primary/10 text-primary font-bold text-sm flex items-center justify-center border border-primary/20">
+                  {user.firstName ? user.firstName[0].toUpperCase() : user.email[0].toUpperCase()}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-foreground">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'EMART User'}</span>
+                  <span className="text-xs text-muted-foreground">{user.email}</span>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => {
+                  setMobileOpen(false)
+                  logout()
+                }}
+                className="w-full text-destructive border-destructive/20 hover:bg-destructive/10"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          ) : (
+            <div className="gap-3 grid grid-cols-2">
+              <Button variant="outline" asChild size="lg">
+                <Link to="/login">{t('navbar.signIn')}</Link>
+              </Button>
+              <Button variant="primary" asChild size="lg">
+                <Link to="/register">{t('navbar.joinFree')}</Link>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

@@ -20,6 +20,12 @@ export const config = {
     origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   },
 
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/v1/auth/google/callback',
+  },
+
   admin: {
     email: process.env.ADMIN_EMAIL || 'admin@emart.com',
     password: process.env.ADMIN_PASSWORD || 'Admin@123456',

@@ -5,6 +5,7 @@ import categoryRoutes from './category.routes';
 import cartRoutes from './cart.routes';
 import orderRoutes from './order.routes';
 import aiRoutes from './ai.routes';
+import walletRoutes from './wallet.routes';
 
 const router = Router();
 
@@ -15,6 +16,7 @@ router.use('/categories', categoryRoutes);
 router.use('/cart', cartRoutes);
 router.use('/orders', orderRoutes);
 router.use('/ai', aiRoutes);
+router.use('/wallet', walletRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
