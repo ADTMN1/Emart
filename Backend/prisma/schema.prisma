@@ -24,10 +24,12 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  addresses         Address[]
-  cart              Cart?
-  orders            Order[]
-  warehousePackages WarehousePackage[]
+  addresses          Address[]
+  cart               Cart?
+  orders             Order[]
+  warehousePackages  WarehousePackage[]
+  wallet             Wallet?
+  walletTransactions WalletTransaction[]
 
   @@index([email])
   @@map("users")
@@ -77,34 +79,35 @@ model Category {
 }
 
 model Product {
-  id                        String          @id @default(uuid())
-  name                      String
-  description               String          @db.Text
-  image                     String
-  images                    String[]
-  price                     Float // Original price in JPY
-  estimatedPriceUsd         Float // Estimated USD price
-  condition                 ProductCondition
-  seller                    String
-  sellerType                SellerType
-  source                    String // Marketplace source
-  domesticShipping          Float // Domestic shipping in JPY
-  internationalShippingUsd  Float // International shipping in USD
-  serviceFee                Float // Service fee in JPY
-  categoryId                String
-  tags                      String[]
-  isNew                     Boolean         @default(false)
-  isBestSeller              Boolean         @default(false)
-  rating                    Float?
-  reviewCount               Int?
-  stock                     Int             @default(1)
-  isAvailable               Boolean         @default(true)
-  createdAt                 DateTime        @default(now())
-  updatedAt                 DateTime        @updatedAt
+  id                       String           @id @default(uuid())
+  name                     String
+  description              String           @db.Text
+  image                    String
+  images                   String[]
+  price                    Float // Original price in JPY
+  estimatedPriceUsd        Float // Estimated USD price
+  condition                ProductCondition
+  seller                   String
+  sellerType               SellerType
+  source                   String // Marketplace source
+  domesticShipping         Float // Domestic shipping in JPY
+  internationalShippingUsd Float // International shipping in USD
+  serviceFee               Float // Service fee in JPY
+  categoryId               String
+  tags                     String[]
+  isNew                    Boolean          @default(false)
+  isBestSeller             Boolean          @default(false)
+  rating                   Float?
+  reviewCount              Int?
+  stock                    Int              @default(1)
+  isAvailable              Boolean          @default(true)
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
 
   // Relations
-  category  Category   @relation(fields: [categoryId], references: [id])
-  cartItems CartItem[]
+  category   Category    @relation(fields: [categoryId], references: [id])
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   @@map("products")
 }
@@ -158,43 +161,43 @@ model CartItem {
 // ============ Order Management ============
 
 model Order {
-  id                String      @id @default(uuid())
-  userId            String
-  orderNumber       String      @unique
-  status            OrderStatus @default(PENDING)
-  
+  id          String      @id @default(uuid())
+  userId      String
+  orderNumber String      @unique
+  status      OrderStatus @default(PENDING)
+
   // Pricing
-  subtotal          Float // Total product price in USD
-  serviceFees       Float // Service fees in USD
-  domesticShipping  Float // Domestic shipping in USD
+  subtotal              Float // Total product price in USD
+  serviceFees           Float // Service fees in USD
+  domesticShipping      Float // Domestic shipping in USD
   internationalShipping Float // International shipping in USD
-  insurance         Float // Insurance cost in USD
-  total             Float // Total order amount in USD
-  
+  insurance             Float // Insurance cost in USD
+  total                 Float // Total order amount in USD
+
   // Shipping
   shippingMethod    String
   shippingCarrier   String?
   trackingNumber    String?
   estimatedDelivery DateTime?
-  
+
   // Addresses
   billingAddressId  String
   shippingAddressId String
-  
+
   // Metadata
-  notes             String?      @db.Text
-  paymentStatus     PaymentStatus @default(PENDING)
-  paymentMethod     String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  notes         String?       @db.Text
+  paymentStatus PaymentStatus @default(PENDING)
+  paymentMethod String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
-  user            User       @relation(fields: [userId], references: [id])
-  billingAddress  Address    @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  shippingAddress Address    @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  items           OrderItem[]
+  user              User               @relation(fields: [userId], references: [id])
+  billingAddress    Address            @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  shippingAddress   Address            @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  items             OrderItem[]
   warehousePackages WarehousePackage[]
-  shipment        Shipment?
+  shipment          Shipment?
 
   @@index([userId])
   @@index([orderNumber])
@@ -203,14 +206,14 @@ model Order {
 }
 
 model OrderItem {
-  id                       String   @id @default(uuid())
-  orderId                  String
-  productId                String
-  quantity                 Int
-  priceAtPurchase          Float // Price in USD at time of purchase
-  serviceFeeAtPurchase     Float
+  id                         String @id @default(uuid())
+  orderId                    String
+  productId                  String
+  quantity                   Int
+  priceAtPurchase            Float // Price in USD at time of purchase
+  serviceFeeAtPurchase       Float
   domesticShippingAtPurchase Float
-  productSnapshot          Json // Store product details at time of purchase
+  productSnapshot            Json // Store product details at time of purchase
 
   // Relations
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -245,29 +248,29 @@ enum PaymentStatus {
 // ============ Warehouse Management ============
 
 model WarehousePackage {
-  id              String   @id @default(uuid())
-  userId          String
-  orderId         String?
-  packageNumber   String   @unique
-  status          PackageStatus @default(RECEIVED)
-  
+  id            String        @id @default(uuid())
+  userId        String
+  orderId       String?
+  packageNumber String        @unique
+  status        PackageStatus @default(RECEIVED)
+
   // Package details
   weight          Float?
   dimensions      String?
   photos          String[] // URLs to package photos
   inspectionNotes String?  @db.Text
-  
+
   // Storage
   storageLocation String?
-  receivedAt      DateTime @default(now())
+  receivedAt      DateTime  @default(now())
   expiresAt       DateTime? // Free storage expires after 45 days
-  
+
   // Shipping
-  addressId       String?
+  addressId        String?
   consolidatedWith String[] // IDs of other packages consolidated together
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   user    User     @relation(fields: [userId], references: [id])
@@ -293,27 +296,27 @@ enum PackageStatus {
 // ============ Shipment Tracking ============
 
 model Shipment {
-  id              String   @id @default(uuid())
-  orderId         String   @unique
-  trackingNumber  String   @unique
-  carrier         String
-  status          ShipmentStatus @default(PENDING)
-  
+  id             String         @id @default(uuid())
+  orderId        String         @unique
+  trackingNumber String         @unique
+  carrier        String
+  status         ShipmentStatus @default(PENDING)
+
   // Shipment details
-  weight          Float?
-  dimensions      String?
-  shippingCost    Float
-  
+  weight       Float?
+  dimensions   String?
+  shippingCost Float
+
   // Tracking events
-  events          Json[] // Array of tracking events
-  
+  events Json[] // Array of tracking events
+
   // Timestamps
-  shippedAt       DateTime?
+  shippedAt         DateTime?
   estimatedDelivery DateTime?
-  deliveredAt     DateTime?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  deliveredAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   order Order @relation(fields: [orderId], references: [id])
@@ -332,4 +335,72 @@ enum ShipmentStatus {
   DELIVERED
   FAILED
   RETURNED
+}
+
+// ============ Wallet Management ============
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Float    @default(0) // Balance in USD
+  currency  String   @default("USD")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id            String            @id @default(uuid())
+  userId        String
+  walletId      String
+  type          TransactionType
+  amount        Float // Amount in USD
+  balanceBefore Float // Balance before transaction
+  balanceAfter  Float // Balance after transaction
+  status        TransactionStatus @default(PENDING)
+
+  // Transaction details
+  description    String
+  reference      String? // Order number, payment reference, etc.
+  paymentMethod  String? // Credit card, PayPal, bank transfer, etc.
+  paymentDetails Json? // Additional payment information
+
+  // Metadata
+  notes       String?   @db.Text
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}
+
+enum TransactionType {
+  DEPOSIT // Money added to wallet
+  WITHDRAWAL // Money withdrawn from wallet
+  PAYMENT // Payment for order
+  REFUND // Refund to wallet
+  BONUS // Promotional bonus
+  ADJUSTMENT // Manual adjustment by admin
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

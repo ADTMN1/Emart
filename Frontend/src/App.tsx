@@ -8,11 +8,13 @@ import Cart from './pages/Cart'
 import Checkout from './pages/Checkout'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import AuthCallback from './pages/AuthCallback'
 import MyOrders from './pages/MyOrders'
 import OrderDetails from './pages/OrderDetails'
 import Warehouse from './pages/Warehouse'
 import Shipping from './pages/Shipping'
 import Account from './pages/Account'
+import Wallet from './pages/Wallet'
 
 function App() {
   return (
@@ -26,11 +28,13 @@ function App() {
         <Route path="checkout" element={<Checkout />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
+        <Route path="auth/callback" element={<AuthCallback />} />
         <Route path="orders" element={<MyOrders />} />
         <Route path="orders/:id" element={<OrderDetails />} />
         <Route path="warehouse" element={<Warehouse />} />
         <Route path="shipping" element={<Shipping />} />
         <Route path="account" element={<Account />} />
+        <Route path="wallet" element={<Wallet />} />
       </Route>
     </Routes>
   )

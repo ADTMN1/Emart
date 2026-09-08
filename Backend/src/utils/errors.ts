@@ -11,6 +11,12 @@ export class AppError extends Error {
   }
 }
 
+export class BadRequestError extends AppError {
+  constructor(message: string) {
+    super(message, 400);
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message: string) {
     super(message, 400);
@@ -38,5 +44,11 @@ export class NotFoundError extends AppError {
 export class ConflictError extends AppError {
   constructor(message: string) {
     super(message, 409);
+  }
+}
+
+export class TooManyRequestsError extends AppError {
+  constructor(message: string = 'Too many requests') {
+    super(message, 429);
   }
 }

@@ -13,6 +13,8 @@ import {
   ChevronDown,
   PackageOpen,
   MapPinCheck,
+  Wallet as WalletIcon,
+  ArrowLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -133,6 +135,8 @@ const MyOrders: React.FC = () => {
       <div className="container-page py-6 border-b border-border">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
+          <ChevronRight className="h-3 w-3" />
+          <Link to="/account" className="hover:text-primary">My Account</Link>
           <ChevronRight className="h-3 w-3" />
           <span className="text-foreground font-medium">My Orders</span>
         </div>
