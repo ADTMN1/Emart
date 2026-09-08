@@ -8,3 +8,4 @@ import { ProductCarouselCSS } from './ProductCarouselCSS'
  * error boundary could render its fallback.
  */
 export const ProductCarousel = ProductCarouselCSS
+

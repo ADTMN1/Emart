@@ -4,6 +4,7 @@ import { TopBar } from './TopBar'
 import { Navbar } from './Navbar'
 import { Footer } from './Footer'
 import { ToastProvider } from '@/components/ui/Toast'
+import ChatWidget from '@/components/ai/ChatWidget'
 
 const Layout: React.FC = () => {
   const location = useLocation()
@@ -24,6 +25,7 @@ const Layout: React.FC = () => {
           <Outlet />
         </main>
         {!isAuthPage && <Footer />}
+        {!isAuthPage && <ChatWidget />}
       </div>
     </ToastProvider>
   )
