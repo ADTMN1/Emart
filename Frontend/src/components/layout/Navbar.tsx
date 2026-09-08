@@ -14,33 +14,10 @@ import {
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-
-const navLinks = [
-  { to: '/marketplace', label: 'Marketplace', icon: Store },
-  { to: '/', label: 'Shop Global', icon: MapPin, hasDropdown: true },
-  { to: '/categories', label: 'Categories', icon: ChevronDown, hasDropdown: true },
-]
-
-const marketplaces = [
-  { name: 'Mercari', to: '/marketplace?source=mercari' },
-  { name: 'Yahoo Auctions', to: '/marketplace?source=yahoo' },
-  { name: 'Rakuten', to: '/marketplace?source=rakuten' },
-  { name: 'Amazon', to: '/marketplace?source=amazon' },
-  { name: 'eBay', to: '/marketplace?source=ebay' },
-]
-
-const categoryLinks = [
-  { name: 'Electronics', to: '/marketplace?cat=electronics' },
-  { name: 'Fashion', to: '/marketplace?cat=fashion' },
-  { name: 'Watches', to: '/marketplace?cat=watches' },
-  { name: 'Collectibles', to: '/marketplace?cat=collectibles' },
-  { name: 'Figures', to: '/marketplace?cat=figures' },
-  { name: 'Beauty', to: '/marketplace?cat=beauty' },
-  { name: 'Home & Living', to: '/marketplace?cat=home' },
-  { name: 'Sports', to: '/marketplace?cat=sports' },
-]
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export const Navbar: React.FC = () => {
+  const { t } = useLanguage()
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
@@ -48,6 +25,31 @@ export const Navbar: React.FC = () => {
   const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
   const location = useLocation()
   const navigate = useNavigate()
+
+  const navLinks = [
+    { to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
+    { to: '/', label: t('navbar.shopGlobal'), icon: MapPin, hasDropdown: true },
+    { to: '/categories', label: t('navbar.categories'), icon: ChevronDown, hasDropdown: true },
+  ]
+
+  const marketplaces = [
+    { name: t('marketplaces.mercari'), to: '/marketplace?source=mercari' },
+    { name: t('marketplaces.yahooAuctions'), to: '/marketplace?source=yahoo' },
+    { name: t('marketplaces.rakuten'), to: '/marketplace?source=rakuten' },
+    { name: t('marketplaces.amazon'), to: '/marketplace?source=amazon' },
+    { name: t('marketplaces.ebay'), to: '/marketplace?source=ebay' },
+  ]
+
+  const categoryLinks = [
+    { name: t('categories.electronics'), to: '/marketplace?cat=electronics' },
+    { name: t('categories.fashion'), to: '/marketplace?cat=fashion' },
+    { name: t('categories.watches'), to: '/marketplace?cat=watches' },
+    { name: t('categories.collectibles'), to: '/marketplace?cat=collectibles' },
+    { name: t('categories.figures'), to: '/marketplace?cat=figures' },
+    { name: t('categories.beauty'), to: '/marketplace?cat=beauty' },
+    { name: t('categories.homeLiving'), to: '/marketplace?cat=home' },
+    { name: t('categories.sports'), to: '/marketplace?cat=sports' },
+  ]
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
@@ -169,7 +171,7 @@ export const Navbar: React.FC = () => {
               <form onSubmit={handleSearch} className="w-full">
                 <Input
                   variant="search"
-                  placeholder="Search products: watches, anime, electronics..."
+                  placeholder={t('navbar.searchPlaceholder')}
                   leftIcon={<Search className="h-5 w-5" />}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -223,13 +225,13 @@ export const Navbar: React.FC = () => {
                   to="/login"
                   className="text-xs font-semibold text-foreground hover:text-primary"
                 >
-                  Sign in
+                  {t('navbar.signIn')}
                 </Link>
                 <Link
                   to="/register"
                   className="text-[11px] text-muted-foreground hover:text-primary"
                 >
-                  Join free
+                  {t('navbar.joinFree')}
                 </Link>
               </div>
             </div>
@@ -263,7 +265,7 @@ export const Navbar: React.FC = () => {
         <form onSubmit={handleSearch} className="p-4 border-b border-border">
           <Input
             variant="search"
-            placeholder="Search products..."
+            placeholder={t('navbar.searchPlaceholder')}
             leftIcon={<Search className="h-5 w-5" />}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -293,7 +295,7 @@ export const Navbar: React.FC = () => {
             to="/cart"
             className="flex items-center justify-between px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
           >
-            <span>Cart</span>
+            <span>{t('navbar.cart')}</span>
             <span className="h-5 min-w-5 px-1.5 text-xs font-bold rounded-full bg-primary text-white">
               3
             </span>
@@ -302,28 +304,28 @@ export const Navbar: React.FC = () => {
             to="/orders"
             className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
           >
-            My Orders
+            {t('navbar.myOrders')}
           </Link>
           <Link
             to="/warehouse"
             className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
           >
-            Warehouse
+            {t('navbar.warehouse')}
           </Link>
           <Link
             to="/account"
             className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
           >
-            Account Settings
+            {t('navbar.accountSettings')}
           </Link>
         </nav>
 
         <div className="p-4 border-t border-border gap-3 grid grid-cols-2">
           <Button variant="outline" asChild size="lg">
-            <Link to="/login">Sign In</Link>
+            <Link to="/login">{t('navbar.signIn')}</Link>
           </Button>
           <Button variant="primary" asChild size="lg">
-            <Link to="/register">Join Free</Link>
+            <Link to="/register">{t('navbar.joinFree')}</Link>
           </Button>
         </div>
       </div>
@@ -334,7 +336,7 @@ export const Navbar: React.FC = () => {
           <form onSubmit={handleSearch} className="relative mx-4 mt-4">
             <Input
               variant="search"
-              placeholder="Search products..."
+              placeholder={t('navbar.searchPlaceholder')}
               leftIcon={<Search className="h-5 w-5" />}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}

@@ -13,53 +13,54 @@ import {
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
-
-const footerSections = [
-  {
-    title: 'Shop',
-    links: [
-      { label: 'All Products', to: '/marketplace' },
-      { label: 'Browse Categories', to: '/categories' },
-      { label: 'Shop Global', to: '/marketplace?source=mercari' },
-      { label: 'New Arrivals', to: '/marketplace?sort=new' },
-      { label: 'Best Sellers', to: '/marketplace?sort=popular' },
-    ],
-  },
-  {
-    title: 'Services',
-    links: [
-      { label: 'How Proxy Shopping Works', to: '#how' },
-      { label: 'International Shipping', to: '#shipping' },
-      { label: 'Warehouse Storage', to: '/warehouse' },
-      { label: 'Buyer Protection', to: '#trust' },
-      { label: 'Item Consolidation', to: '#shipping' },
-    ],
-  },
-  {
-    title: 'Support',
-    links: [
-      { label: 'Help Center', to: '#help' },
-      { label: 'Track Your Order', to: '/orders' },
-      { label: 'Track Shipment', to: '/shipping' },
-      { label: 'Contact Us', to: '#contact' },
-      { label: 'FAQ', to: '#faq' },
-    ],
-  },
-  {
-    title: 'Company',
-    links: [
-      { label: 'About EMART', to: '#about' },
-      { label: 'Fees & Pricing', to: '#fees' },
-      { label: 'Shipping Rates', to: '#rates' },
-      { label: 'Terms of Service', to: '#terms' },
-      { label: 'Privacy Policy', to: '#privacy' },
-    ],
-  },
-]
-
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export const Footer: React.FC = () => {
+  const { t } = useLanguage()
   const [email, setEmail] = React.useState('')
+
+  const footerSections = [
+    {
+      title: t('footer.shop'),
+      links: [
+        { label: t('footer.allProducts'), to: '/marketplace' },
+        { label: t('footer.browseCategories'), to: '/categories' },
+        { label: t('footer.shopGlobal'), to: '/marketplace?source=mercari' },
+        { label: t('footer.newArrivals'), to: '/marketplace?sort=new' },
+        { label: t('footer.bestSellers'), to: '/marketplace?sort=popular' },
+      ],
+    },
+    {
+      title: t('footer.services'),
+      links: [
+        { label: t('footer.howProxyWorks'), to: '#how' },
+        { label: t('footer.internationalShipping'), to: '#shipping' },
+        { label: t('footer.warehouseStorage'), to: '/warehouse' },
+        { label: t('footer.buyerProtection'), to: '#trust' },
+        { label: t('footer.itemConsolidation'), to: '#shipping' },
+      ],
+    },
+    {
+      title: t('footer.support'),
+      links: [
+        { label: t('footer.helpCenter'), to: '#help' },
+        { label: t('footer.trackOrder'), to: '/orders' },
+        { label: t('footer.trackShipment'), to: '/shipping' },
+        { label: t('footer.contactUs'), to: '#contact' },
+        { label: t('footer.faq'), to: '#faq' },
+      ],
+    },
+    {
+      title: t('footer.company'),
+      links: [
+        { label: t('footer.aboutEmart'), to: '#about' },
+        { label: t('footer.feesPricing'), to: '#fees' },
+        { label: t('footer.shippingRates'), to: '#rates' },
+        { label: t('footer.termsOfService'), to: '#terms' },
+        { label: t('footer.privacyPolicy'), to: '#privacy' },
+      ],
+    },
+  ]
 
   return (
     <footer className="bg-primary-900 text-primary-100 mt-20">
@@ -67,23 +68,23 @@ export const Footer: React.FC = () => {
         <div className="container-page py-8 lg:py-12 grid lg:grid-cols-2 gap-8 items-center">
           <div className="max-w-xl">
             <h3 className="font-display text-2xl font-bold text-white mb-2">
-              Get exclusive deals
+              {t('footer.getExclusiveDeals')}
             </h3>
             <p className="text-primary-200 text-sm leading-relaxed">
-              Subscribe to our newsletter for weekly curated finds, exclusive discounts, and insider shopping tips from global marketplaces.
+              {t('footer.newsletterDesc')}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 max-w-lg lg:ml-auto w-full">
             <Input
               type="email"
-              placeholder="Enter your email"
+              placeholder={t('footer.enterEmail')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="!h-12 !bg-[#F5F8FC]/95 !text-primary-900 !placeholder:text-primary-700/50 !border-white/10 focus:!ring-white/20 flex-1"
               wrapperClassName="flex-1"
             />
             <Button size="lg" variant="secondary" className="shrink-0">
-              Subscribe
+              {t('footer.subscribe')}
             </Button>
           </div>
         </div>
@@ -101,13 +102,13 @@ export const Footer: React.FC = () => {
                   EMART
                 </span>
                 <span className="text-[10px] font-semibold text-primary-300 tracking-widest uppercase">
-                  Global Proxy Shopping
+                  {t('footer.globalProxyShopping')}
                 </span>
               </div>
             </Link>
 
             <p className="text-sm text-primary-200 leading-relaxed mb-6 max-w-sm">
-              Your trusted partner for buying authentic products from global marketplaces. We handle everything from purchase to international delivery with complete transparency.
+              {t('footer.companyDesc')}
             </p>
 
             <div className="flex flex-col gap-3 text-sm text-primary-200">
@@ -159,13 +160,13 @@ export const Footer: React.FC = () => {
       <div className="border-t border-white/10 bg-primary-950/50">
         <div className="container-page py-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-primary-300">
           <div>
-            © {new Date().getFullYear()} EMART Co., Ltd. All rights reserved. Made with care.
+            © {new Date().getFullYear()} EMART Co., Ltd. {t('footer.allRightsReserved')}
           </div>
           <div className="flex items-center gap-5">
-            <a href="#terms" className="hover:text-white transition-colors">Terms</a>
-            <a href="#privacy" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#cookies" className="hover:text-white transition-colors">Cookies</a>
-            <a href="#sitemap" className="hover:text-white transition-colors">Sitemap</a>
+            <a href="#terms" className="hover:text-white transition-colors">{t('footer.terms')}</a>
+            <a href="#privacy" className="hover:text-white transition-colors">{t('footer.privacy')}</a>
+            <a href="#cookies" className="hover:text-white transition-colors">{t('footer.cookies')}</a>
+            <a href="#sitemap" className="hover:text-white transition-colors">{t('footer.sitemap')}</a>
           </div>
         </div>
       </div>

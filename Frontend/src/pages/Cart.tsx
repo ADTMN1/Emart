@@ -24,6 +24,7 @@ import { Select } from '@/components/ui/Select'
 import { products } from '@/data/mockData'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface CartItem {
   id: string
@@ -38,6 +39,7 @@ const initialCart: CartItem[] = [
 ]
 
 const Cart: React.FC = () => {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const { toast } = useToast()
   const [items, setItems] = React.useState<CartItem[]>(initialCart)
@@ -71,12 +73,12 @@ const Cart: React.FC = () => {
 
   const removeItem = (id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id))
-    toast({ variant: 'info', title: 'Item removed', description: 'Item has been removed from your cart.' })
+    toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
   }
 
   const saveForLater = (id: string) => {
     removeItem(id)
-    toast({ variant: 'success', title: 'Saved for later', description: 'You can find this in your favorites.' })
+    toast({ variant: 'success', title: t('cart.saveForLater'), description: 'You can find this in your favorites.' })
   }
 
   if (cartItems.length === 0) {
@@ -104,16 +106,15 @@ const Cart: React.FC = () => {
           <div>
             <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
               <ShoppingCart className="h-7 w-7 text-primary" />
-              Your Cart
+              {t('cart.yourCart')}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {cartItems.reduce((s, i) => s + i.quantity, 0)} items · Ready for checkout
+              {cartItems.reduce((s, i) => s + i.quantity, 0)} {t('cart.items')} · {t('cart.readyForCheckout')}
             </p>
           </div>
-          <Button variant="outline" size="md" asChild>
+          <Button variant="outline" size="md" rightIcon={<ArrowRight className="h-4 w-4" />} asChild>
             <Link to="/marketplace">
-              Continue Shopping
-              <ArrowRight className="h-4 w-4 ml-1" />
+              {t('cart.continueShopping')}
             </Link>
           </Button>
         </div>
@@ -192,7 +193,7 @@ const Cart: React.FC = () => {
 
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Package className="h-3.5 w-3.5" />
-                        Ships separately
+                        {t('cart.shipsSeparately')}
                       </div>
                     </div>
                   </div>
@@ -206,13 +207,13 @@ const Cart: React.FC = () => {
                   <WarehouseIcon />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm">Items stored separately in our warehouse</div>
+                  <div className="font-bold text-sm">{t('cart.warehouseStorage')}</div>
                   <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                    Request consolidation at checkout to combine orders into one shipment and save up to 70% on international shipping. Free storage for up to 45 days.
+                    {t('cart.consolidationInfo')}
                   </p>
                 </div>
                 <button className="text-xs font-bold text-primary shrink-0 self-start">
-                  Learn more
+                  {t('cart.learnMore')}
                 </button>
               </CardContent>
             </Card>
@@ -221,23 +222,23 @@ const Cart: React.FC = () => {
           <aside className="space-y-5 lg:sticky lg:top-24 self-start">
             <Card>
               <CardContent className="p-5 lg:p-6 space-y-5">
-                <h3 className="font-display text-lg font-bold">Order Summary</h3>
+                <h3 className="font-display text-lg font-bold">{t('cart.orderSummary')}</h3>
 
                 <div className="space-y-2">
                   {[
                     {
-                      label: 'Subtotal',
+                      label: t('cart.subtotal'),
                       value: formatCurrency(subtotal, 'USD'),
-                      info: `${cartItems.reduce((s, i) => s + i.quantity, 0)} items`,
+                      info: `${cartItems.reduce((s, i) => s + i.quantity, 0)} ${t('cart.items')}`,
                     },
                     {
-                      label: 'Service Fees (7%)',
+                      label: t('cart.serviceFees'),
                       value: formatCurrency(proxyFees, 'USD'),
-                      info: 'Buyer protection included',
+                      info: t('cart.buyerProtection'),
                       icon: ShieldCheck,
                     },
                     {
-                      label: 'Domestic Shipping',
+                      label: t('cart.domesticShipping'),
                       value: formatCurrency(domestic, 'USD'),
                       info: `Shipping to our warehouse`,
                       icon: Truck,
@@ -261,7 +262,7 @@ const Cart: React.FC = () => {
 
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 block">
-                    Shipping to
+                    {t('cart.shippingTo')}
                   </label>
                   <Select value={shipCountry} onChange={(e) => setShipCountry(e.target.value)}>
                     <option value="US">🇺🇸 United States</option>
@@ -276,7 +277,7 @@ const Cart: React.FC = () => {
 
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 block">
-                    Shipping Method
+                    {t('cart.shippingMethod')}
                   </label>
                   <div className="space-y-2">
                     {[
@@ -310,7 +311,7 @@ const Cart: React.FC = () => {
                             </span>
                           </div>
                           <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {m.days} · Fully tracked
+                            {m.days} · {t('cart.fullyTracked')}
                           </div>
                         </div>
                       </label>
@@ -321,7 +322,7 @@ const Cart: React.FC = () => {
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-1.5 text-foreground/80 font-medium">
                     <ShieldCheck className="h-3.5 w-3.5 text-success" />
-                    Shipping Insurance (2%)
+                    {t('cart.shippingInsurance')}
                   </div>
                   <span className="font-semibold">{formatCurrency(insurance, 'USD')}</span>
                 </div>
@@ -329,13 +330,13 @@ const Cart: React.FC = () => {
                 <div className="h-px bg-border/70" />
 
                 <div className="flex items-baseline justify-between">
-                  <span className="text-sm font-bold text-foreground/80">Estimated Total</span>
+                  <span className="text-sm font-bold text-foreground/80">{t('cart.estimatedTotal')}</span>
                   <div>
                     <div className="font-display text-2xl font-extrabold text-foreground">
                       {formatCurrency(total, 'USD')}
                     </div>
                     <div className="text-xs text-right text-muted-foreground">
-                      Taxes & duties may apply at customs
+                      {t('cart.taxesAndDuties')}
                     </div>
                   </div>
                 </div>
@@ -348,7 +349,7 @@ const Cart: React.FC = () => {
                     setTimeout(() => navigate('/checkout'), 500)
                   }}
                 >
-                  Proceed to Checkout
+                  {t('cart.proceedToCheckout')}
                   <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
 

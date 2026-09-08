@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Marquee } from '@/components/ui/Marquee'
 import { HeroProductRail } from '@/components/3d/HeroProductRail'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 import {
   categories,
@@ -45,7 +46,6 @@ import {
   howItWorksSteps,
   trustFeatures,
   shippingCarriers,
-  testimonials,
 } from '@/data/mockData'
 import { cn, formatCurrency, formatNumber } from '@/lib/utils'
 
@@ -71,36 +71,61 @@ const iconMap: Record<string, React.FC<{ className?: string }>> = {
   dumbbell: Dumbbell,
 }
 
-const faqs = [
-  {
-    q: 'How does proxy shopping work?',
-    a: 'EMART acts as your personal buyer. You find products, we purchase them on your behalf, inspect them at our warehouse, consolidate multiple orders, and ship internationally to your doorstep with full tracking.',
-  },
-  {
-    q: 'Are there any hidden fees?',
-    a: 'Not at all. Our pricing is 100% transparent. You see the exact breakdown at checkout: item price, domestic shipping, our service fee (7-10%), and your chosen international shipping. No surprises.',
-  },
-  {
-    q: 'How long does shipping take?',
-    a: 'Delivery times depend on your chosen method: DHL/FedEx (3-5 days), EMS (5-8 days), SAL (10-14 days), or Sea Mail (25-40 days). All methods include full tracking.',
-  },
-  {
-    q: 'What if my item is damaged or wrong?',
-    a: 'Every item is photographed and inspected at our warehouse. If an issue is found before shipping, we contact you immediately. Our 100% Buyer Protection covers you for any verified issues.',
-  },
-  {
-    q: 'Can I combine multiple orders?',
-    a: 'Yes! This is one of our best features. Store up to 10 items for FREE for 45 days, then consolidate them all into a single international shipment. This saves you up to 70% on shipping costs.',
-  },
-]
-
 const Home: React.FC = () => {
+  const { t } = useLanguage()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = React.useState('')
   const [urlQuery, setUrlQuery] = React.useState('')
   const [activeTab, setActiveTab] = React.useState<'search' | 'url'>('search')
   const [openFaq, setOpenFaq] = React.useState<number | null>(0)
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
+
+  const testimonials = [
+    {
+      name: t('testimonials.testimonial1Name'),
+      location: t('testimonials.testimonial1Location'),
+      avatar: 'S',
+      rating: 5,
+      text: t('testimonials.testimonial1Text'),
+    },
+    {
+      name: t('testimonials.testimonial2Name'),
+      location: t('testimonials.testimonial2Location'),
+      avatar: 'J',
+      rating: 5,
+      text: t('testimonials.testimonial2Text'),
+    },
+    {
+      name: t('testimonials.testimonial3Name'),
+      location: t('testimonials.testimonial3Location'),
+      avatar: 'A',
+      rating: 5,
+      text: t('testimonials.testimonial3Text'),
+    },
+  ]
+
+  const faqs = [
+    {
+      q: t('home.faq1q'),
+      a: t('home.faq1a'),
+    },
+    {
+      q: t('home.faq2q'),
+      a: t('home.faq2a'),
+    },
+    {
+      q: t('home.faq3q'),
+      a: t('home.faq3a'),
+    },
+    {
+      q: t('home.faq4q'),
+      a: t('home.faq4a'),
+    },
+    {
+      q: t('home.faq5q'),
+      a: t('home.faq5a'),
+    },
+  ]
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -159,18 +184,18 @@ const Home: React.FC = () => {
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 animate-fade-in">
               <Sparkles className="h-3.5 w-3.5 text-secondary-300" />
               <span className="text-xs font-bold text-white tracking-wide">
-                TRUSTED BY 250,000+ CUSTOMERS WORLDWIDE
+                {t('home.trustedBy')}
               </span>
             </div>
 
             <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight text-white leading-[1.05] text-balance animate-slide-up">
-              Buy from Global Markets,
+              {t('home.heroTitle')}
               <br />
-              <span className="text-secondary-300"> delivered to you.</span>
+              <span className="text-secondary-300"> {t('home.heroTitleHighlight')}</span>
             </h1>
 
             <p className="mt-6 text-lg lg:text-xl text-white/90 leading-relaxed max-w-2xl mx-auto text-balance animate-slide-up" style={{ animationDelay: '80ms' }}>
-              Shop millions of authentic products from global marketplaces — with complete transparency, buyer protection, and consolidated international shipping.
+              {t('home.heroSubtitle')}
             </p>
 
             <form onSubmit={handleSearch} className="mt-8 animate-slide-up max-w-2xl mx-auto" style={{ animationDelay: '160ms' }}>
@@ -186,7 +211,7 @@ const Home: React.FC = () => {
                     )}
                   >
                     <Search className="h-3.5 w-3.5" />
-                    Search Products
+                    {t('home.searchProducts')}
                   </button>
                   <button
                     type="button"
@@ -199,28 +224,28 @@ const Home: React.FC = () => {
                     )}
                   >
                     <LinkIcon className="h-3.5 w-3.5" />
-                    Paste Product URL
+                    {t('home.pasteUrl')}
                   </button>
                 </div>
 
                 <div className="relative flex flex-col sm:flex-row gap-3 items-stretch">
                   {activeTab === 'search' ? (
                     <SearchInput
-                      placeholder="Search products: Rolex, Pokémon cards, Sony..."
+                      placeholder={t('home.searchPlaceholder')}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       wrapperClassName="flex-1"
                     />
                   ) : (
                     <UrlInput
-                      placeholder="Paste product URL from any marketplace"
+                      placeholder={t('home.urlPlaceholder')}
                       value={urlQuery}
                       onChange={(e) => setUrlQuery(e.target.value)}
                       wrapperClassName="flex-1"
                     />
                   )}
                   <Button type="submit" size="xl" className="sm:w-auto w-full shadow-lg shadow-primary/25">
-                    {activeTab === 'search' ? 'Search Products' : 'Get Quote'}
+                    {activeTab === 'search' ? t('home.searchButton') : t('home.getQuote')}
                     <ArrowRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
@@ -228,15 +253,15 @@ const Home: React.FC = () => {
                 <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-white/80">
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                    <span className="font-medium">100% Buyer Protection</span>
+                    <span className="font-medium">{t('home.buyerProtection')}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                    <span className="font-medium">Transparent 7-10% Service Fee</span>
+                    <span className="font-medium">{t('home.transparentFee')}</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
-                    <span className="font-medium">Free 45-Day Storage</span>
+                    <span className="font-medium">{t('home.freeStorage')}</span>
                   </div>
                 </div>
               </form>
@@ -245,10 +270,10 @@ const Home: React.FC = () => {
             {/* Stats */}
             <div className="mt-16 lg:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 max-w-4xl mx-auto">
               {[
-                { v: '12M+', l: 'Products Available' },
-                { v: '250K+', l: 'Happy Customers' },
-                { v: '180+', l: 'Countries Shipped' },
-                { v: '4.9/5', l: 'Average Rating' },
+                { v: '12M+', l: t('home.productsAvailable') },
+                { v: '250K+', l: t('home.happyCustomers') },
+                { v: '180+', l: t('home.countriesShipped') },
+                { v: '4.9/5', l: t('home.averageRating') },
               ].map((s) => (
                 <div key={s.l} className="bg-white/90 backdrop-blur-sm border border-white/50 rounded-2xl p-5 lg:p-6 text-center shadow-lg hover:shadow-xl transition-shadow">
                   <div className="font-display text-2xl lg:text-3xl font-extrabold text-primary-700">
@@ -272,42 +297,42 @@ const Home: React.FC = () => {
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary-500 text-white text-xs font-bold uppercase">
                   🔥 Hot
                 </span>
-                <span>Flash Sale: Up to 50% OFF on Electronics</span>
+                <span>{t('home.flashSale')}</span>
               </div>
               <span className="text-white/40 text-xl">•</span>
               <div className="flex items-center gap-2.5 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
                   ✈️ New
                 </span>
-                <span>Free Express Shipping on Orders $200+</span>
+                <span>{t('home.freeExpressShipping')}</span>
               </div>
               <span className="text-white/40 text-xl">•</span>
               <div className="flex items-center gap-2.5 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
                   🎁 Gift
                 </span>
-                <span>First-Time Buyers Get $20 Credit</span>
+                <span>{t('home.firstTimeBuyers')}</span>
               </div>
               <span className="text-white/40 text-xl">•</span>
               <div className="flex items-center gap-2.5 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500 text-white text-xs font-bold uppercase">
                   ⭐ Trending
                 </span>
-                <span>Limited Edition Pokémon Cards Available Now</span>
+                <span>{t('home.limitedEdition')}</span>
               </div>
               <span className="text-white/40 text-xl">•</span>
               <div className="flex items-center gap-2.5 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/20 text-white text-xs font-bold uppercase">
                   💎 Premium
                 </span>
-                <span>Exclusive Japanese Watches from $1,500</span>
+                <span>{t('home.exclusiveWatches')}</span>
               </div>
               <span className="text-white/40 text-xl">•</span>
               <div className="flex items-center gap-2.5 whitespace-nowrap">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-600 text-white text-xs font-bold uppercase">
                   ✓ Verified
                 </span>
-                <span>All Sellers 100% Authenticated & Insured</span>
+                <span>{t('home.verifiedSellers')}</span>
               </div>
             </div>
           </Marquee>
@@ -318,10 +343,10 @@ const Home: React.FC = () => {
       <section className="border-b border-border bg-muted/30">
         <div className="container-page py-6 flex flex-col md:flex-row items-center justify-center md:justify-between gap-4">
           <span className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Shop directly from top global marketplaces
+            {t('home.shopFromMarketplaces')}
           </span>
           <div className="flex flex-wrap items-center gap-3">
-            {['Mercari', 'Yahoo Auctions', 'Rakuten', 'Amazon', 'eBay', 'AliExpress'].map((s) => (
+            {[t('home.mercari'), t('home.yahooAuctions'), t('home.rakuten'), t('home.amazon'), t('home.ebay'), t('home.aliExpress')].map((s) => (
               <span
                 key={s}
                 className="px-4 py-2 rounded-lg bg-background border border-border text-sm font-bold text-foreground/80 hover:text-primary hover:border-primary-300 transition-colors cursor-default"
@@ -339,20 +364,20 @@ const Home: React.FC = () => {
           <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
             <div>
               <Badge variant="secondary" size="sm" className="mb-3">
-                Explore Categories
+                {t('home.exploreCategories')}
               </Badge>
               <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight">
-                Shop by Category
+                {t('home.shopByCategory')}
               </h2>
               <p className="mt-2 text-muted-foreground max-w-xl">
-                Discover the best products across our most popular categories, handpicked for international shoppers.
+                {t('home.categoryDescription')}
               </p>
             </div>
             <Link
               to="/categories"
               className="hidden md:inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary-700 transition-colors group"
             >
-              View all categories
+              {t('home.viewAllCategories')}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
@@ -378,7 +403,7 @@ const Home: React.FC = () => {
                     {cat.name}
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
-                    {formatNumber(cat.count)} items
+                    {formatNumber(cat.count)} {t('home.items')}
                   </div>
                 </Link>
               )
@@ -389,7 +414,7 @@ const Home: React.FC = () => {
             to="/categories"
             className="md:hidden mt-6 flex items-center justify-center gap-1.5 text-sm font-bold text-primary py-3 rounded-xl bg-primary-50 w-full"
           >
-            View all categories
+            {t('home.viewAllCategories')}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -401,19 +426,19 @@ const Home: React.FC = () => {
           <div className="flex items-end justify-between mb-10 gap-4 flex-wrap">
             <div>
               <Badge variant="info" size="sm" className="mb-3" dot>
-                Trending Now
+                {t('home.trendingNow')}
               </Badge>
               <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight">
-                Featured Finds
+                {t('home.featuredFinds')}
               </h2>
               <p className="mt-2 text-muted-foreground max-w-xl">
-                Curated selection of authentic products from top sellers, updated daily with new arrivals.
+                {t('home.featuredDescription')}
               </p>
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="md" asChild>
                 <Link to="/marketplace">
-                  View All Products
+                  {t('home.viewAllProducts')}
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Link>
               </Button>
@@ -438,13 +463,13 @@ const Home: React.FC = () => {
         <div className="container-page">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge variant="primary" size="sm" className="mb-3">
-              Simple Process
+              {t('home.simpleProcess')}
             </Badge>
             <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight">
-              How EMART Works
+              {t('home.howItWorks')}
             </h2>
             <p className="mt-3 text-muted-foreground text-lg">
-              Five simple steps from browsing products to receiving them at your doorstep.
+              {t('home.howItWorksDescription')}
             </p>
           </div>
 
@@ -468,9 +493,9 @@ const Home: React.FC = () => {
                           {step.id}
                         </div>
                       </div>
-                      <h3 className="text-base font-bold mb-1.5">{step.title}</h3>
+                      <h3 className="text-base font-bold mb-1.5">{t(`home.step${idx + 1}Title`)}</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">
-                        {step.description}
+                        {t(`home.step${idx + 1}Desc`)}
                       </p>
                     </div>
                     {idx < howItWorksSteps.length - 1 && (
@@ -495,18 +520,18 @@ const Home: React.FC = () => {
         <div className="container-page relative">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge variant="accent" size="sm" className="mb-3">
-              Your Trust Matters
+              {t('home.yourTrustMatters')}
             </Badge>
             <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight">
-              Shop with Complete Confidence
+              {t('home.shopWithConfidence')}
             </h2>
             <p className="mt-3 text-primary-100/80 text-lg">
-              Everything we do is designed to protect buyers and deliver a trustworthy international shopping experience.
+              {t('home.trustDescription')}
             </p>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {trustFeatures.map((f) => {
+            {trustFeatures.map((f, idx) => {
               const Icon = iconMap[f.icon] || ShieldCheck
               return (
                 <Card
@@ -517,9 +542,9 @@ const Home: React.FC = () => {
                     <div className="h-12 w-12 rounded-xl bg-secondary/15 text-secondary flex items-center justify-center mb-4">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <h3 className="text-lg font-bold mb-2 text-white">{f.title}</h3>
+                    <h3 className="text-lg font-bold mb-2 text-white">{t(`home.trust${idx + 1}Title`)}</h3>
                     <p className="text-sm text-primary-100/70 leading-relaxed">
-                      {f.description}
+                      {t(`home.trust${idx + 1}Desc`)}
                     </p>
                   </CardContent>
                 </Card>
@@ -568,13 +593,13 @@ const Home: React.FC = () => {
 
             <div className="order-1 lg:order-2">
               <Badge variant="info" size="sm" className="mb-3">
-                Global Shipping
+                {t('home.globalShipping')}
               </Badge>
               <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight mb-4">
-                International Shipping to <span className="text-primary">180+ Countries</span>
+                {t('home.internationalShipping')}
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-8">
-                Choose from multiple trusted carriers to balance speed and cost. Store multiple items at our warehouse for FREE (up to 45 days) and combine them into one shipment for massive savings — up to 70% vs shipping individually.
+                {t('home.shippingDescription')}
               </p>
 
               <div className="space-y-3 mb-8">
@@ -582,25 +607,25 @@ const Home: React.FC = () => {
                   <div className="h-6 w-6 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
-                  <span className="text-sm font-medium">Free package consolidation</span>
+                  <span className="text-sm font-medium">{t('home.freeConsolidation')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="h-6 w-6 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
-                  <span className="text-sm font-medium">Full end-to-end tracking on every shipment</span>
+                  <span className="text-sm font-medium">{t('home.fullTracking')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="h-6 w-6 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
-                  <span className="text-sm font-medium">Professional packaging & damage protection</span>
+                  <span className="text-sm font-medium">{t('home.professionalPackaging')}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="h-6 w-6 rounded-full bg-success/10 text-success flex items-center justify-center shrink-0">
                     <CheckCircle2 className="h-4 w-4" />
                   </div>
-                  <span className="text-sm font-medium">Insurance available for high-value items</span>
+                  <span className="text-sm font-medium">{t('home.insuranceAvailable')}</span>
                 </div>
               </div>
 
@@ -625,10 +650,10 @@ const Home: React.FC = () => {
         <div className="container-page">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <Badge variant="accent" size="sm" className="mb-3">
-              Real Customers
+              {t('home.realCustomers')}
             </Badge>
             <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight">
-              Loved by Thousands of International Shoppers
+              {t('home.lovedByThousands')}
             </h2>
           </div>
 
@@ -667,17 +692,17 @@ const Home: React.FC = () => {
           <div className="grid lg:grid-cols-5 gap-10 lg:gap-16">
             <div className="lg:col-span-2">
               <Badge variant="primary" size="sm" className="mb-3">
-                FAQ
+                {t('home.faq')}
               </Badge>
               <h2 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight mb-4">
-                Frequently Asked Questions
+                {t('home.frequentlyAskedQuestions')}
               </h2>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Have questions about using EMART? We've got answers. If you don't find what you need, our support team is here 24/7.
+                {t('home.faqDescription')}
               </p>
               <Button variant="outline" size="md">
                 <Headphones className="h-4 w-4 mr-2" />
-                Contact Support
+                {t('home.contactSupport')}
               </Button>
             </div>
 
