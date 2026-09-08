@@ -125,46 +125,70 @@ const Categories: React.FC = () => {
 
           return (
             <section key={cat.id} className="scroll-mt-24" id={cat.id}>
-              <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">
-                <div className="flex items-start gap-4">
-                  <div
-                    className={cn(
-                      'h-14 w-14 lg:h-16 lg:w-16 rounded-2xl flex items-center justify-center shrink-0',
-                      cat.color,
-                    )}
-                  >
-                    <Icon className="h-7 w-7 lg:h-8 lg:w-8" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h2 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight">
-                        {cat.name}
-                      </h2>
-                      <Badge variant="outline" size="sm">
-                        {formatNumber(cat.count)} items
-                      </Badge>
+              <div className="relative rounded-3xl border border-border/60 bg-[#F5F8FC] p-8 shadow-lg hover:shadow-2xl transition-all duration-500 mb-6 overflow-hidden group">
+                {/* Decorative background elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-700 -mr-32 -mt-32" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-secondary/8 via-secondary/4 to-transparent rounded-full blur-2xl opacity-50" />
+                
+                {/* Accent border glow on hover */}
+                <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary/20 via-transparent to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" style={{ padding: '1px' }} />
+                
+                <div className="relative flex items-end justify-between gap-6 flex-wrap">
+                  <div className="flex items-start gap-5">
+                    {/* Enhanced icon container with gradient */}
+                    <div className="relative">
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 blur-xl group-hover:blur-2xl transition-all duration-500" />
+                      <div
+                        className={cn(
+                          'relative h-16 w-16 lg:h-20 lg:w-20 rounded-2xl flex items-center justify-center shrink-0 shadow-xl ring-4 ring-[#F5F8FC] transition-all duration-300 group-hover:scale-110 group-hover:rotate-3',
+                          cat.color,
+                        )}
+                      >
+                        <Icon className="h-8 w-8 lg:h-10 lg:w-10 transition-transform duration-300 group-hover:scale-110" />
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 mt-2.5">
-                      {subs.slice(0, 6).map((s) => (
-                        <Link
-                          key={s.name}
-                          to={`/marketplace?cat=${cat.id}&sub=${encodeURIComponent(s.name)}`}
-                          className="px-2.5 py-1 rounded-md bg-muted hover:bg-primary-50 hover:text-primary text-xs font-medium text-foreground/80 transition-colors"
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 flex-wrap mb-3">
+                        <h2 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight text-foreground">
+                          {cat.name}
+                        </h2>
+                        <Badge 
+                          variant="outline" 
+                          size="sm" 
+                          className="shadow-md bg-[#F5F8FC] border-primary/30 font-extrabold text-primary px-3 py-1 hover:bg-primary hover:text-white transition-all duration-300"
                         >
-                          {s.name}
-                          <span className="ml-1 text-muted-foreground/80">({(s.count / 1000).toFixed(1)}K)</span>
-                        </Link>
-                      ))}
+                          {formatNumber(cat.count)} items
+                        </Badge>
+                      </div>
+                      
+                      {/* Subcategories with enhanced styling */}
+                      <div className="flex flex-wrap gap-2">
+                        {subs.slice(0, 6).map((s) => (
+                          <Link
+                            key={s.name}
+                            to={`/marketplace?cat=${cat.id}&sub=${encodeURIComponent(s.name)}`}
+                            className="group/sub px-3 py-1.5 rounded-lg bg-surface/80 backdrop-blur-sm hover:bg-primary text-xs font-semibold text-foreground/80 hover:text-white transition-all duration-300 border border-border/50 hover:border-primary hover:shadow-lg hover:scale-105 active:scale-95"
+                          >
+                            <span className="block">{s.name}</span>
+                            <span className="text-[10px] text-muted-foreground group-hover/sub:text-white/80 transition-colors">
+                              {(s.count / 1000).toFixed(1)}K
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                  
+                  {/* View all button with enhanced design */}
+                  <Link
+                    to={`/marketplace?cat=${cat.id}`}
+                    className="hidden md:inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-white transition-all duration-300 group/btn px-5 py-2.5 rounded-xl bg-primary-50 hover:bg-primary border-2 border-primary/30 hover:border-primary shadow-md hover:shadow-xl active:scale-95"
+                  >
+                    <span>View all</span>
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+                  </Link>
                 </div>
-                <Link
-                  to={`/marketplace?cat=${cat.id}`}
-                  className="hidden md:inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary-700 transition-colors group"
-                >
-                  View all
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </Link>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-5">

@@ -79,7 +79,7 @@ export const Footer: React.FC = () => {
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="!h-12 !bg-white/95 !text-primary-900 !placeholder:text-primary-700/50 !border-white/10 focus:!ring-white/20 flex-1"
+              className="!h-12 !bg-[#F5F8FC]/95 !text-primary-900 !placeholder:text-primary-700/50 !border-white/10 focus:!ring-white/20 flex-1"
               wrapperClassName="flex-1"
             />
             <Button size="lg" variant="secondary" className="shrink-0">
@@ -93,7 +93,7 @@ export const Footer: React.FC = () => {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 lg:gap-6">
           <div className="col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-5">
-              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-white text-primary shadow-lg">
+              <div className="flex items-center justify-center h-10 w-10 rounded-full bg-[#F5F8FC] text-primary shadow-lg">
                 <span className="font-display font-extrabold text-xl">E</span>
               </div>
               <div className="flex flex-col leading-none">

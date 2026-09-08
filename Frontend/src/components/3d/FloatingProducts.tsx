@@ -23,7 +23,7 @@ export const FloatingProducts: React.FC = () => {
               animationDelay: '0s'
             }}
           >
-            <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
+            <div className="relative bg-[#F5F8FC] rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
               <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                 NEW
               </div>
@@ -46,7 +46,7 @@ export const FloatingProducts: React.FC = () => {
               animationDelay: '1s'
             }}
           >
-            <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
+            <div className="relative bg-[#F5F8FC] rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
               <div className="absolute -top-2 -right-2 bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                 HOT
               </div>
@@ -69,7 +69,7 @@ export const FloatingProducts: React.FC = () => {
               animationDelay: '2s'
             }}
           >
-            <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
+            <div className="relative bg-[#F5F8FC] rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
               <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                 SALE
               </div>
@@ -92,7 +92,7 @@ export const FloatingProducts: React.FC = () => {
               animationDelay: '3s'
             }}
           >
-            <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
+            <div className="relative bg-[#F5F8FC] rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
               <div className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                 ⭐
               </div>
@@ -115,7 +115,7 @@ export const FloatingProducts: React.FC = () => {
               animationDelay: '4s'
             }}
           >
-            <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
+            <div className="relative bg-[#F5F8FC] rounded-2xl p-8 shadow-2xl border border-gray-100 transition-all duration-500 hover:shadow-3xl hover:scale-105">
               <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
                 RARE
               </div>

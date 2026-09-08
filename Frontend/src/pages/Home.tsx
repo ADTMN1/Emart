@@ -37,6 +37,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Marquee } from '@/components/ui/Marquee'
+import { HeroProductRail } from '@/components/3d/HeroProductRail'
 
 import {
   categories,
@@ -142,7 +143,19 @@ const Home: React.FC = () => {
         <div className="absolute top-1/2 -left-32 h-96 w-96 rounded-full bg-primary-400/20 blur-3xl" />
 
         <div className="container-page relative py-16 lg:py-24">
-          <div className="max-w-3xl mx-auto text-center">
+          {/* Decorative side rails stay behind the centered hero content. */}
+          <div className="pointer-events-none absolute inset-y-10 left-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
+            <div className="pointer-events-auto h-full origin-left scale-75 xl:scale-90 2xl:scale-100">
+              <HeroProductRail side="left" />
+            </div>
+          </div>
+          <div className="pointer-events-none absolute inset-y-10 right-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
+            <div className="pointer-events-auto h-full origin-right scale-75 xl:scale-90 2xl:scale-100">
+              <HeroProductRail side="right" />
+            </div>
+          </div>
+
+          <div className="relative z-10 max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 animate-fade-in">
               <Sparkles className="h-3.5 w-3.5 text-secondary-300" />
               <span className="text-xs font-bold text-white tracking-wide">

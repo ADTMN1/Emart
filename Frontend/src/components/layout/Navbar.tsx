@@ -88,8 +88,8 @@ export const Navbar: React.FC = () => {
         className={cn(
           'sticky top-0 z-40 w-full transition-all duration-300',
           scrolled
-            ? 'bg-white/95 backdrop-blur-md border-b border-border shadow-sm'
-            : 'bg-white border-b border-border/50',
+            ? 'bg-[#F5F8FC]/95 backdrop-blur-md border-b border-border shadow-sm'
+            : 'bg-[#F5F8FC] border-b border-border/50',
         )}
       >
         <div className="container-page">
@@ -146,7 +146,7 @@ export const Navbar: React.FC = () => {
                       </button>
                       
                       {link.hasDropdown && isOpen && (
-                        <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-border rounded-xl shadow-lg py-2 z-50">
+                        <div className="absolute top-full left-0 mt-1 w-56 bg-[#F5F8FC] border border-border rounded-xl shadow-lg py-2 z-50">
                           {menuItems.map((item) => (
                             <Link
                               key={item.name}
@@ -239,7 +239,7 @@ export const Navbar: React.FC = () => {
 
       <div
         className={cn(
-          'md:hidden fixed inset-0 z-50 bg-white flex flex-col transition-transform duration-300',
+          'md:hidden fixed inset-0 z-50 bg-[#F5F8FC] flex flex-col transition-transform duration-300',
           mobileOpen ? 'translate-x-0' : 'translate-x-full',
         )}
         aria-hidden={!mobileOpen}
