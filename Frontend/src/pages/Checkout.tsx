@@ -17,10 +17,18 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
-import { products } from '@/data/mockData'
+import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
-import { SuccessState } from '@/components/ui/States'
+import { SuccessState, EmptyCart } from '@/components/ui/States'
+import { api } from '@/lib/api'
+
+interface CartItem {
+  id: string
+  productId: string
+  quantity: number
+  product?: Product
+}
 
 const Checkout: React.FC = () => {
   const navigate = useNavigate()
@@ -28,34 +36,133 @@ const Checkout: React.FC = () => {
   const [step, setStep] = React.useState<1 | 2 | 3>(1)
   const [sameAddress, setSameAddress] = React.useState(true)
   const [payment, setPayment] = React.useState<'card' | 'paypal' | 'apple' | 'bank'>('card')
-
   const [submitted, setSubmitted] = React.useState(false)
+  const [loading, setLoading] = React.useState(true)
+  const [cartItems, setCartItems] = React.useState<CartItem[]>([])
+  const [quantities, setQuantities] = React.useState<Record<string, number>>({})
 
-  const cartItems = [products[0], products[2], products[4]]
-  const subtotal = cartItems.reduce((s, p) => s + p.estimatedPriceUsd, 0) + products[4].estimatedPriceUsd
-  const fees = 54
-  const shipping = 58
-  const insurance = 17
+  // Helper function to get product image - matches ProductDetails logic
+  const getProductImage = (product: any): string => {
+    // Try productImages array first (with url property)
+    if (product?.productImages && Array.isArray(product.productImages)) {
+      const validImages = product.productImages.filter((img: any) => img && img.url)
+      if (validImages.length > 0) {
+        return validImages[0].url
+      }
+    }
+    // Fall back to image field
+    if (product?.image) {
+      return product.image
+    }
+    // Fall back to images array
+    if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+      return product.images[0]
+    }
+    // Return placeholder if no image found
+    return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
+  }
+
+  const fetchCart = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await api.get<any>('/cart').catch(() => null)
+      const rawItems = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+      const items = rawItems.filter((item: any) => item && item.product)
+      setCartItems(items)
+      const qtyMap: Record<string, number> = {}
+      items.forEach((item: any) => {
+        qtyMap[item.productId] = item.quantity || 1
+      })
+      setQuantities(qtyMap)
+    } catch {
+      setCartItems([])
+      setQuantities({})
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchCart()
+    const handleCartUpdate = () => fetchCart()
+    window.addEventListener('cart:updated', handleCartUpdate)
+    return () => window.removeEventListener('cart:updated', handleCartUpdate)
+  }, [fetchCart])
+
+  const subtotal = cartItems.reduce(
+    (s, i) => s + (i.product?.estimatedPriceUsd || 0) * (quantities[i.productId] || 1),
+    0
+  )
+  const fees = cartItems.length > 0 ? Math.round(subtotal * 0.07) : 0
+  const shipping = cartItems.length > 0 ? 58 : 0
+  const insurance = cartItems.length > 0 ? Math.round(subtotal * 0.02) : 0
   const total = subtotal + fees + shipping + insurance
 
-  const handleSubmit = () => {
-    setSubmitted(true)
-    toast({
-      variant: 'success',
-      title: 'Order placed successfully!',
-      description: 'Order #EMT-20240907-12345 has been confirmed.',
-    })
+  const [createdOrder, setCreatedOrder] = React.useState<any>(null)
+  const [submittingOrder, setSubmittingOrder] = React.useState(false)
+
+  const handleSubmit = async () => {
+    if (cartItems.length === 0) return
+
+    try {
+      setSubmittingOrder(true)
+      const res = await api.post('/orders', {
+        items: cartItems.map((item) => ({
+          productId: item.productId,
+          quantity: quantities[item.productId] || item.quantity || 1,
+        })),
+        shippingMethod: 'dhl',
+        paymentMethod: payment,
+      })
+      setCreatedOrder(res)
+      setSubmitted(true)
+      toast({
+        variant: 'success',
+        title: 'Order placed successfully!',
+        description: `Order #${res.orderNumber || res.id} has been confirmed.`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Checkout Failed',
+        description: err.message || 'Could not place order. Please try again.',
+      })
+    } finally {
+      setSubmittingOrder(false)
+    }
   }
 
   if (submitted) {
+    const orderNum = createdOrder?.orderNumber || createdOrder?.id || ''
     return (
       <div className="container-page py-16 min-h-[70vh] flex items-center justify-center">
         <div className="max-w-md w-full text-center">
           <SuccessState
             title="Order Placed Successfully!"
-            description="Order #EMT-20240907-12345 has been confirmed. Our team will begin processing your purchase. You will receive email updates at every step."
+            description={`Order ${orderNum ? `#${orderNum} ` : ''}has been confirmed. Our team will begin processing your purchase.`}
             action={{ label: 'View My Orders', onClick: () => navigate('/orders') }}
           />
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="container-page py-16 min-h-[70vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading checkout...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="container-page py-16 min-h-[70vh]">
+        <div className="max-w-xl mx-auto">
+          <EmptyCart onShop={() => navigate('/marketplace')} />
         </div>
       </div>
     )
@@ -286,29 +393,40 @@ const Checkout: React.FC = () => {
                   <div className="space-y-5">
                     <div>
                       <div className="flex items-center justify-between mb-2.5">
-                        <h3 className="text-sm font-bold">Items ({cartItems.length + 1})</h3>
+                        <h3 className="text-sm font-bold">
+                          Items ({Object.values(quantities).reduce((s, q) => s + q, 0)})
+                        </h3>
                       </div>
                       <div className="space-y-3">
-                        {cartItems.map((p, idx) => (
-                          <div key={p.id} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
-                            <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
-                              <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-semibold text-sm leading-snug line-clamp-2">{p.name}</div>
-                              <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
-                                <span className="font-medium">{p.source}</span>
-                                <span>·</span>
-                                <span>Qty: {idx === 2 ? 2 : 1}</span>
+                        {cartItems.map((item, idx) => {
+                          const product = item.product
+                          const qty = quantities[item.productId] || 1
+                          if (!product) return null
+                          return (
+                            <div key={item.id} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
+                              <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
+                                <img
+                                  src={getProductImage(product)}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm leading-snug line-clamp-2">{product.name}</div>
+                                <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
+                                  <span className="font-medium">{product.source}</span>
+                                  <span>·</span>
+                                  <span>Qty: {qty}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-bold text-sm">
+                                  {formatCurrency(product.estimatedPriceUsd * qty, 'USD')}
+                                </div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="font-bold text-sm">
-                                {formatCurrency(p.estimatedPriceUsd * (idx === 2 ? 2 : 1), 'USD')}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
 
@@ -361,9 +479,10 @@ const Checkout: React.FC = () => {
                         size="xl"
                         className="flex-1 shadow-xl shadow-primary/25"
                         onClick={handleSubmit}
+                        disabled={submittingOrder}
                       >
                         <Lock className="h-4 w-4 mr-2" />
-                        Place Order — {formatCurrency(total, 'USD')}
+                        {submittingOrder ? 'Placing Order...' : `Place Order — ${formatCurrency(total, 'USD')}`}
                       </Button>
                     </div>
                   </div>

@@ -9,59 +9,11 @@ interface Product {
   category: string
 }
 
-const products: Product[] = [
-  {
-    id: '1',
-    name: 'Premium Sneakers',
-    image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop',
-    price: '¥24,800',
-    category: 'Fashion',
-  },
-  {
-    id: '2',
-    name: 'Mirrorless Camera',
-    image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&h=400&fit=crop',
-    price: '¥89,900',
-    category: 'Electronics',
-  },
-  {
-    id: '3',
-    name: 'Wireless Headphones',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop',
-    price: '¥32,400',
-    category: 'Audio',
-  },
-  {
-    id: '4',
-    name: 'Gaming Console',
-    image: 'https://images.unsplash.com/photo-1486401899868-0e435ed85128?w=400&h=400&fit=crop',
-    price: '¥54,800',
-    category: 'Gaming',
-  },
-  {
-    id: '5',
-    name: 'Japanese Novel Collection',
-    image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=400&fit=crop',
-    price: '¥3,800',
-    category: 'Books',
-  },
-  {
-    id: '6',
-    name: 'Designer Watch',
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=400&fit=crop',
-    price: '¥198,000',
-    category: 'Fashion',
-  },
-]
+interface ProductCarouselCSSProps {
+  products?: Product[]
+}
 
-/**
- * CSS-based 3D Product Carousel
- * 
- * A stable, pure-CSS alternative to WebGL-based carousel
- * that works reliably across all browsers and devices.
- * Uses CSS 3D transforms for hardware-accelerated animation.
- */
-export const ProductCarouselCSS: React.FC = () => {
+export const ProductCarouselCSS: React.FC<ProductCarouselCSSProps> = ({ products = [] }) => {
   const [rotation, setRotation] = React.useState(0)
   const [isDragging, setIsDragging] = React.useState(false)
   const [startX, setStartX] = React.useState(0)
@@ -69,9 +21,8 @@ export const ProductCarouselCSS: React.FC = () => {
   const [autoRotate, setAutoRotate] = React.useState(true)
   const autoRotateRef = React.useRef<number>()
 
-  // Auto-rotation effect
   React.useEffect(() => {
-    if (autoRotate && !isDragging) {
+    if (autoRotate && !isDragging && products.length > 0) {
       autoRotateRef.current = window.setInterval(() => {
         setRotation((prev) => prev + 0.5)
       }, 30)
@@ -86,7 +37,7 @@ export const ProductCarouselCSS: React.FC = () => {
         window.clearInterval(autoRotateRef.current)
       }
     }
-  }, [autoRotate, isDragging])
+  }, [autoRotate, isDragging, products.length])
 
   const handlePointerDown = (e: React.PointerEvent) => {
     setIsDragging(true)
@@ -124,12 +75,16 @@ export const ProductCarouselCSS: React.FC = () => {
     setIsDragging(false)
   }
 
-  const angleStep = 360 / products.length
+  const displayProducts = products.length > 0 ? products : []
+  const angleStep = displayProducts.length > 0 ? 360 / displayProducts.length : 60
   const radius = 250
+
+  if (displayProducts.length === 0) {
+    return null
+  }
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
-      {/* CSS for 3D perspective */}
       <style>{`
         .perspective-container {
           perspective: 1200px;
@@ -188,7 +143,6 @@ export const ProductCarouselCSS: React.FC = () => {
           }
         }
 
-        /* Floating animation */
         @keyframes float {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-10px); }
@@ -197,13 +151,6 @@ export const ProductCarouselCSS: React.FC = () => {
         .carousel-item {
           animation: float 3s ease-in-out infinite;
         }
-
-        .carousel-item:nth-child(1) { animation-delay: 0s; }
-        .carousel-item:nth-child(2) { animation-delay: 0.5s; }
-        .carousel-item:nth-child(3) { animation-delay: 1s; }
-        .carousel-item:nth-child(4) { animation-delay: 1.5s; }
-        .carousel-item:nth-child(5) { animation-delay: 2s; }
-        .carousel-item:nth-child(6) { animation-delay: 2.5s; }
       `}</style>
 
       <div className="perspective-container w-full h-full flex items-center justify-center">
@@ -220,7 +167,7 @@ export const ProductCarouselCSS: React.FC = () => {
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          {products.map((product, index) => {
+          {displayProducts.map((product, index) => {
             const angle = angleStep * index
             const x = Math.sin((angle * Math.PI) / 180) * radius
             const z = Math.cos((angle * Math.PI) / 180) * radius
@@ -231,6 +178,7 @@ export const ProductCarouselCSS: React.FC = () => {
                 className="carousel-item absolute top-1/2 left-1/2"
                 style={{
                   transform: `translate(-50%, -50%) translateX(${x}px) translateZ(${z}px) rotateY(${-angle}deg)`,
+                  animationDelay: `${index * 0.5}s`,
                 }}
               >
                 <div className="product-card-3d bg-[#F5F8FC] rounded-xl overflow-hidden w-[160px] md:w-[180px] border border-gray-100 hover:border-primary-300 relative">
@@ -255,9 +203,6 @@ export const ProductCarouselCSS: React.FC = () => {
                       <span className="text-sm font-extrabold text-primary-600">
                         {product.price}
                       </span>
-                      <button className="px-2 py-1 rounded-md bg-primary-50 text-primary-700 text-[10px] font-bold hover:bg-primary-100 transition-colors">
-                        View
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -267,12 +212,10 @@ export const ProductCarouselCSS: React.FC = () => {
         </div>
       </div>
 
-      {/* Instruction Hint */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 md:px-4 py-1.5 md:py-2 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] md:text-xs font-medium shadow-lg">
         {autoRotate ? 'Drag to control • Auto-rotating' : 'Drag to rotate'}
       </div>
 
-      {/* Auto-rotate toggle */}
       <button
         onClick={() => setAutoRotate(!autoRotate)}
         className="absolute top-4 right-4 px-2.5 md:px-3 py-1 md:py-1.5 rounded-lg bg-[#F5F8FC]/90 hover:bg-[#F5F8FC] backdrop-blur-sm text-[10px] md:text-xs font-bold text-gray-700 shadow-lg transition-colors"
@@ -280,33 +223,34 @@ export const ProductCarouselCSS: React.FC = () => {
         {autoRotate ? 'Pause' : 'Play'}
       </button>
 
-      {/* Navigation Dots */}
-      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-2">
-        {products.map((_, index) => {
-          const targetRotation = -(angleStep * index)
-          const normalizedRotation = ((rotation % 360) + 360) % 360
-          const normalizedTarget = ((targetRotation % 360) + 360) % 360
-          const diff = Math.abs(normalizedRotation - normalizedTarget)
-          const isActive = diff < angleStep / 2 || diff > 360 - angleStep / 2
+      {displayProducts.length > 1 && (
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex items-center gap-2">
+          {displayProducts.map((_, index) => {
+            const targetRotation = -(angleStep * index)
+            const normalizedRotation = ((rotation % 360) + 360) % 360
+            const normalizedTarget = ((targetRotation % 360) + 360) % 360
+            const diff = Math.abs(normalizedRotation - normalizedTarget)
+            const isActive = diff < angleStep / 2 || diff > 360 - angleStep / 2
 
-          return (
-            <button
-              key={index}
-              onClick={() => {
-                setRotation(targetRotation)
-                setAutoRotate(false)
-              }}
-              className={cn(
-                'transition-all duration-300 rounded-full',
-                isActive
-                  ? 'bg-white w-6 h-2'
-                  : 'bg-white/40 hover:bg-white/60 w-2 h-2',
-              )}
-              aria-label={`Go to product ${index + 1}`}
-            />
-          )
-        })}
-      </div>
+            return (
+              <button
+                key={index}
+                onClick={() => {
+                  setRotation(targetRotation)
+                  setAutoRotate(false)
+                }}
+                className={cn(
+                  'transition-all duration-300 rounded-full',
+                  isActive
+                    ? 'bg-white w-6 h-2'
+                    : 'bg-white/40 hover:bg-white/60 w-2 h-2',
+                )}
+                aria-label={`Go to product ${index + 1}`}
+              />
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

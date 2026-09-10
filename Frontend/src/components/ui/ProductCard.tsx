@@ -9,32 +9,101 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { cn, formatCurrency, truncate } from '@/lib/utils'
-import type { Product } from '@/data/mockData'
 import { Badge } from './Badge'
 import { Button } from './Button'
 
+interface ProductImage {
+  id: string
+  productId: string
+  path: string
+  url: string
+  isPrimary: boolean
+  sortOrder: number
+  createdAt: string
+}
+
+interface ProductWithImages {
+  id: string
+  name: string
+  image?: string
+  images?: string[]
+  price: number
+  estimatedPriceUsd: number
+  condition: string
+  seller: string
+  sellerType: string
+  source: string
+  domesticShipping: number
+  internationalShippingUsd: number
+  serviceFee: number
+  description: string
+  category?: string | { id: string; name: string }
+  categoryId?: string
+  tags: string[]
+  isNew?: boolean
+  isBestSeller?: boolean
+  rating?: number
+  reviewCount?: number
+  productImages?: ProductImage[]
+}
+
 interface ProductCardProps {
-  product: Product
+  product: ProductWithImages
   className?: string
   onFavorite?: (id: string) => void
   isFavorite?: boolean
   compact?: boolean
 }
 
-const conditionColors: Record<Product['condition'], string> = {
+const getProductImageUrl = (product: ProductWithImages): string => {
+  if (product.productImages && product.productImages.length > 0) {
+    const primary = product.productImages.find(img => img.isPrimary)
+    if (primary && primary.url) return primary.url
+    if (product.productImages[0]?.url) return product.productImages[0].url
+  }
+  if (product.image) return product.image
+  if (product.images && product.images.length > 0) return product.images[0]
+  return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22600%22%20height%3D%22600%22%20viewBox%3D%220%200%20600%20600%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22600%22%20height%3D%22600%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2224%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
+}
+
+const conditionColors: Record<string, string> = {
+  NEW: 'success',
   New: 'success',
+  LIKE_NEW: 'success',
   'Like New': 'success',
+  VERY_GOOD: 'info',
   'Very Good': 'info',
+  GOOD: 'warning',
   Good: 'warning',
+  ACCEPTABLE: 'warning',
   Acceptable: 'warning',
 }
 
-const sourceColors: Record<Product['source'], string> = {
+const sourceColors: Record<string, string> = {
   'Marketplace A': 'bg-rose-500',
   'Marketplace B': 'bg-amber-500',
   'Marketplace C': 'bg-red-600',
   'Marketplace D': 'bg-orange-500',
   'Marketplace E': 'bg-blue-500',
+}
+
+const normalizeCondition = (condition: string): string => {
+  const map: Record<string, string> = {
+    NEW: 'New',
+    LIKE_NEW: 'Like New',
+    VERY_GOOD: 'Very Good',
+    GOOD: 'Good',
+    ACCEPTABLE: 'Acceptable',
+  }
+  return map[condition] || condition
+}
+
+const normalizeSellerType = (sellerType: string): string => {
+  const map: Record<string, string> = {
+    SHOP: 'Shop',
+    INDIVIDUAL: 'Individual',
+  }
+  return map[sellerType] || sellerType
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -46,6 +115,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const [imgLoaded, setImgLoaded] = React.useState(false)
   const [hoverFav, setHoverFav] = React.useState(false)
+  const imageUrl = getProductImageUrl(product)
+  const displayCondition = normalizeCondition(product.condition)
 
   return (
     <div
@@ -62,7 +133,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <div className="absolute inset-0 shimmer animate-shimmer rounded-none" />
           )}
           <img
-            src={product.image}
+            src={imageUrl}
             alt={product.name}
             loading="lazy"
             onLoad={() => setImgLoaded(true)}
@@ -88,7 +159,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             variant={conditionColors[product.condition] as any}
             size="sm"
           >
-            {product.condition}
+            {displayCondition}
           </Badge>
         </div>
 
@@ -180,7 +251,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {!compact && (
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {product.sellerType === 'Shop' ? (
+            {normalizeSellerType(product.sellerType) === 'Shop' ? (
               <Store className="h-3 w-3 shrink-0" />
             ) : (
               <User className="h-3 w-3 shrink-0" />

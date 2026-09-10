@@ -1,5 +1,3 @@
-// Prisma schema for EMART backend
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,50 +8,40 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ============ User Management ============
-
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  firstName String?
-  lastName  String?
-  phone     String?
-  role      UserRole @default(CUSTOMER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  firstName          String?
+  lastName           String?
+  phone              String?
+  role               UserRole            @default(CUSTOMER)
+  suspended          Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
   addresses          Address[]
   cart               Cart?
   orders             Order[]
-  warehousePackages  WarehousePackage[]
-  wallet             Wallet?
   walletTransactions WalletTransaction[]
+  wallet             Wallet?
+  warehousePackages  WarehousePackage[]
 
   @@index([email])
   @@map("users")
 }
 
-enum UserRole {
-  CUSTOMER
-  ADMIN
-}
-
 model Address {
-  id          String  @id @default(uuid())
-  userId      String
-  fullName    String
-  addressLine String
-  city        String
-  state       String?
-  postalCode  String
-  country     String
-  countryCode String
-  phone       String
-  isDefault   Boolean @default(false)
-
-  // Relations
+  id                String             @id @default(uuid())
+  userId            String
+  fullName          String
+  addressLine       String
+  city              String
+  state             String?
+  postalCode        String
+  country           String
+  countryCode       String
+  phone             String
+  isDefault         Boolean            @default(false)
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   ordersAsBilling   Order[]            @relation("BillingAddress")
   ordersAsShipping  Order[]            @relation("ShippingAddress")
@@ -63,16 +51,12 @@ model Address {
   @@map("addresses")
 }
 
-// ============ Product Management ============
-
 model Category {
-  id    String @id @default(uuid())
-  name  String @unique
-  icon  String
-  count Int    @default(0)
-  color String
-
-  // Relations
+  id       String    @id @default(uuid())
+  name     String    @unique
+  icon     String
+  count    Int       @default(0)
+  color    String
   products Product[]
 
   @@map("categories")
@@ -81,18 +65,18 @@ model Category {
 model Product {
   id                       String           @id @default(uuid())
   name                     String
-  description              String           @db.Text
-  image                    String
-  images                   String[]
-  price                    Float // Original price in JPY
-  estimatedPriceUsd        Float // Estimated USD price
+  description              String
+  image                    String?
+  images                   String[]         @default([])
+  price                    Float
+  estimatedPriceUsd        Float
   condition                ProductCondition
   seller                   String
   sellerType               SellerType
-  source                   String // Marketplace source
-  domesticShipping         Float // Domestic shipping in JPY
-  internationalShippingUsd Float // International shipping in USD
-  serviceFee               Float // Service fee in JPY
+  source                   String
+  domesticShipping         Float
+  internationalShippingUsd Float
+  serviceFee               Float
   categoryId               String
   tags                     String[]
   isNew                    Boolean          @default(false)
@@ -103,13 +87,201 @@ model Product {
   isAvailable              Boolean          @default(true)
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
-
-  // Relations
-  category   Category    @relation(fields: [categoryId], references: [id])
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  cartItems                CartItem[]
+  orderItems               OrderItem[]
+  category                 Category         @relation(fields: [categoryId], references: [id])
+  productImages            ProductImage[]
 
   @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  path      String
+  url       String?
+  isPrimary Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([isPrimary])
+  @@map("product_images")
+}
+
+model Cart {
+  id        String     @id @default(uuid())
+  userId    String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     CartItem[]
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                    String             @id @default(uuid())
+  userId                String
+  orderNumber           String             @unique
+  status                OrderStatus        @default(PENDING)
+  subtotal              Float
+  serviceFees           Float
+  domesticShipping      Float
+  internationalShipping Float
+  insurance             Float
+  total                 Float
+  shippingMethod        String
+  shippingCarrier       String?
+  trackingNumber        String?
+  estimatedDelivery     DateTime?
+  billingAddressId      String
+  shippingAddressId     String
+  notes                 String?
+  paymentStatus         PaymentStatus      @default(PENDING)
+  paymentMethod         String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  items                 OrderItem[]
+  billingAddress        Address            @relation("BillingAddress", fields: [billingAddressId], references: [id])
+  shippingAddress       Address            @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
+  user                  User               @relation(fields: [userId], references: [id])
+  shipment              Shipment?
+  warehousePackages     WarehousePackage[]
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                         String  @id @default(uuid())
+  orderId                    String
+  productId                  String
+  quantity                   Int
+  priceAtPurchase            Float
+  serviceFeeAtPurchase       Float
+  domesticShippingAtPurchase Float
+  productSnapshot            Json
+  order                      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product                    Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model WarehousePackage {
+  id               String        @id @default(uuid())
+  userId           String
+  orderId          String?
+  packageNumber    String        @unique
+  status           PackageStatus @default(RECEIVED)
+  weight           Float?
+  dimensions       String?
+  photos           String[]
+  inspectionNotes  String?
+  storageLocation  String?
+  receivedAt       DateTime      @default(now())
+  expiresAt        DateTime?
+  addressId        String?
+  consolidatedWith String[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  address          Address?      @relation(fields: [addressId], references: [id])
+  order            Order?        @relation(fields: [orderId], references: [id])
+  user             User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([orderId])
+  @@index([status])
+  @@map("warehouse_packages")
+}
+
+model Shipment {
+  id                String         @id @default(uuid())
+  orderId           String         @unique
+  trackingNumber    String         @unique
+  carrier           String
+  status            ShipmentStatus @default(PENDING)
+  weight            Float?
+  dimensions        String?
+  shippingCost      Float
+  events            Json[]
+  shippedAt         DateTime?
+  estimatedDelivery DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  order             Order          @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+  @@index([trackingNumber])
+  @@map("shipments")
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Float    @default(0)
+  currency  String   @default("USD")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("wallets")
+}
+
+model WalletTransaction {
+  id             String            @id @default(uuid())
+  userId         String
+  walletId       String
+  type           TransactionType
+  amount         Float
+  balanceBefore  Float
+  balanceAfter   Float
+  status         TransactionStatus @default(PENDING)
+  description    String
+  reference      String?
+  paymentMethod  String?
+  paymentDetails Json?
+  notes          String?
+  processedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  user           User              @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("wallet_transactions")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
 }
 
 enum ProductCondition {
@@ -123,105 +295,6 @@ enum ProductCondition {
 enum SellerType {
   SHOP
   INDIVIDUAL
-}
-
-// ============ Shopping Cart ============
-
-model Cart {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items CartItem[]
-
-  @@map("carts")
-}
-
-model CartItem {
-  id        String   @id @default(uuid())
-  cartId    String
-  productId String
-  quantity  Int      @default(1)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@unique([cartId, productId])
-  @@index([cartId])
-  @@index([productId])
-  @@map("cart_items")
-}
-
-// ============ Order Management ============
-
-model Order {
-  id          String      @id @default(uuid())
-  userId      String
-  orderNumber String      @unique
-  status      OrderStatus @default(PENDING)
-
-  // Pricing
-  subtotal              Float // Total product price in USD
-  serviceFees           Float // Service fees in USD
-  domesticShipping      Float // Domestic shipping in USD
-  internationalShipping Float // International shipping in USD
-  insurance             Float // Insurance cost in USD
-  total                 Float // Total order amount in USD
-
-  // Shipping
-  shippingMethod    String
-  shippingCarrier   String?
-  trackingNumber    String?
-  estimatedDelivery DateTime?
-
-  // Addresses
-  billingAddressId  String
-  shippingAddressId String
-
-  // Metadata
-  notes         String?       @db.Text
-  paymentStatus PaymentStatus @default(PENDING)
-  paymentMethod String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  // Relations
-  user              User               @relation(fields: [userId], references: [id])
-  billingAddress    Address            @relation("BillingAddress", fields: [billingAddressId], references: [id])
-  shippingAddress   Address            @relation("ShippingAddress", fields: [shippingAddressId], references: [id])
-  items             OrderItem[]
-  warehousePackages WarehousePackage[]
-  shipment          Shipment?
-
-  @@index([userId])
-  @@index([orderNumber])
-  @@index([status])
-  @@map("orders")
-}
-
-model OrderItem {
-  id                         String @id @default(uuid())
-  orderId                    String
-  productId                  String
-  quantity                   Int
-  priceAtPurchase            Float // Price in USD at time of purchase
-  serviceFeeAtPurchase       Float
-  domesticShippingAtPurchase Float
-  productSnapshot            Json // Store product details at time of purchase
-
-  // Relations
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
-
-  @@index([orderId])
-  @@index([productId])
-  @@map("order_items")
 }
 
 enum OrderStatus {
@@ -245,44 +318,6 @@ enum PaymentStatus {
   REFUNDED
 }
 
-// ============ Warehouse Management ============
-
-model WarehousePackage {
-  id            String        @id @default(uuid())
-  userId        String
-  orderId       String?
-  packageNumber String        @unique
-  status        PackageStatus @default(RECEIVED)
-
-  // Package details
-  weight          Float?
-  dimensions      String?
-  photos          String[] // URLs to package photos
-  inspectionNotes String?  @db.Text
-
-  // Storage
-  storageLocation String?
-  receivedAt      DateTime  @default(now())
-  expiresAt       DateTime? // Free storage expires after 45 days
-
-  // Shipping
-  addressId        String?
-  consolidatedWith String[] // IDs of other packages consolidated together
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user    User     @relation(fields: [userId], references: [id])
-  order   Order?   @relation(fields: [orderId], references: [id])
-  address Address? @relation(fields: [addressId], references: [id])
-
-  @@index([userId])
-  @@index([orderId])
-  @@index([status])
-  @@map("warehouse_packages")
-}
-
 enum PackageStatus {
   RECEIVED
   INSPECTED
@@ -291,39 +326,6 @@ enum PackageStatus {
   CONSOLIDATED
   SHIPPED
   DELIVERED
-}
-
-// ============ Shipment Tracking ============
-
-model Shipment {
-  id             String         @id @default(uuid())
-  orderId        String         @unique
-  trackingNumber String         @unique
-  carrier        String
-  status         ShipmentStatus @default(PENDING)
-
-  // Shipment details
-  weight       Float?
-  dimensions   String?
-  shippingCost Float
-
-  // Tracking events
-  events Json[] // Array of tracking events
-
-  // Timestamps
-  shippedAt         DateTime?
-  estimatedDelivery DateTime?
-  deliveredAt       DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  order Order @relation(fields: [orderId], references: [id])
-
-  @@index([orderId])
-  @@index([trackingNumber])
-  @@map("shipments")
 }
 
 enum ShipmentStatus {
@@ -337,64 +339,13 @@ enum ShipmentStatus {
   RETURNED
 }
 
-// ============ Wallet Management ============
-
-model Wallet {
-  id        String   @id @default(uuid())
-  userId    String   @unique
-  balance   Float    @default(0) // Balance in USD
-  currency  String   @default("USD")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("wallets")
-}
-
-model WalletTransaction {
-  id            String            @id @default(uuid())
-  userId        String
-  walletId      String
-  type          TransactionType
-  amount        Float // Amount in USD
-  balanceBefore Float // Balance before transaction
-  balanceAfter  Float // Balance after transaction
-  status        TransactionStatus @default(PENDING)
-
-  // Transaction details
-  description    String
-  reference      String? // Order number, payment reference, etc.
-  paymentMethod  String? // Credit card, PayPal, bank transfer, etc.
-  paymentDetails Json? // Additional payment information
-
-  // Metadata
-  notes       String?   @db.Text
-  processedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // Relations
-  user User @relation(fields: [userId], references: [id])
-
-  @@index([userId])
-  @@index([walletId])
-  @@index([type])
-  @@index([status])
-  @@index([createdAt])
-  @@map("wallet_transactions")
-}
-
 enum TransactionType {
-  DEPOSIT // Money added to wallet
-  WITHDRAWAL // Money withdrawn from wallet
-  PAYMENT // Payment for order
-  REFUND // Refund to wallet
-  BONUS // Promotional bonus
-  ADJUSTMENT // Manual adjustment by admin
+  DEPOSIT
+  WITHDRAWAL
+  PAYMENT
+  REFUND
+  BONUS
+  ADJUSTMENT
 }
 
 enum TransactionStatus {

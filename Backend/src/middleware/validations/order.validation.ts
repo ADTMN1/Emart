@@ -14,9 +14,8 @@ export const createOrderValidation = [
     .notEmpty()
     .withMessage('Shipping method is required'),
   body('billingAddressId')
-    .notEmpty()
-    .withMessage('Billing address is required'),
+    .optional(),
   body('shippingAddressId')
-    .notEmpty()
-    .withMessage('Shipping address is required'),
+    .optional(),
 ];
+

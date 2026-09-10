@@ -8,4 +8,17 @@ export default defineConfig({
       '@': '/src',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'three-vendor': ['three', '@react-three/fiber', '@react-three/drei'],
+        },
+      },
+    },
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom'],
+  },
 })

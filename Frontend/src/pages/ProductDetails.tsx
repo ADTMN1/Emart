@@ -19,14 +19,71 @@ import {
   ChevronRight as ChevronRightIcon,
   CheckCircle2,
   AlertCircle,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { useToast } from '@/components/ui/Toast'
-import { products, categories } from '@/data/mockData'
 import { cn, formatCurrency } from '@/lib/utils'
+import { api } from '@/lib/api'
+
+interface ProductImage {
+  id: string
+  productId: string
+  path: string
+  url: string
+  isPrimary: boolean
+  sortOrder: number
+  createdAt: string
+}
+
+interface Product {
+  id: string
+  name: string
+  description: string
+  price: number
+  estimatedPriceUsd: number
+  serviceFee: number
+  domesticShipping: number
+  internationalShippingUsd: number
+  condition: string
+  source: string
+  seller: string
+  sellerType: string
+  rating?: number
+  reviewCount?: number
+  isNew: boolean
+  isBestSeller: boolean
+  isAvailable: boolean
+  tags: string[]
+  categoryId: string
+  category?: {
+    id: string
+    name: string
+  }
+  productImages: ProductImage[]
+}
+
+const normalizeCondition = (condition: string): string => {
+  const map: Record<string, string> = {
+    NEW: 'New',
+    LIKE_NEW: 'Like New',
+    VERY_GOOD: 'Very Good',
+    GOOD: 'Good',
+    ACCEPTABLE: 'Acceptable',
+  }
+  return map[condition] || condition
+}
+
+const normalizeSellerType = (sellerType: string): string => {
+  const map: Record<string, string> = {
+    SHOP: 'Shop',
+    INDIVIDUAL: 'Individual',
+  }
+  return map[sellerType] || sellerType
+}
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams()
@@ -35,29 +92,170 @@ const ProductDetails: React.FC = () => {
   const [imgIdx, setImgIdx] = React.useState(0)
   const [qty, setQty] = React.useState(1)
   const [isFav, setIsFav] = React.useState(false)
+  const [product, setProduct] = React.useState<Product | null>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [reloadKey, setReloadKey] = React.useState(0)
+  const [relatedProducts, setRelatedProducts] = React.useState<Product[]>([])
+  const [relatedLoading, setRelatedLoading] = React.useState(false)
+  const [isAddingToCart, setIsAddingToCart] = React.useState(false)
 
-  const product = products.find((p) => p.id === id) || products[0]
-  const category = categories.find((c) => c.id === product.category)
+  // Fetch product from API with cache-busting timestamp
+  React.useEffect(() => {
+    if (!id) return
+
+    const fetchProduct = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const cacheBuster = `t=${Date.now()}-${reloadKey}`
+        const separator = id.includes('?') ? '&' : '?'
+        const data = await api.get<Product>(`/products/${id}${separator}${cacheBuster}`)
+        setProduct(data)
+      } catch (err: any) {
+        console.error('Failed to fetch product:', err)
+        setError(err.message || 'Failed to load product')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProduct()
+  }, [id, reloadKey])
+
+  // Auto-refresh when tab becomes visible again (catches stale data after admin edits)
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        setReloadKey((k) => k + 1)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  const addToCart = async (buyNow = false) => {
+    if (!product || isAddingToCart) return
+
+    setIsAddingToCart(true)
+
+    try {
+      const currentCartCount = Number((window as any).__emartCartCount || 0)
+      const optimisticCount = currentCartCount + qty
+      ;(window as any).__emartCartCount = optimisticCount
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: optimisticCount } }))
+
+      await api.post('/cart/items', {
+        productId: product.id,
+        quantity: qty,
+      })
+
+      const refreshedCart = await api.get<{ items?: Array<{ quantity?: number }> } | null>('/cart').catch(() => null)
+      const cartTotal = Array.isArray(refreshedCart?.items)
+        ? refreshedCart.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+        : optimisticCount
+
+      ;(window as any).__emartCartCount = cartTotal
+      window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: cartTotal } }))
+
+      toast({
+        variant: 'success',
+        title: buyNow ? 'Proceeding to checkout' : 'Added to cart',
+        description: buyNow
+          ? `${product.name} is ready for purchase.`
+          : `${qty} × ${product.name.slice(0, 40)} added to your cart.`,
+      })
+
+      if (buyNow) {
+        navigate('/checkout', { replace: true })
+      }
+    } catch (err: any) {
+      const status = err?.status || err?.response?.status
+      if (status === 401) {
+        toast({
+          variant: 'warning',
+          title: 'Sign in required',
+          description: 'Please sign in to add items to your cart.',
+        })
+        navigate('/login')
+        return
+      }
+
+      toast({
+        variant: 'error',
+        title: 'Unable to add to cart',
+        description: err?.message || 'Please try again.',
+      })
+    } finally {
+      setIsAddingToCart(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (!product?.categoryId || !product?.id) return
+    const fetchRelated = async () => {
+      try {
+        setRelatedLoading(true)
+        const data = await api.get<{ products: Product[] }>(
+          `/products?category=${encodeURIComponent(product.categoryId)}&limit=8`
+        )
+        const related = (data?.products || []).filter(p => p.id !== product.id)
+        setRelatedProducts(related)
+      } catch {
+        setRelatedProducts([])
+      } finally {
+        setRelatedLoading(false)
+      }
+    }
+    fetchRelated()
+  }, [product?.categoryId, product?.id])
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading product...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error || !product) {
+    return (
+      <div className="bg-background min-h-screen flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto px-4">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive" />
+          <h2 className="mt-4 text-xl font-bold">Product Not Found</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {error || 'The product you are looking for does not exist or has been removed.'}
+          </p>
+          <Button className="mt-6" onClick={() => navigate('/marketplace')}>
+            Back to Marketplace
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const category = product.category
 
   const subtotalJpy = product.price + product.serviceFee + product.domesticShipping
   const subtotalUsd = product.estimatedPriceUsd
   const totalUsd = subtotalUsd + product.internationalShippingUsd
 
-  const addToCart = (buyNow = false) => {
-    toast({
-      variant: 'success',
-      title: buyNow ? 'Proceeding to checkout' : 'Added to cart',
-      description: buyNow
-        ? `${product.name} is ready for purchase.`
-        : `${qty} × ${product.name.slice(0, 40)} added to your cart.`,
-    })
-    if (buyNow) {
-      setTimeout(() => navigate('/checkout'), 600)
-    }
-  }
+  // Use productImages from API if available, filter out null URLs, fall back to placeholder
+  const PLACEHOLDER_IMG = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
 
-  const relatedProducts = products.filter((p) => p.id !== product.id && p.category === product.category)
-  const displayImages = product.images.length > 0 ? product.images : [product.image]
+  const validImageUrls = (product.productImages || [])
+    .filter(img => img && img.url)
+    .map(img => img.url as string)
+
+  const displayImages = validImageUrls.length > 0
+    ? validImageUrls
+    : [PLACEHOLDER_IMG]
 
   return (
     <div className="bg-background">
@@ -113,7 +311,7 @@ const ProductDetails: React.FC = () => {
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">
                 {product.isNew && <Badge variant="info" size="md" dot>NEW</Badge>}
                 {product.isBestSeller && <Badge variant="accent" size="md" dot>BESTSELLER</Badge>}
-                <Badge variant="success" size="md">{product.condition}</Badge>
+                <Badge variant="success" size="md">{normalizeCondition(product.condition)}</Badge>
               </div>
             </div>
 
@@ -162,7 +360,7 @@ const ProductDetails: React.FC = () => {
             {/* Seller Info */}
             <div className="flex items-center gap-3 p-3.5 rounded-xl bg-muted/50 border border-border/60">
               <div className="h-11 w-11 rounded-xl bg-primary-50 text-primary flex items-center justify-center shrink-0">
-                {product.sellerType === 'Shop' ? (
+                {normalizeSellerType(product.sellerType) === 'Shop' ? (
                   <Store className="h-5 w-5" />
                 ) : (
                   <User className="h-5 w-5" />
@@ -172,7 +370,7 @@ const ProductDetails: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-sm truncate">{product.seller}</span>
                   <span className="text-[10px] uppercase tracking-wide font-bold text-muted-foreground px-1.5 py-0.5 rounded bg-muted">
-                    {product.sellerType}
+                    {normalizeSellerType(product.sellerType)}
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -306,17 +504,19 @@ const ProductDetails: React.FC = () => {
                   variant="primary"
                   className="sm:flex-1 shadow-lg shadow-primary/25"
                   onClick={() => addToCart(false)}
+                  disabled={isAddingToCart}
                 >
                   <Package className="h-4 w-4 mr-2" />
-                  Add to Cart
+                  {isAddingToCart ? 'Adding...' : 'Add to Cart'}
                 </Button>
                 <Button
                   size="xl"
                   variant="secondary"
                   className="sm:flex-1 shadow-lg shadow-secondary/25"
                   onClick={() => addToCart(true)}
+                  disabled={isAddingToCart}
                 >
-                  Buy Now
+                  {isAddingToCart ? 'Processing...' : 'Buy Now'}
                 </Button>
                 <div className="flex sm:flex-col gap-2">
                   <Button
@@ -363,10 +563,10 @@ const ProductDetails: React.FC = () => {
               </p>
               <ul className="mt-5 space-y-2.5">
                 {[
-                  ['Condition', product.condition],
+                  ['Condition', normalizeCondition(product.condition)],
                   ['Seller Location', 'Global'],
                   ['Shipping from', 'EMART Warehouse'],
-                  ['Seller Type', product.sellerType],
+                  ['Seller Type', normalizeSellerType(product.sellerType)],
                   ['Marketplace', product.source],
                   ['Item Code', `EM-${product.id.toUpperCase()}-${Math.round(product.price)}`],
                 ].map(([k, v]) => (
@@ -405,28 +605,49 @@ const ProductDetails: React.FC = () => {
         </section>
 
         {/* Related */}
-        {relatedProducts.length > 0 && (
-          <section className="mt-16">
-            <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
-              <div>
-                <h2 className="font-display text-xl lg:text-2xl font-extrabold tracking-tight">
-                  Related Products
-                </h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Customers also viewed these {category?.name || 'items'}
-                </p>
-              </div>
-              <Link to="/marketplace" className="text-sm font-bold text-primary hover:text-primary-700">
-                View all →
-              </Link>
+        <section className="mt-16">
+          <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
+            <div>
+              <h2 className="font-display text-xl lg:text-2xl font-extrabold tracking-tight">
+                Related Products
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Customers also viewed these {category?.name || 'items'}
+              </p>
             </div>
+            <Link to="/marketplace" className="text-sm font-bold text-primary hover:text-primary-700">
+              View all →
+            </Link>
+          </div>
+          {relatedLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="aspect-square bg-muted animate-pulse" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                    <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : relatedProducts.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
               {relatedProducts.slice(0, 4).map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-12 text-center">
+              <Package className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+              <h3 className="font-semibold text-muted-foreground">No related products yet</h3>
+              <p className="text-sm text-muted-foreground/70 mt-1">Check back soon for similar items</p>
+              <Button variant="outline" size="md" className="mt-4" asChild>
+                <Link to="/marketplace">Browse all products</Link>
+              </Button>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

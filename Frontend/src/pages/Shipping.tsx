@@ -25,6 +25,8 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn, formatCurrency } from '@/lib/utils'
 
+import { api } from '@/lib/api'
+
 interface TrackingEvent {
   date: string
   time: string
@@ -34,37 +36,21 @@ interface TrackingEvent {
   current?: boolean
 }
 
-const trackings = [
-  {
-    id: 't1',
-    code: 'DHL1234567890JP',
-    carrier: 'DHL Express',
-    eta: 'Sep 12, 2024',
-    destination: 'New York, US',
-    status: 'In Transit',
-    progress: 65,
-    icon: Plane,
-    events: [
-      { date: 'Sep 7', time: '14:22', status: 'Shipment picked up', location: 'Origin Hub', done: true },
-      { date: 'Sep 7', time: '19:45', status: 'Departed origin facility', location: 'Transit Hub', done: true },
-      { date: 'Sep 8', time: '08:30', status: 'In transit', location: 'Anchorage, US', done: true, current: true },
-      { date: '—', time: '—', status: 'Arrived at destination', location: 'New York, US', done: false },
-      { date: '—', time: '—', status: 'Out for delivery', location: 'New York, US', done: false },
-      { date: 'Est. Sep 12', time: '—', status: 'Delivered', location: 'New York, US', done: false },
-    ],
-  },
-  {
-    id: 't2',
-    code: 'EMS9876543210JP',
-    carrier: 'EMS',
-    eta: 'Aug 16, 2024',
-    destination: 'London, UK',
-    status: 'Delivered',
-    progress: 100,
-    icon: MapPinCheck,
-    events: [],
-  },
-]
+interface ShipmentItem {
+  id: string
+  trackingNumber: string
+  carrier: string
+  status: string
+  shippingCost: number
+  shippedAt?: string
+  estimatedDelivery?: string
+  order?: {
+    orderNumber: string
+    user?: {
+      email: string
+    }
+  }
+}
 
 const methods = [
   { name: 'DHL Express', days: '3-5 days', priceFrom: 22, icon: Plane, speed: 5, coverage: 220, track: true },
@@ -77,6 +63,23 @@ const methods = [
 
 const Shipping: React.FC = () => {
   const [trackQuery, setTrackQuery] = React.useState('')
+  const [shipments, setShipments] = React.useState<ShipmentItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    const fetchShipments = async () => {
+      try {
+        setLoading(true)
+        const res = await api.get<{ shipments: ShipmentItem[] }>('/admin/shipments').catch(() => ({ shipments: [] }))
+        setShipments(res.shipments || [])
+      } catch {
+        setShipments([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchShipments()
+  }, [])
 
   return (
     <div className="bg-background">
@@ -133,18 +136,6 @@ const Shipping: React.FC = () => {
                     Track Package
                   </Button>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-                  <span className="text-muted-foreground font-semibold">Quick access:</span>
-                  {trackings.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => setTrackQuery(t.code)}
-                      className="font-mono text-[11px] px-2.5 py-1 rounded-md bg-muted hover:bg-primary-50 hover:text-primary transition-colors font-bold"
-                    >
-                      {t.code.slice(0, 6)}…
-                    </button>
-                  ))}
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -154,115 +145,81 @@ const Shipping: React.FC = () => {
       {/* Active shipments */}
       <section className="container-page pb-10">
         <h2 className="font-display text-xl lg:text-2xl font-bold mb-5">Your Active Shipments</h2>
-        <div className="space-y-6">
-          {trackings.slice(0, 1).map((t) => {
-            const Icon = t.icon
-            return (
-              <Card key={t.id} className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="p-5 lg:p-6 grid lg:grid-cols-5 gap-5 items-start border-b border-border/60">
-                    <div className="lg:col-span-2">
-                      <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                          <Icon className="h-6 w-6" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="font-display text-lg font-bold">{t.carrier}</h3>
-                            <Badge variant={t.status === 'Delivered' ? 'success' : 'accent'} size="sm" className="gap-1">
-                              <Truck className="h-3 w-3" />
-                              {t.status}
-                            </Badge>
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+            <p className="mt-4 text-sm text-muted-foreground">Loading active shipments...</p>
+          </div>
+        ) : shipments.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <Truck className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+              <h3 className="font-display text-lg font-bold mb-2">No Active Shipments</h3>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                When your warehouse packages are prepared for international delivery, active shipments will appear here with live tracking updates.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {shipments.map((t) => {
+              return (
+                <Card key={t.id} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    <div className="p-5 lg:p-6 grid lg:grid-cols-5 gap-5 items-start border-b border-border/60">
+                      <div className="lg:col-span-2">
+                        <div className="flex items-start gap-4">
+                          <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <Truck className="h-6 w-6" />
                           </div>
-                          <div className="mt-1 font-mono text-sm font-bold text-muted-foreground flex items-center gap-1.5">
-                            {t.code}
-                            <button className="text-primary hover:underline text-xs font-sans font-semibold">Copy</button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:col-span-3">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Destination</div>
-                        <div className="text-sm font-semibold mt-0.5 flex items-center gap-1">
-                          <Globe2 className="h-3.5 w-3.5 text-primary" />
-                          {t.destination}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">ETA</div>
-                        <div className="text-sm font-semibold mt-0.5 flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5 text-secondary" />
-                          {t.eta}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Progress</div>
-                        <div className="mt-1.5">
-                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={cn(
-                                'h-full rounded-full',
-                                t.progress === 100 ? 'bg-success' : 'bg-gradient-to-r from-primary to-secondary',
-                              )}
-                              style={{ width: `${t.progress}%` }}
-                            />
-                          </div>
-                          <div className="mt-1 text-xs font-bold">{t.progress}%</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Timeline */}
-                  <div className="p-5 lg:p-6 bg-muted/20">
-                    <div className="relative">
-                      <div className="hidden sm:block absolute left-5 top-5 bottom-5 w-0.5 bg-border" />
-                      <div className="space-y-5">
-                        {t.events.map((e, i) => (
-                          <div key={i} className="relative flex gap-4">
-                            <div className={cn(
-                              'relative z-10 h-10 w-10 shrink-0 rounded-xl flex items-center justify-center border-2',
-                              e.current
-                                ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25 ring-4 ring-primary/15'
-                                : e.done
-                                ? 'bg-success text-white border-success'
-                                : 'bg-white border-border text-muted-foreground',
-                            )}>
-                              {e.done || e.current ? (
-                                e.current ? <Truck className="h-4 w-4 animate-pulse" /> : <CheckCircle2 className="h-5 w-5" />
-                              ) : (
-                                <Clock className="h-4 w-4" />
-                              )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-display text-lg font-bold">{t.carrier}</h3>
+                              <Badge variant={t.status === 'DELIVERED' ? 'success' : 'accent'} size="sm" className="gap-1">
+                                <Truck className="h-3 w-3" />
+                                {t.status}
+                              </Badge>
                             </div>
-                            <div className="flex-1 grid sm:grid-cols-5 gap-2 pt-0.5 pb-1">
-                              <div className="sm:col-span-1 text-xs">
-                                <div className="font-bold text-foreground">{e.date}</div>
-                                <div className="text-muted-foreground">{e.time}</div>
-                              </div>
-                              <div className="sm:col-span-2">
-                                <div className={cn('text-sm font-bold', !e.done && !e.current && 'text-muted-foreground')}>
-                                  {e.status}
-                                  {e.current && <Badge variant="primary" size="sm" className="ml-2">Current</Badge>}
-                                </div>
-                              </div>
-                              <div className="sm:col-span-2 text-sm text-foreground/70">
-                                <div className="flex items-center gap-1">
-                                  <MapPinCheck className="h-3 w-3 opacity-70" />
-                                  {e.location}
-                                </div>
-                              </div>
+                            <div className="mt-1 font-mono text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                              {t.trackingNumber}
+                              <button
+                                className="text-primary hover:underline text-xs font-sans font-semibold"
+                                onClick={() => navigator.clipboard.writeText(t.trackingNumber)}
+                              >
+                                Copy
+                              </button>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 lg:col-span-3">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Cost</div>
+                          <div className="text-sm font-semibold mt-0.5 flex items-center gap-1">
+                            {formatCurrency(t.shippingCost || 0, 'USD')}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Shipped At</div>
+                          <div className="text-sm font-semibold mt-0.5 flex items-center gap-1">
+                            <Clock className="h-3.5 w-3.5 text-secondary" />
+                            {t.shippedAt ? new Date(t.shippedAt).toLocaleDateString() : 'Pending'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Status</div>
+                          <div className="text-sm font-semibold mt-0.5 flex items-center gap-1">
+                            {t.status}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </section>
 
       {/* Shipping methods */}

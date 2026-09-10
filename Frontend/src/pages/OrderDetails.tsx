@@ -21,21 +21,117 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
 import { cn, formatCurrency } from '@/lib/utils'
-import { products } from '@/data/mockData'
+import type { Product } from '@/lib/types'
+import { api } from '@/lib/api'
+import { EmptyOrders } from '@/components/ui/States'
+import { useNavigate } from 'react-router-dom'
 
-const timelineSteps = [
-  { id: 1, key: 'placed', title: 'Order Placed', time: 'Sep 7, 2024 · 10:32 AM', icon: CheckCircle2, done: true },
-  { id: 2, key: 'paid', title: 'Payment Confirmed', time: 'Sep 7, 2024 · 10:34 AM', icon: ShieldCheck, done: true },
-  { id: 3, key: 'purchasing', title: 'Purchasing from Sellers', time: 'In progress...', icon: Store, active: true },
-  { id: 4, key: 'warehouse', title: 'Arrives at Warehouse', time: 'Est. Sep 9-10', icon: PackageOpen, done: false },
-  { id: 5, key: 'inspection', title: 'Item Inspection', time: 'Est. Sep 10', icon: PackageCheck, done: false },
-  { id: 6, key: 'shipped', title: 'Shipped Internationally', time: 'Est. Sep 11', icon: Truck, done: false },
-  { id: 7, key: 'delivered', title: 'Delivered to You', time: 'Est. Sep 14-16', icon: MapPinCheck, done: false },
+interface OrderItem {
+  product: Product
+  pkg: string
+  qty: number
+  status: string
+  vendor: string
+}
+
+interface OrderData {
+  id: string
+  number: string
+  status: string
+  date: string
+  itemsCount: number
+  packages: number
+  items: OrderItem[]
+  timelineSteps: Array<{
+    id: number
+    key: string
+    title: string
+    time: string
+    done: boolean
+    active?: boolean
+  }>
+  subtotal: number
+  serviceFees: number
+  domesticShipping: number
+  internationalShipping: number
+  insurance: number
+  total: number
+  trackingCode?: string
+}
+
+const defaultTimelineSteps = [
+  { id: 1, key: 'placed', title: 'Order Placed', time: '', icon: CheckCircle2, done: false, active: false },
+  { id: 2, key: 'paid', title: 'Payment Confirmed', time: '', icon: ShieldCheck, done: false, active: false },
+  { id: 3, key: 'purchasing', title: 'Purchasing from Sellers', time: '', icon: Store, done: false, active: false },
+  { id: 4, key: 'warehouse', title: 'Arrives at Warehouse', time: '', icon: PackageOpen, done: false, active: false },
+  { id: 5, key: 'inspection', title: 'Item Inspection', time: '', icon: PackageCheck, done: false, active: false },
+  { id: 6, key: 'shipped', title: 'Shipped Internationally', time: '', icon: Truck, done: false, active: false },
+  { id: 7, key: 'delivered', title: 'Delivered to You', time: '', icon: MapPinCheck, done: false, active: false },
 ]
+
+const iconMap = {
+  placed: CheckCircle2,
+  paid: ShieldCheck,
+  purchasing: Store,
+  warehouse: PackageOpen,
+  inspection: PackageCheck,
+  shipped: Truck,
+  delivered: MapPinCheck,
+}
 
 const OrderDetails: React.FC = () => {
   const { id } = useParams()
-  const items = [products[0], products[2]]
+  const navigate = useNavigate()
+  const [loading, setLoading] = React.useState(true)
+  const [order, setOrder] = React.useState<OrderData | null>(null)
+  const [error, setError] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!id) return
+    const fetchOrder = async () => {
+      try {
+        setLoading(true)
+        const data = await api.get<OrderData>(`/orders/${id}`).catch(() => null)
+        if (data) {
+          setOrder(data)
+        } else {
+          setError(true)
+        }
+      } catch {
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrder()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="container-page py-12 min-h-[70vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading order details...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !order) {
+    return (
+      <div className="container-page py-12 min-h-[70vh]">
+        <div className="max-w-xl mx-auto">
+          <EmptyOrders onBrowse={() => navigate('/orders')} />
+        </div>
+      </div>
+    )
+  }
+
+  const timelineSteps = order.timelineSteps?.length
+    ? order.timelineSteps.map((t) => ({ ...t, icon: iconMap[t.key as keyof typeof iconMap] || CheckCircle2 }))
+    : defaultTimelineSteps
+  const items = order.items?.map((i) => i.product) || []
+  const orderItems = order.items || []
 
   return (
     <div className="bg-background">
@@ -45,21 +141,21 @@ const OrderDetails: React.FC = () => {
           <ChevronRight className="h-3 w-3" />
           <Link to="/orders" className="hover:text-primary">My Orders</Link>
           <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground font-medium">#EMT-20240907-12345</span>
+          <span className="text-foreground font-medium">#{order.number}</span>
         </div>
         <div className="mt-4 flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight">
-                Order #EMT-20240907-12345
+                Order #{order.number}
               </h1>
               <Badge variant="info" size="md" className="gap-1.5">
                 <Clock className="h-3 w-3" />
-                Processing
+                {order.status}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Placed on Sep 7, 2024 · {items.length + 1} items · 2 packages
+              Placed on {order.date} · {order.itemsCount} items · {order.packages || 1} packages
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -127,53 +223,61 @@ const OrderDetails: React.FC = () => {
           <Card>
             <CardContent className="p-5 lg:p-6">
               <div className="flex items-center justify-between mb-5">
-                <h2 className="font-display text-lg font-bold">Items ({items.length + 1})</h2>
+                <h2 className="font-display text-lg font-bold">Items ({order.itemsCount})</h2>
                 <Button variant="ghost" size="sm" asChild>
                   <Link to="/cart">Add More Items</Link>
                 </Button>
               </div>
 
               <div className="space-y-4">
-                {[
-                  { p: items[0], pkg: 'Package A', qty: 1, status: 'Purchasing', vendor: 'Mercari - Watch Collector' },
-                  { p: items[1], pkg: 'Package B', qty: 1, status: 'Arriving tomorrow', vendor: 'Amazon - Ghibli Museum Store' },
-                ].map((row, idx) => (
-                  <div key={row.p.id + idx} className="p-4 rounded-xl bg-muted/30 border border-border/60">
-                    <div className="flex items-center justify-between mb-3 pb-3 border-b border-border/60">
-                      <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-md bg-primary/10 text-primary flex items-center justify-center">
-                          <Package className="h-3.5 w-3.5" />
+                {orderItems.length === 0 ? (
+                  <div className="p-8 rounded-xl bg-muted/30 border border-dashed border-border text-center">
+                    <Package className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                    <p className="text-sm text-muted-foreground">No items found for this order</p>
+                  </div>
+                ) : (
+                  orderItems.map((row, idx) => (
+                    <div key={row.product.id + idx} className="p-4 rounded-xl bg-muted/30 border border-border/60">
+                      <div className="flex items-center justify-between mb-3 pb-3 border-b border-border/60">
+                        <div className="flex items-center gap-2">
+                          <div className="h-6 w-6 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+                            <Package className="h-3.5 w-3.5" />
+                          </div>
+                          <span className="text-xs font-bold">{row.pkg}</span>
+                          <Badge variant="outline" size="sm" className="gap-1">
+                            {row.status === 'Purchasing' ? <Clock className="h-2.5 w-2.5" /> : <CheckCircle2 className="h-2.5 w-2.5 text-info" />}
+                            {row.status}
+                          </Badge>
                         </div>
-                        <span className="text-xs font-bold">{row.pkg}</span>
-                        <Badge variant="outline" size="sm" className="gap-1">
-                          {row.status === 'Purchasing' ? <Clock className="h-2.5 w-2.5" /> : <CheckCircle2 className="h-2.5 w-2.5 text-info" />}
-                          {row.status}
-                        </Badge>
+                        <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                          <Store className="h-3 w-3" />
+                          {row.vendor}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                        <Store className="h-3 w-3" />
-                        {row.vendor}
-                      </div>
-                    </div>
-                    <div className="flex gap-4">
-                      <Link to={`/product/${row.p.id}`} className="h-20 w-20 shrink-0 rounded-xl overflow-hidden bg-muted border border-border">
-                        <img src={row.p.image} alt="" className="h-full w-full object-cover" />
-                      </Link>
-                      <div className="flex-1 min-w-0 flex flex-col justify-between">
-                        <Link to={`/product/${row.p.id}`} className="font-semibold text-sm leading-snug line-clamp-2 hover:text-primary transition-colors">
-                          {row.p.name}
+                      <div className="flex gap-4">
+                        <Link to={`/product/${row.product.id}`} className="h-20 w-20 shrink-0 rounded-xl overflow-hidden bg-muted border border-border">
+                          <img
+                            src={row.product.image || row.product.images?.[0] || ''}
+                            alt={row.product.name}
+                            className="h-full w-full object-cover"
+                          />
                         </Link>
-                        <div className="flex items-center justify-between pt-2">
-                          <Badge variant="success" size="sm">{row.p.condition}</Badge>
-                          <div className="flex items-center gap-4">
-                            <span className="text-xs text-muted-foreground">Qty: {row.qty}</span>
-                            <span className="font-bold">{formatCurrency(row.p.estimatedPriceUsd * row.qty, 'USD')}</span>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <Link to={`/product/${row.product.id}`} className="font-semibold text-sm leading-snug line-clamp-2 hover:text-primary transition-colors">
+                            {row.product.name}
+                          </Link>
+                          <div className="flex items-center justify-between pt-2">
+                            <Badge variant="success" size="sm">{row.product.condition}</Badge>
+                            <div className="flex items-center gap-4">
+                              <span className="text-xs text-muted-foreground">Qty: {row.qty}</span>
+                              <span className="font-bold">{formatCurrency(row.product.estimatedPriceUsd * row.qty, 'USD')}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -232,24 +336,24 @@ const OrderDetails: React.FC = () => {
 
               <div className="space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-foreground/80 font-medium">3 items</span>
-                  <span className="font-semibold">{formatCurrency(372, 'USD')}</span>
+                  <span className="text-foreground/80 font-medium">{order.itemsCount} items</span>
+                  <span className="font-semibold">{formatCurrency(order.subtotal, 'USD')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-foreground/80 font-medium">Service Fees (7%)</span>
-                  <span className="font-semibold">{formatCurrency(54, 'USD')}</span>
+                  <span className="font-semibold">{formatCurrency(order.serviceFees, 'USD')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-foreground/80 font-medium">Domestic Shipping</span>
-                  <span className="font-semibold">{formatCurrency(10, 'USD')}</span>
+                  <span className="font-semibold">{formatCurrency(order.domesticShipping, 'USD')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-foreground/80 font-medium">DHL Express</span>
-                  <span className="font-semibold">{formatCurrency(58, 'USD')}</span>
+                  <span className="font-semibold">{formatCurrency(order.internationalShipping, 'USD')}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-foreground/80 font-medium">Insurance</span>
-                  <span className="font-semibold">{formatCurrency(8, 'USD')}</span>
+                  <span className="font-semibold">{formatCurrency(order.insurance, 'USD')}</span>
                 </div>
               </div>
 
@@ -258,7 +362,7 @@ const OrderDetails: React.FC = () => {
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-bold">Total Paid</span>
                 <div className="font-display text-2xl font-extrabold">
-                  {formatCurrency(502, 'USD')}
+                  {formatCurrency(order.total, 'USD')}
                 </div>
               </div>
 
@@ -285,8 +389,15 @@ const OrderDetails: React.FC = () => {
               </p>
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 text-xs">
                 <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-mono font-bold">EMT-20240907-12345</span>
-                <button className="ml-auto text-primary font-bold">Copy</button>
+                <span className="font-mono font-bold">{order?.number || order?.id || id}</span>
+                <button
+                  className="ml-auto text-primary font-bold hover:underline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(order?.number || order?.id || id || '')
+                  }}
+                >
+                  Copy
+                </button>
               </div>
             </CardContent>
           </Card>

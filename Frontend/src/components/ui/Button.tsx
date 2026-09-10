@@ -50,6 +50,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       rightIcon,
       children,
       disabled,
+      asChild,
       ...props
     },
     ref,

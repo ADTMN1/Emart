@@ -14,11 +14,55 @@ export const errorHandler = (
 
   // Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
+    const code = (err as any).code;
+
+    if (code === 'P2023' || code === 'P2025') {
+      return sendError(res, 'Requested resource not found or invalid ID format', 404);
+    }
+
+    if (code === 'P1001' || code === 'P1010' || code === 'P1002') {
+      return sendError(res, 'Database connection failed. Check your DATABASE_URL and Supabase project status.', 503);
+    }
+
+    console.error('Prisma Known Error:', code, err.message);
     return sendError(res, 'Database error occurred', 400);
   }
 
+  if (err.name === 'PrismaClientInitializationError') {
+    console.error('Prisma Initialization Error:', err.message);
+    return sendError(
+      res,
+      'Database connection failed. Check your DATABASE_URL and Supabase status.',
+      503
+    );
+  }
+
   if (err.name === 'PrismaClientValidationError') {
-    return sendError(res, 'Invalid data provided', 400);
+    console.error('Prisma Validation Error:', err.message);
+    const isDev = process.env.NODE_ENV !== 'production';
+    let fieldName = 'unknown';
+    let details = '';
+    
+    const argMatch = err.message.match(/Argument `(\w+)`/);
+    if (argMatch) {
+      fieldName = argMatch[1];
+    }
+    
+    const typeMatch = err.message.match(/Got invalid value.*?Expected (\w+)/);
+    if (typeMatch) {
+      details = ` Expected type: ${typeMatch[1]}.`;
+    }
+    
+    const missingMatch = err.message.match(/Missing required value for argument `(\w+)`/);
+    if (missingMatch) {
+      fieldName = missingMatch[1];
+      details = ' This field is required.';
+    }
+    
+    const userMsg = `Invalid data for field '${fieldName}'.${details}`;
+    const devMsg = err.message.split('\n').slice(0, 3).join(' ');
+    
+    return sendError(res, isDev ? `Prisma error: ${devMsg}` : userMsg, 400);
   }
 
   // JWT errors

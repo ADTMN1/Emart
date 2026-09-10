@@ -47,8 +47,12 @@ const AuthCallback = () => {
           description: 'You have successfully signed in with Google.',
         });
         
-        // Navigate to home page
-        navigate('/', { replace: true });
+        // Redirect based on user role
+        if (userData.role === 'ADMIN') {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
       } catch (err: any) {
         console.error('OAuth callback error:', err);
         setError(err.message || 'Authentication failed');

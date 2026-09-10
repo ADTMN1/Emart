@@ -7,27 +7,50 @@ type Side = 'left' | 'right'
 
 interface Product {
   name: string
-  image: string
-  accent: string
+  image?: string
+  images?: string[]
+  accent?: string
 }
 
-const railProducts: Record<Side, Product[]> = {
-  left: [
-    { name: 'Sneakers', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=360&h=440&fit=crop', accent: '#f59e0b' },
-    { name: 'Headphones', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=360&h=440&fit=crop', accent: '#6366f1' },
-    { name: 'Camera', image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=360&h=440&fit=crop', accent: '#38bdf8' },
-    { name: 'Watch', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=360&h=440&fit=crop', accent: '#f43f5e' },
-  ],
-  right: [
-    { name: 'Gaming', image: 'https://images.unsplash.com/photo-1593305841991-05c297ba4575?w=360&h=440&fit=crop', accent: '#a855f7' },
-    { name: 'Collectible', image: 'https://images.unsplash.com/photo-1608889335941-32ac5f2041b9?w=360&h=440&fit=crop', accent: '#f97316' },
-    { name: 'Electronics', image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=360&h=440&fit=crop', accent: '#22c55e' },
-    { name: 'Accessories', image: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=360&h=440&fit=crop', accent: '#eab308' },
-  ],
+interface HeroProductRailProps {
+  side: Side
+  products?: Product[]
+}
+
+const accents = ['#f59e0b', '#6366f1', '#38bdf8', '#f43f5e', '#a855f7', '#f97316', '#22c55e', '#eab308']
+
+function makePlaceholderDataUrl(label: string, accent: string) {
+  const safeLabel = (label || 'Product').replace(/[<>&]/g, '').slice(0, 18)
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+      <defs>
+        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="${accent}"/>
+          <stop offset="100%" stop-color="#e2e8f0"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="1000" rx="44" fill="url(#g)"/>
+      <circle cx="400" cy="350" r="180" fill="rgba(255,255,255,0.18)"/>
+      <text x="400" y="620" text-anchor="middle" font-size="72" font-family="Arial, sans-serif" font-weight="700" fill="white">${safeLabel}</text>
+    </svg>
+  `
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+}
+
+function getSafeProductImage(product: Product) {
+  const candidate = product.image || product.images?.find((image: string) => typeof image === 'string' && image.trim().length > 0)
+
+  if (typeof candidate === 'string' && candidate.trim() && candidate !== 'undefined' && candidate !== 'null') {
+    return candidate
+  }
+
+  return makePlaceholderDataUrl(product.name, product.accent || '#6366f1')
 }
 
 function ProductCard({ product, position, tilt }: { product: Product; position: [number, number, number]; tilt: number }) {
-  const texture = useLoader(THREE.TextureLoader, product.image)
+  const safeImage = React.useMemo(() => getSafeProductImage(product), [product])
+  const texture = useLoader(THREE.TextureLoader, safeImage)
   const [hovered, setHovered] = React.useState(false)
 
   React.useEffect(() => {
@@ -80,7 +103,7 @@ function GlowParticles() {
   )
 }
 
-function RailScene({ side }: { side: Side }) {
+function RailScene({ side, products = [] }: { side: Side; products?: Product[] }) {
   const group = React.useRef<THREE.Group>(null)
   const targetRotation = React.useRef(side === 'left' ? 0.16 : -0.16)
   const pointerStart = React.useRef<number | null>(null)
@@ -111,6 +134,8 @@ function RailScene({ side }: { side: Side }) {
     [0.38, -1.67, -0.65],
   ]
 
+  const displayProducts = products.slice(0, 4)
+
   return (
     <group ref={group} onPointerDown={startDrag} onPointerMove={drag} onPointerUp={endDrag} onPointerLeave={endDrag}>
       <GlowParticles />
@@ -118,8 +143,8 @@ function RailScene({ side }: { side: Side }) {
         <circleGeometry args={[2.7, 48]} />
         <meshBasicMaterial color={side === 'left' ? '#1d4ed8' : '#7c3aed'} transparent opacity={0.12} />
       </mesh>
-      {railProducts[side].map((product, index) => (
-        <ProductCard key={product.name} product={product} position={positions[index]} tilt={(index % 2 === 0 ? -1 : 1) * 0.22} />
+      {displayProducts.map((product, index) => (
+        <ProductCard key={product.name + index} product={product} position={positions[index % positions.length]} tilt={(index % 2 === 0 ? -1 : 1) * 0.22} />
       ))}
       <ambientLight intensity={1.15} />
       <directionalLight position={[-3, 4, 5]} intensity={2.1} castShadow />
@@ -128,7 +153,7 @@ function RailScene({ side }: { side: Side }) {
   )
 }
 
-export function HeroProductRail({ side }: { side: Side }) {
+export function HeroProductRail({ side, products }: HeroProductRailProps) {
   return (
     <div className="h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label={`${side} product carousel`}>
       <Canvas
@@ -138,7 +163,7 @@ export function HeroProductRail({ side }: { side: Side }) {
         shadows
       >
         <React.Suspense fallback={null}>
-          <RailScene side={side} />
+          <RailScene side={side} products={products} />
         </React.Suspense>
       </Canvas>
     </div>
