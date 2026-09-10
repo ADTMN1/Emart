@@ -59,6 +59,7 @@ model Category {
   color    String
   products Product[]
 
+  @@index([name])
   @@map("categories")
 }
 
@@ -92,6 +93,20 @@ model Product {
   category                 Category         @relation(fields: [categoryId], references: [id])
   productImages            ProductImage[]
 
+  @@index([categoryId])
+  @@index([categoryId, isAvailable, createdAt])
+  @@index([categoryId, isAvailable, estimatedPriceUsd])
+  @@index([isAvailable, categoryId, isBestSeller])
+  @@index([isAvailable, condition])
+  @@index([isAvailable, createdAt])
+  @@index([isAvailable])
+  @@index([isNew])
+  @@index([isBestSeller])
+  @@index([source])
+  @@index([condition])
+  @@index([estimatedPriceUsd])
+  @@index([createdAt])
+  @@index([name])
   @@map("products")
 }
 
@@ -106,6 +121,7 @@ model ProductImage {
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId])
+  @@index([productId, isPrimary, sortOrder])
   @@index([isPrimary])
   @@map("product_images")
 }
@@ -167,8 +183,11 @@ model Order {
   warehousePackages     WarehousePackage[]
 
   @@index([userId])
+  @@index([userId, createdAt])
   @@index([orderNumber])
   @@index([status])
+  @@index([status, createdAt])
+  @@index([paymentStatus, createdAt])
   @@map("orders")
 }
 
@@ -185,6 +204,7 @@ model OrderItem {
   product                    Product @relation(fields: [productId], references: [id])
 
   @@index([orderId])
+  @@index([orderId, productId])
   @@index([productId])
   @@map("order_items")
 }
@@ -211,8 +231,11 @@ model WarehousePackage {
   user             User          @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([userId, status, createdAt])
   @@index([orderId])
+  @@index([orderId, status])
   @@index([status])
+  @@index([status, createdAt])
   @@map("warehouse_packages")
 }
 
@@ -235,6 +258,7 @@ model Shipment {
 
   @@index([orderId])
   @@index([trackingNumber])
+  @@index([status, createdAt])
   @@map("shipments")
 }
 

@@ -45,7 +45,8 @@ export class ProductService {
   }
 
   async getAllProducts(filters: ProductFilters, pagination: PaginationParams) {
-    const { page = 1, limit = 20 } = pagination;
+    const page = Math.max(1, Number(pagination.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(pagination.limit) || 20));
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -91,11 +92,39 @@ export class ProductService {
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        include: {
-          category: true,
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          estimatedPriceUsd: true,
+          condition: true,
+          seller: true,
+          sellerType: true,
+          source: true,
+          domesticShipping: true,
+          internationalShippingUsd: true,
+          serviceFee: true,
+          tags: true,
+          isNew: true,
+          isBestSeller: true,
+          rating: true,
+          reviewCount: true,
+          categoryId: true,
+          createdAt: true,
+          category: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
           productImages: {
             where: { isPrimary: true },
             take: 1,
+            select: {
+              id: true,
+              url: true,
+              isPrimary: true,
+            },
           },
         },
         skip,
@@ -121,9 +150,43 @@ export class ProductService {
   async getProductById(id: string) {
     const product = await prisma.product.findUnique({
       where: { id },
-      include: {
-        category: true,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        estimatedPriceUsd: true,
+        condition: true,
+        seller: true,
+        sellerType: true,
+        source: true,
+        domesticShipping: true,
+        internationalShippingUsd: true,
+        serviceFee: true,
+        tags: true,
+        isNew: true,
+        isBestSeller: true,
+        isAvailable: true,
+        rating: true,
+        reviewCount: true,
+        categoryId: true,
+        createdAt: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+            icon: true,
+            color: true,
+          },
+        },
         productImages: {
+          select: {
+            id: true,
+            url: true,
+            path: true,
+            isPrimary: true,
+            sortOrder: true,
+          },
           orderBy: [
             { isPrimary: 'desc' },
             { sortOrder: 'asc' },
@@ -237,11 +300,38 @@ export class ProductService {
           { isBestSeller: true },
         ],
       },
-      include: {
-        category: true,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        estimatedPriceUsd: true,
+        condition: true,
+        seller: true,
+        sellerType: true,
+        source: true,
+        domesticShipping: true,
+        internationalShippingUsd: true,
+        serviceFee: true,
+        tags: true,
+        isNew: true,
+        isBestSeller: true,
+        rating: true,
+        reviewCount: true,
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         productImages: {
           where: { isPrimary: true },
           take: 1,
+          select: {
+            id: true,
+            url: true,
+            isPrimary: true,
+          },
         },
       },
       take: limit,
@@ -252,7 +342,14 @@ export class ProductService {
   }
 
   async getRelatedProducts(productId: string, limit: number = 4) {
-    const product = await this.getProductById(productId);
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { categoryId: true },
+    });
+
+    if (!product) {
+      throw new NotFoundError('Product not found');
+    }
 
     return await prisma.product.findMany({
       where: {
@@ -260,11 +357,37 @@ export class ProductService {
         id: { not: productId },
         isAvailable: true,
       },
-      include: {
-        category: true,
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        estimatedPriceUsd: true,
+        condition: true,
+        seller: true,
+        sellerType: true,
+        source: true,
+        domesticShipping: true,
+        serviceFee: true,
+        tags: true,
+        isNew: true,
+        isBestSeller: true,
+        rating: true,
+        reviewCount: true,
+        categoryId: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         productImages: {
           where: { isPrimary: true },
           take: 1,
+          select: {
+            id: true,
+            url: true,
+            isPrimary: true,
+          },
         },
       },
       take: limit,

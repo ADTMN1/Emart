@@ -4,6 +4,9 @@ import prisma from '../config/database';
 class AdminController {
   async getStats(_req: Request, res: Response, next: NextFunction) {
     try {
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+
       const [
         totalProducts,
         activeProducts,
@@ -11,7 +14,7 @@ class AdminController {
         pendingOrders,
         totalRevenue,
         lastMonthRevenue,
-      ] = await Promise.all([
+      ] = await prisma.$transaction([
         prisma.product.count(),
         prisma.product.count({ where: { isAvailable: true } }),
         prisma.order.count(),
@@ -26,15 +29,13 @@ class AdminController {
           _sum: { total: true },
           where: {
             status: { notIn: ['CANCELLED', 'REFUNDED'] },
-            createdAt: {
-              gte: new Date(new Date().setMonth(new Date().getMonth() - 1)),
-            },
+            createdAt: { gte: lastMonth },
           },
         }),
       ]);
 
-      const revenue = totalRevenue._sum.total || 0;
-      const lastRevenue = lastMonthRevenue._sum.total || 0;
+      const revenue = totalRevenue?._sum.total ?? 0;
+      const lastRevenue = lastMonthRevenue?._sum.total ?? 0;
       const revenueChange = lastRevenue > 0 ? ((revenue - lastRevenue) / lastRevenue) * 100 : 0;
 
       res.json({
@@ -62,6 +63,7 @@ class AdminController {
           firstName: true,
           lastName: true,
           role: true,
+          suspended: true,
           createdAt: true,
           _count: {
             select: {
@@ -72,6 +74,7 @@ class AdminController {
         orderBy: {
           createdAt: 'desc',
         },
+        take: 100, // Limit admin user list
       });
 
       res.json({
@@ -86,7 +89,16 @@ class AdminController {
   async getWarehousePackages(_req: Request, res: Response, next: NextFunction) {
     try {
       const packages = await prisma.warehousePackage.findMany({
-        include: {
+        select: {
+          id: true,
+          packageNumber: true,
+          status: true,
+          weight: true,
+          dimensions: true,
+          storageLocation: true,
+          receivedAt: true,
+          expiresAt: true,
+          createdAt: true,
           user: {
             select: {
               id: true,
@@ -105,6 +117,7 @@ class AdminController {
         orderBy: {
           createdAt: 'desc',
         },
+        take: 100, // Limit results
       });
 
       res.json({
@@ -119,9 +132,22 @@ class AdminController {
   async getShipments(_req: Request, res: Response, next: NextFunction) {
     try {
       const shipments = await prisma.shipment.findMany({
-        include: {
+        select: {
+          id: true,
+          trackingNumber: true,
+          carrier: true,
+          status: true,
+          weight: true,
+          dimensions: true,
+          shippingCost: true,
+          shippedAt: true,
+          estimatedDelivery: true,
+          deliveredAt: true,
+          createdAt: true,
           order: {
-            include: {
+            select: {
+              id: true,
+              orderNumber: true,
               user: {
                 select: {
                   id: true,
@@ -136,6 +162,7 @@ class AdminController {
         orderBy: {
           createdAt: 'desc',
         },
+        take: 100, // Limit results
       });
 
       res.json({
@@ -188,7 +215,11 @@ class AdminController {
       const { id } = req.params;
 
       // Don't allow deleting admin users
-      const user = await prisma.user.findUnique({ where: { id } });
+      const user = await prisma.user.findUnique({ 
+        where: { id },
+        select: { role: true },
+      });
+      
       if (user?.role === 'ADMIN') {
         return res.status(403).json({
           success: false,

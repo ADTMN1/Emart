@@ -5,14 +5,46 @@ export class CartService {
   async getCart(userId: string) {
     let cart = await prisma.cart.findUnique({
       where: { userId },
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        createdAt: true,
+        updatedAt: true,
         items: {
-          include: {
+          select: {
+            id: true,
+            quantity: true,
+            createdAt: true,
             product: {
-              include: {
-                category: true,
+              select: {
+                id: true,
+                name: true,
+                price: true,
+                estimatedPriceUsd: true,
+                condition: true,
+                seller: true,
+                sellerType: true,
+                source: true,
+                domesticShipping: true,
+                internationalShippingUsd: true,
+                serviceFee: true,
+                isAvailable: true,
+                stock: true,
+                categoryId: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
                 productImages: {
-                  orderBy: { sortOrder: 'asc' },
+                  where: { isPrimary: true },
+                  take: 1,
+                  select: {
+                    id: true,
+                    url: true,
+                    isPrimary: true,
+                  },
                 },
               },
             },
@@ -25,14 +57,46 @@ export class CartService {
     if (!cart) {
       cart = await prisma.cart.create({
         data: { userId },
-        include: {
+        select: {
+          id: true,
+          userId: true,
+          createdAt: true,
+          updatedAt: true,
           items: {
-            include: {
+            select: {
+              id: true,
+              quantity: true,
+              createdAt: true,
               product: {
-                include: {
-                  category: true,
+                select: {
+                  id: true,
+                  name: true,
+                  price: true,
+                  estimatedPriceUsd: true,
+                  condition: true,
+                  seller: true,
+                  sellerType: true,
+                  source: true,
+                  domesticShipping: true,
+                  internationalShippingUsd: true,
+                  serviceFee: true,
+                  isAvailable: true,
+                  stock: true,
+                  categoryId: true,
+                  category: {
+                    select: {
+                      id: true,
+                      name: true,
+                    },
+                  },
                   productImages: {
-                    orderBy: { sortOrder: 'asc' },
+                    where: { isPrimary: true },
+                    take: 1,
+                    select: {
+                      id: true,
+                      url: true,
+                      isPrimary: true,
+                    },
                   },
                 },
               },
@@ -48,6 +112,11 @@ export class CartService {
   async addToCart(userId: string, productId: string, quantity: number) {
     const product = await prisma.product.findUnique({
       where: { id: productId },
+      select: {
+        id: true,
+        isAvailable: true,
+        stock: true,
+      },
     });
 
     if (!product) {
@@ -58,7 +127,13 @@ export class CartService {
       throw new ValidationError('Product is not available');
     }
 
-    const cart = await this.getCart(userId);
+    // Get or create cart efficiently
+    const cart = await prisma.cart.upsert({
+      where: { userId },
+      create: { userId },
+      update: {},
+      select: { id: true },
+    });
 
     // Check if item already exists in cart
     const existingItem = await prisma.cartItem.findUnique({
@@ -68,6 +143,7 @@ export class CartService {
           productId,
         },
       },
+      select: { id: true, quantity: true },
     });
 
     if (existingItem) {
@@ -77,12 +153,22 @@ export class CartService {
         data: {
           quantity: existingItem.quantity + quantity,
         },
-        include: {
+        select: {
+          id: true,
+          quantity: true,
           product: {
-            include: {
-              category: true,
+            select: {
+              id: true,
+              name: true,
+              price: true,
+              estimatedPriceUsd: true,
+              condition: true,
               productImages: {
-                orderBy: { sortOrder: 'asc' },
+                where: { isPrimary: true },
+                take: 1,
+                select: {
+                  url: true,
+                },
               },
             },
           },
@@ -97,12 +183,22 @@ export class CartService {
         productId,
         quantity,
       },
-      include: {
+      select: {
+        id: true,
+        quantity: true,
         product: {
-          include: {
-            category: true,
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            estimatedPriceUsd: true,
+            condition: true,
             productImages: {
-              orderBy: { sortOrder: 'asc' },
+              where: { isPrimary: true },
+              take: 1,
+              select: {
+                url: true,
+              },
             },
           },
         },
@@ -111,13 +207,15 @@ export class CartService {
   }
 
   async updateCartItem(userId: string, itemId: string, quantity: number) {
-    const cart = await this.getCart(userId);
-
+    // Verify cart ownership and item existence in one query
     const item = await prisma.cartItem.findFirst({
       where: {
         id: itemId,
-        cartId: cart.id,
+        cart: {
+          userId,
+        },
       },
+      select: { id: true },
     });
 
     if (!item) {
@@ -127,12 +225,22 @@ export class CartService {
     return await prisma.cartItem.update({
       where: { id: itemId },
       data: { quantity },
-      include: {
+      select: {
+        id: true,
+        quantity: true,
         product: {
-          include: {
-            category: true,
+          select: {
+            id: true,
+            name: true,
+            price: true,
+            estimatedPriceUsd: true,
+            condition: true,
             productImages: {
-              orderBy: { sortOrder: 'asc' },
+              where: { isPrimary: true },
+              take: 1,
+              select: {
+                url: true,
+              },
             },
           },
         },
@@ -141,13 +249,15 @@ export class CartService {
   }
 
   async removeFromCart(userId: string, itemId: string) {
-    const cart = await this.getCart(userId);
-
+    // Verify cart ownership and delete in one transaction
     const item = await prisma.cartItem.findFirst({
       where: {
         id: itemId,
-        cartId: cart.id,
+        cart: {
+          userId,
+        },
       },
+      select: { id: true },
     });
 
     if (!item) {
@@ -162,11 +272,16 @@ export class CartService {
   }
 
   async clearCart(userId: string) {
-    const cart = await this.getCart(userId);
-
-    await prisma.cartItem.deleteMany({
-      where: { cartId: cart.id },
+    const cart = await prisma.cart.findUnique({
+      where: { userId },
+      select: { id: true },
     });
+
+    if (cart) {
+      await prisma.cartItem.deleteMany({
+        where: { cartId: cart.id },
+      });
+    }
 
     return { message: 'Cart cleared' };
   }

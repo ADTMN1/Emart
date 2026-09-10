@@ -23,11 +23,26 @@ export class OrderService {
     let domesticShipping = 0;
 
     const orderItems = [];
+    const productIds = [...new Set(data.items.map((item) => item.productId))];
+
+    const products = await prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        isAvailable: true,
+        estimatedPriceUsd: true,
+        serviceFee: true,
+        domesticShipping: true,
+      },
+    });
+
+    const productMap = new Map(products.map((product) => [product.id, product]));
 
     for (const item of data.items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-      });
+      const product = productMap.get(item.productId);
 
       if (!product) {
         throw new NotFoundError(`Product ${item.productId} not found`);
@@ -35,6 +50,10 @@ export class OrderService {
 
       if (!product.isAvailable) {
         throw new ValidationError(`Product ${product.name} is not available`);
+      }
+
+      if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+        throw new ValidationError(`Quantity for ${product.name} must be greater than zero`);
       }
 
       const itemSubtotal = product.estimatedPriceUsd * item.quantity;
@@ -158,14 +177,38 @@ export class OrderService {
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          subtotal: true,
+          total: true,
+          shippingMethod: true,
+          trackingNumber: true,
+          estimatedDelivery: true,
+          paymentStatus: true,
+          createdAt: true,
           items: {
-            include: {
-              product: true,
+            select: {
+              id: true,
+              quantity: true,
+              priceAtPurchase: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  condition: true,
+                  productImages: {
+                    where: { isPrimary: true },
+                    take: 1,
+                    select: {
+                      url: true,
+                    },
+                  },
+                },
+              },
             },
           },
-          billingAddress: true,
-          shippingAddress: true,
         },
         skip,
         take: limit,
@@ -193,19 +236,89 @@ export class OrderService {
         id: orderId,
         userId,
       },
-      include: {
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        subtotal: true,
+        serviceFees: true,
+        domesticShipping: true,
+        internationalShipping: true,
+        insurance: true,
+        total: true,
+        shippingMethod: true,
+        shippingCarrier: true,
+        trackingNumber: true,
+        estimatedDelivery: true,
+        notes: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        createdAt: true,
+        updatedAt: true,
         items: {
-          include: {
+          select: {
+            id: true,
+            quantity: true,
+            priceAtPurchase: true,
+            serviceFeeAtPurchase: true,
+            domesticShippingAtPurchase: true,
             product: {
-              include: {
-                category: true,
+              select: {
+                id: true,
+                name: true,
+                condition: true,
+                source: true,
+                category: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+                productImages: {
+                  where: { isPrimary: true },
+                  take: 1,
+                  select: {
+                    url: true,
+                  },
+                },
               },
             },
           },
         },
-        billingAddress: true,
-        shippingAddress: true,
-        shipment: true,
+        billingAddress: {
+          select: {
+            fullName: true,
+            addressLine: true,
+            city: true,
+            state: true,
+            postalCode: true,
+            country: true,
+            phone: true,
+          },
+        },
+        shippingAddress: {
+          select: {
+            fullName: true,
+            addressLine: true,
+            city: true,
+            state: true,
+            postalCode: true,
+            country: true,
+            phone: true,
+          },
+        },
+        shipment: {
+          select: {
+            id: true,
+            trackingNumber: true,
+            carrier: true,
+            status: true,
+            shippedAt: true,
+            estimatedDelivery: true,
+            deliveredAt: true,
+            events: true,
+          },
+        },
       },
     });
 

@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
 import { EmptyCart } from '@/components/ui/States'
 import { Select } from '@/components/ui/Select'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
@@ -194,7 +195,16 @@ const Cart: React.FC = () => {
                     to={`/product/${item.product.id}`}
                     className="w-24 h-24 lg:w-32 lg:h-32 shrink-0 rounded-xl overflow-hidden bg-muted border border-border"
                   >
-                    <img src={getProductImage(item.product)} alt={item.product.name} className="w-full h-full object-cover" />
+                    <OptimizedImage
+                      src={getProductImage(item.product)}
+                      alt={item.product.name}
+                      size="small"
+                      context="thumbnail"
+                      lazy
+                      showShimmer
+                      aspectRatio="aspect-square"
+                      className="w-full h-full object-cover"
+                    />
                   </Link>
 
                   <div className="flex-1 min-w-0 flex flex-col">

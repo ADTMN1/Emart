@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import compression from 'compression';
 import config from './config/env';
 import routes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -9,6 +10,14 @@ const app = express();
 
 // Middleware
 app.use(cors({ origin: config.cors.origin, credentials: true }));
+app.use(compression({
+  level: 6,
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.path === '/health') return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -22,6 +31,13 @@ app.use((_req, res, next) => {
   next();
 });
 
+// Guard against stalled requests and slow upstream dependencies.
+app.use((req, res, next) => {
+  req.socket.setTimeout(15000);
+  res.setTimeout(15000);
+  next();
+});
+
 // Routes
 app.use(`/api/${config.apiVersion}`, routes);
 
@@ -32,7 +48,7 @@ app.use(errorHandler);
 // Start server
 const PORT = config.port;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
 ║                                        ║
@@ -48,5 +64,10 @@ app.listen(PORT, () => {
 ╚════════════════════════════════════════╝
   `);
 });
+
+server.requestTimeout = 15000;
+server.headersTimeout = 16000;
+server.keepAliveTimeout = 5000;
+server.setTimeout(15000);
 
 export default app;
