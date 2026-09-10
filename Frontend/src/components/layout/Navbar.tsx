@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
+import { api } from '@/lib/api'
 
 export const Navbar: React.FC = () => {
   const { t } = useLanguage()
@@ -28,38 +29,48 @@ export const Navbar: React.FC = () => {
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState('')
   const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
+  const [cartCount, setCartCount] = React.useState(0)
   const location = useLocation()
   const navigate = useNavigate()
 
-  // Debug logging
   React.useEffect(() => {
-    console.log('[Navbar] Auth state:', { isLoading, isAuthenticated, hasUser: !!user });
-  }, [isLoading, isAuthenticated, user]);
+    const loadCartCount = async () => {
+      if (!isAuthenticated || !user) {
+        setCartCount(0)
+        ;(window as any).__emartCartCount = 0
+        return
+      }
 
-  const navLinks = [
-    { to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
-    { to: '/', label: t('navbar.shopGlobal'), icon: MapPin, hasDropdown: true },
-    { to: '/categories', label: t('navbar.categories'), icon: ChevronDown, hasDropdown: true },
-  ]
+      try {
+        const cart = await api.get<{ items?: Array<{ quantity?: number }> } | null>('/cart').catch(() => null)
+        const items = Array.isArray(cart?.items) ? cart.items : []
+        const total = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
+        setCartCount(total)
+        ;(window as any).__emartCartCount = total
+      } catch {
+        setCartCount(0)
+        ;(window as any).__emartCartCount = 0
+      }
+    }
 
-  const marketplaces = [
-    { name: t('marketplaces.mercari'), to: '/marketplace?source=mercari' },
-    { name: t('marketplaces.yahooAuctions'), to: '/marketplace?source=yahoo' },
-    { name: t('marketplaces.rakuten'), to: '/marketplace?source=rakuten' },
-    { name: t('marketplaces.amazon'), to: '/marketplace?source=amazon' },
-    { name: t('marketplaces.ebay'), to: '/marketplace?source=ebay' },
-  ]
+    loadCartCount()
 
-  const categoryLinks = [
-    { name: t('categories.electronics'), to: '/marketplace?cat=electronics' },
-    { name: t('categories.fashion'), to: '/marketplace?cat=fashion' },
-    { name: t('categories.watches'), to: '/marketplace?cat=watches' },
-    { name: t('categories.collectibles'), to: '/marketplace?cat=collectibles' },
-    { name: t('categories.figures'), to: '/marketplace?cat=figures' },
-    { name: t('categories.beauty'), to: '/marketplace?cat=beauty' },
-    { name: t('categories.homeLiving'), to: '/marketplace?cat=home' },
-    { name: t('categories.sports'), to: '/marketplace?cat=sports' },
-  ]
+    const handleCartUpdate = (event?: Event) => {
+      const customEvent = event as CustomEvent<{ total?: number }> | undefined
+      const incomingTotal = customEvent?.detail?.total
+      if (typeof incomingTotal === 'number') {
+        setCartCount(incomingTotal)
+        ;(window as any).__emartCartCount = incomingTotal
+        return
+      }
+      loadCartCount()
+    }
+
+    window.addEventListener('cart:updated', handleCartUpdate)
+    return () => {
+      window.removeEventListener('cart:updated', handleCartUpdate)
+    }
+  }, [isAuthenticated, user?.id])
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
@@ -93,6 +104,36 @@ export const Navbar: React.FC = () => {
       setSearchQuery('')
     }
   }
+
+  const navLinks = [
+    { to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
+    { to: '/', label: t('navbar.shopGlobal'), icon: MapPin, hasDropdown: true },
+    { to: '/categories', label: t('navbar.categories'), icon: ChevronDown, hasDropdown: true },
+  ]
+
+  const marketplaces = [
+    { name: t('marketplaces.mercari'), to: '/marketplace?source=mercari' },
+    { name: t('marketplaces.yahooAuctions'), to: '/marketplace?source=yahoo' },
+    { name: t('marketplaces.rakuten'), to: '/marketplace?source=rakuten' },
+    { name: t('marketplaces.amazon'), to: '/marketplace?source=amazon' },
+    { name: t('marketplaces.ebay'), to: '/marketplace?source=ebay' },
+  ]
+
+  const categoryLinks = [
+    { name: t('categories.electronics'), to: '/marketplace?cat=electronics' },
+    { name: t('categories.fashion'), to: '/marketplace?cat=fashion' },
+    { name: t('categories.watches'), to: '/marketplace?cat=watches' },
+    { name: t('categories.collectibles'), to: '/marketplace?cat=collectibles' },
+    { name: t('categories.figures'), to: '/marketplace?cat=figures' },
+    { name: t('categories.beauty'), to: '/marketplace?cat=beauty' },
+    { name: t('categories.homeLiving'), to: '/marketplace?cat=home' },
+    { name: t('categories.sports'), to: '/marketplace?cat=sports' },
+  ]
+
+  // Debug logging
+  React.useEffect(() => {
+    console.log('[Navbar] Auth state:', { isLoading, isAuthenticated, hasUser: !!user });
+  }, [isLoading, isAuthenticated, user]);
 
   return (
     <>
@@ -192,7 +233,8 @@ export const Navbar: React.FC = () => {
 
             <div className="flex items-center gap-1 sm:gap-2 shrink-0">
               <button
-                onClick={() => setSearchOpen(true)}
+                onClick={() => setSearchOpen(true)
+                }
                 className="md:hidden p-2.5 rounded-lg hover:bg-muted text-foreground"
                 aria-label="Search"
               >
@@ -215,9 +257,11 @@ export const Navbar: React.FC = () => {
                 aria-label="Cart"
               >
                 <ShoppingCart className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold rounded-full bg-primary text-white flex items-center justify-center ring-2 ring-background">
-                  3
-                </span>
+                {cartCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold rounded-full bg-primary text-white flex items-center justify-center ring-2 ring-background">
+                    {cartCount > 99 ? '99+' : cartCount}
+                  </span>
+                )}
               </Link>
 
               {isLoading ? (
@@ -385,7 +429,7 @@ export const Navbar: React.FC = () => {
           >
             <span>{t('navbar.cart')}</span>
             <span className="h-5 min-w-5 px-1.5 text-xs font-bold rounded-full bg-primary text-white">
-              3
+              {cartCount}
             </span>
           </Link>
           <Link

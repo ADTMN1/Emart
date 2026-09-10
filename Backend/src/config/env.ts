@@ -34,6 +34,11 @@ export const config = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
   },
+
+  supabase: {
+    url: process.env.SUPABASE_URL || '',
+    secretKey: process.env.SUPABASE_SECRET_KEY || '',
+  },
 };
 
 export default config;

@@ -13,16 +13,60 @@ export const createProductValidation = [
     .withMessage('Product description is required'),
   body('price')
     .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
+    .withMessage('Price must be a positive number')
+    .toFloat(),
   body('estimatedPriceUsd')
     .isFloat({ min: 0 })
-    .withMessage('Estimated USD price must be a positive number'),
+    .withMessage('Estimated USD price must be a positive number')
+    .toFloat(),
   body('condition')
     .isIn(['NEW', 'LIKE_NEW', 'VERY_GOOD', 'GOOD', 'ACCEPTABLE'])
     .withMessage('Invalid product condition'),
+  body('seller')
+    .trim()
+    .notEmpty()
+    .withMessage('Seller name is required'),
+  body('sellerType')
+    .isIn(['SHOP', 'INDIVIDUAL'])
+    .withMessage('Invalid seller type'),
+  body('source')
+    .trim()
+    .notEmpty()
+    .withMessage('Source marketplace is required'),
+  body('domesticShipping')
+    .isFloat({ min: 0 })
+    .withMessage('Domestic shipping must be a positive number')
+    .toFloat(),
+  body('internationalShippingUsd')
+    .isFloat({ min: 0 })
+    .withMessage('International shipping must be a positive number')
+    .toFloat(),
+  body('serviceFee')
+    .isFloat({ min: 0 })
+    .withMessage('Service fee must be a positive number')
+    .toFloat(),
   body('categoryId')
     .notEmpty()
     .withMessage('Category ID is required'),
+  body('stock')
+    .isInt({ min: 0 })
+    .withMessage('Stock must be a non-negative integer')
+    .toInt(),
+  body('tags')
+    .isArray()
+    .withMessage('Tags must be an array'),
+  body('isAvailable')
+    .isBoolean()
+    .withMessage('isAvailable must be a boolean')
+    .toBoolean(),
+  body('isNew')
+    .isBoolean()
+    .withMessage('isNew must be a boolean')
+    .toBoolean(),
+  body('isBestSeller')
+    .isBoolean()
+    .withMessage('isBestSeller must be a boolean')
+    .toBoolean(),
 ];
 
 export const searchProductsValidation = [

@@ -23,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyOrders } from '@/components/ui/States'
 import { cn, formatCurrency } from '@/lib/utils'
-import { products } from '@/data/mockData'
+import { api } from '@/lib/api'
 
 type OrderStatus =
   | 'awaiting_payment'
@@ -41,59 +41,9 @@ interface Order {
   status: OrderStatus
   itemsCount: number
   totalUsd: number
-  thumbnail: string
+  thumbnail?: string
   trackingCode?: string
 }
-
-const mockOrders: Order[] = [
-  {
-    id: 'o1',
-    number: 'EMT-20240907-12345',
-    date: 'Sep 7, 2024',
-    status: 'processing',
-    itemsCount: 3,
-    totalUsd: 486,
-    thumbnail: products[0].image,
-  },
-  {
-    id: 'o2',
-    number: 'EMT-20240825-48291',
-    date: 'Aug 25, 2024',
-    status: 'in_warehouse',
-    itemsCount: 1,
-    totalUsd: 137,
-    thumbnail: products[6].image,
-  },
-  {
-    id: 'o3',
-    number: 'EMT-20240812-33812',
-    date: 'Aug 12, 2024',
-    status: 'shipping',
-    itemsCount: 5,
-    totalUsd: 1124,
-    thumbnail: products[1].image,
-    trackingCode: 'DHL1234567890JP',
-  },
-  {
-    id: 'o4',
-    number: 'EMT-20240720-11204',
-    date: 'Jul 20, 2024',
-    status: 'delivered',
-    itemsCount: 2,
-    totalUsd: 298,
-    thumbnail: products[3].image,
-    trackingCode: 'EMS9876543210JP',
-  },
-  {
-    id: 'o5',
-    number: 'EMT-20240705-00319',
-    date: 'Jul 5, 2024',
-    status: 'cancelled',
-    itemsCount: 1,
-    totalUsd: 538,
-    thumbnail: products[7].image,
-  },
-]
 
 const statusConfig: Record<OrderStatus, { label: string; variant: any; icon: React.FC<any>; color: string }> = {
   awaiting_payment: { label: 'Awaiting Payment', variant: 'warning', icon: CircleDollarSign, color: 'text-warning' },
@@ -109,10 +59,50 @@ const statuses = ['All', 'Processing', 'Purchasing', 'In Warehouse', 'Shipping',
 
 const MyOrders: React.FC = () => {
   const [tab, setTab] = React.useState('All')
+  const [orders, setOrders] = React.useState<Order[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-  const orders = tab === 'All' ? mockOrders : mockOrders
+  React.useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true)
+        const data = await api.get<Order[]>('/orders').catch(() => [])
+        setOrders(Array.isArray(data) ? data : [])
+      } catch {
+        setOrders([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchOrders()
+  }, [])
 
-  if (false) {
+  const filteredOrders = tab === 'All'
+    ? orders
+    : tab === 'Processing'
+      ? orders.filter((o) => ['processing', 'purchasing'].includes(o.status))
+      : tab === 'In Warehouse'
+        ? orders.filter((o) => o.status === 'in_warehouse')
+        : tab === 'Shipping'
+          ? orders.filter((o) => o.status === 'shipping')
+          : tab === 'Delivered'
+            ? orders.filter((o) => o.status === 'delivered')
+            : tab === 'Cancelled'
+              ? orders.filter((o) => o.status === 'cancelled')
+              : orders
+
+  if (loading) {
+    return (
+      <div className="container-page py-12 min-h-[70vh]">
+        <div className="max-w-xl mx-auto text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading your orders...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (orders.length === 0) {
     return (
       <div className="container-page py-12 min-h-[70vh]">
         <div className="max-w-xl mx-auto">
@@ -123,11 +113,11 @@ const MyOrders: React.FC = () => {
   }
 
   const tabs = [
-    { key: 'All', count: mockOrders.length },
-    { key: 'Processing', count: mockOrders.filter((o) => ['processing', 'purchasing'].includes(o.status)).length },
-    { key: 'In Warehouse', count: mockOrders.filter((o) => o.status === 'in_warehouse').length },
-    { key: 'Shipping', count: mockOrders.filter((o) => o.status === 'shipping').length },
-    { key: 'Delivered', count: mockOrders.filter((o) => o.status === 'delivered').length },
+    { key: 'All', count: orders.length },
+    { key: 'Processing', count: orders.filter((o) => ['processing', 'purchasing'].includes(o.status)).length },
+    { key: 'In Warehouse', count: orders.filter((o) => o.status === 'in_warehouse').length },
+    { key: 'Shipping', count: orders.filter((o) => o.status === 'shipping').length },
+    { key: 'Delivered', count: orders.filter((o) => o.status === 'delivered').length },
   ]
 
   return (
@@ -214,7 +204,16 @@ const MyOrders: React.FC = () => {
 
         {/* Orders */}
         <div className="space-y-4">
-          {orders.map((order) => {
+          {filteredOrders.length === 0 ? (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Package className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="font-semibold text-muted-foreground">No orders in this category</h3>
+                <p className="text-sm text-muted-foreground/70 mt-1">Try a different filter</p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredOrders.map((order) => {
             const cfg = statusConfig[order.status]
             const Icon = cfg.icon
             return (
@@ -299,7 +298,7 @@ const MyOrders: React.FC = () => {
                 </CardContent>
               </Card>
             )
-          })}
+          }))}
         </div>
       </div>
     </div>

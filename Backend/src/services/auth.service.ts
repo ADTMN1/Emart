@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import { OAuth2Client } from 'google-auth-library';
 import prisma from '../config/database';
 import config from '../config/env';
-import { ConflictError, UnauthorizedError, NotFoundError, BadRequestError } from '../utils/errors';
+import { ConflictError, UnauthorizedError, NotFoundError, BadRequestError, AppError } from '../utils/errors';
 import { generateToken } from '../utils/jwt';
 
 const SALT_ROUNDS = 12;
@@ -101,25 +101,30 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        phone: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          role: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
-    if (!user) {
+      if (!user) {
+        throw new NotFoundError('User not found. Your session may have expired.');
+      }
+
+      return user;
+    } catch (err) {
+      if (err instanceof AppError) throw err;
       throw new NotFoundError('User not found. Your session may have expired.');
     }
-
-    return user;
   }
 
   async updateProfile(userId: string, data: { firstName?: string; lastName?: string; phone?: string }) {

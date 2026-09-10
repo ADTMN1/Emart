@@ -41,6 +41,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
+import { api } from '@/lib/api'
 
 const navItems = [
   { key: 'overview', label: 'Overview', icon: User },
@@ -79,10 +80,33 @@ const Account: React.FC = () => {
   const [phone, setPhone] = React.useState(user?.phone || '')
   const [isSaving, setIsSaving] = React.useState(false)
   
-  // Wallet modal states
+  // Wallet states
+  const [walletBalance, setWalletBalance] = React.useState<number>(0)
+  const [transactions, setTransactions] = React.useState<any[]>([])
+  const [loadingWallet, setLoadingWallet] = React.useState<boolean>(false)
   const [showDepositModal, setShowDepositModal] = React.useState(false)
   const [depositAmount, setDepositAmount] = React.useState('')
   const [paymentMethod, setPaymentMethod] = React.useState('credit_card')
+
+  const fetchWallet = React.useCallback(async () => {
+    try {
+      setLoadingWallet(true)
+      const [walletRes, txRes] = await Promise.all([
+        api.get<{ balance: number }>('/wallet').catch(() => ({ balance: 0 })),
+        api.get<{ transactions: any[] }>('/wallet/transactions').catch(() => ({ transactions: [] })),
+      ])
+      setWalletBalance(walletRes?.balance ?? 0)
+      setTransactions(txRes?.transactions || (Array.isArray(txRes) ? txRes : []))
+    } catch {
+      // keep default
+    } finally {
+      setLoadingWallet(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchWallet()
+  }, [fetchWallet])
 
   React.useEffect(() => {
     if (user) {
@@ -113,14 +137,22 @@ const Account: React.FC = () => {
       return
     }
 
-    // TODO: Integrate with backend API
-    toast({
-      variant: 'success',
-      title: 'Deposit Initiated',
-      description: `Processing deposit of ${formatCurrency(amount, 'USD')}`,
-    })
-    setShowDepositModal(false)
-    setDepositAmount('')
+    try {
+      setIsSaving(true)
+      await api.post('/wallet/deposit', { amount, paymentMethod })
+      toast({
+        variant: 'success',
+        title: 'Deposit Successful',
+        description: `Successfully added ${formatCurrency(amount, 'USD')} to your wallet.`,
+      })
+      setShowDepositModal(false)
+      setDepositAmount('')
+      await fetchWallet()
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Deposit Failed', description: err.message || 'Unable to process deposit.' })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const userDisplayName = user
@@ -526,7 +558,7 @@ const Account: React.FC = () => {
                           Available Balance
                         </div>
                         <div className="font-display text-5xl font-extrabold text-primary mb-1">
-                          {formatCurrency(373.0, 'USD')}
+                          {formatCurrency(walletBalance, 'USD')}
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Last updated: {new Date().toLocaleDateString('en-US', { 
@@ -557,25 +589,37 @@ const Account: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-3 border-t border-border">
-                    {[
-                      { label: 'Total Deposited', value: '$500', icon: TrendingUp, color: 'text-success' },
-                      { label: 'Total Spent', value: '$137', icon: ArrowUpRight, color: 'text-primary' },
-                      { label: 'Bonuses Earned', value: '$10', icon: Gift, color: 'text-secondary' },
-                    ].map((stat, idx) => (
-                      <div
-                        key={stat.label}
-                        className={cn(
-                          'p-5 text-center',
-                          idx < 2 && 'border-r border-border'
-                        )}
-                      >
-                        <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                          <stat.icon className={cn('h-4 w-4', stat.color)} />
-                          <div className="text-xs font-bold text-muted-foreground">{stat.label}</div>
+                    {(() => {
+                      const totalDeposited = transactions
+                        .filter((t) => (t.type === 'DEPOSIT' || t.type === 'REFUND' || t.type === 'BONUS') && t.status === 'COMPLETED')
+                        .reduce((sum, t) => sum + t.amount, 0)
+                      const totalSpent = transactions
+                        .filter((t) => (t.type === 'PAYMENT' || t.type === 'WITHDRAWAL') && t.status === 'COMPLETED')
+                        .reduce((sum, t) => sum + t.amount, 0)
+                      const totalBonuses = transactions
+                        .filter((t) => t.type === 'BONUS' && t.status === 'COMPLETED')
+                        .reduce((sum, t) => sum + t.amount, 0)
+
+                      return [
+                        { label: 'Total Deposited', value: formatCurrency(totalDeposited, 'USD'), icon: TrendingUp, color: 'text-success' },
+                        { label: 'Total Spent', value: formatCurrency(totalSpent, 'USD'), icon: ArrowUpRight, color: 'text-primary' },
+                        { label: 'Bonuses Earned', value: formatCurrency(totalBonuses, 'USD'), icon: Gift, color: 'text-secondary' },
+                      ].map((stat, idx) => (
+                        <div
+                          key={stat.label}
+                          className={cn(
+                            'p-5 text-center',
+                            idx < 2 && 'border-r border-border'
+                          )}
+                        >
+                          <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                            <stat.icon className={cn('h-4 w-4', stat.color)} />
+                            <div className="text-xs font-bold text-muted-foreground">{stat.label}</div>
+                          </div>
+                          <div className="font-display text-xl font-extrabold">{stat.value}</div>
                         </div>
-                        <div className="font-display text-xl font-extrabold">{stat.value}</div>
-                      </div>
-                    ))}
+                      ))
+                    })()}
                   </div>
                 </CardContent>
               </Card>
@@ -593,71 +637,49 @@ const Account: React.FC = () => {
                     </Button>
                   </div>
 
-                  <div className="space-y-3">
-                    {[
-                      {
-                        type: 'DEPOSIT',
-                        desc: 'Deposit via Credit Card',
-                        amount: 500,
-                        date: '2026-09-08T10:00:00Z',
-                        icon: ArrowDownLeft,
-                        iconColor: 'text-success',
-                        iconBg: 'bg-success/10',
-                        sign: '+',
-                      },
-                      {
-                        type: 'PAYMENT',
-                        desc: 'Payment for order EMT-20240825-48291',
-                        amount: 137,
-                        date: '2026-09-07T14:30:00Z',
-                        icon: Package,
-                        iconColor: 'text-destructive',
-                        iconBg: 'bg-destructive/10',
-                        sign: '-',
-                      },
-                      {
-                        type: 'BONUS',
-                        desc: 'Welcome bonus - $10 credit',
-                        amount: 10,
-                        date: '2026-09-06T09:00:00Z',
-                        icon: Gift,
-                        iconColor: 'text-primary',
-                        iconBg: 'bg-primary/10',
-                        sign: '+',
-                      },
-                    ].map((tx, idx) => (
-                      <div key={idx} className="flex items-center justify-between gap-4 p-4 rounded-xl hover:bg-muted/40 transition-colors">
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center shrink-0', tx.iconBg)}>
-                            <tx.icon className={cn('h-5 w-5', tx.iconColor)} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-sm mb-1">{tx.desc}</div>
-                            <div className="text-xs text-muted-foreground flex items-center gap-2">
-                              <CalendarDays className="h-3 w-3" />
-                              {new Date(tx.date).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                  {loadingWallet ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground">Loading transactions...</div>
+                  ) : transactions.length === 0 ? (
+                    <div className="text-center py-6 text-xs text-muted-foreground">No recent transactions</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {transactions.slice(0, 5).map((tx, idx) => {
+                        const isPlus = tx.type === 'DEPOSIT' || tx.type === 'REFUND' || tx.type === 'BONUS'
+                        return (
+                          <div key={tx.id || idx} className="flex items-center justify-between gap-4 p-4 rounded-xl hover:bg-muted/40 transition-colors">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center shrink-0', isPlus ? 'bg-success/10' : 'bg-destructive/10')}>
+                                {isPlus ? <ArrowDownLeft className="h-5 w-5 text-success" /> : <Package className="h-5 w-5 text-destructive" />}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-sm mb-1">{tx.description || tx.type}</div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                  <CalendarDays className="h-3 w-3" />
+                                  {new Date(tx.createdAt || Date.now()).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div
+                                className={cn(
+                                  'font-display text-xl font-extrabold',
+                                  isPlus ? 'text-success' : 'text-destructive'
+                                )}
+                              >
+                                {isPlus ? '+' : '-'}{formatCurrency(tx.amount, 'USD')}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div
-                            className={cn(
-                              'font-display text-xl font-extrabold',
-                              tx.sign === '+' ? 'text-success' : 'text-destructive'
-                            )}
-                          >
-                            {tx.sign}{formatCurrency(tx.amount, 'USD')}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   <div className="mt-5 p-4 rounded-xl bg-info/10 border border-info/20 text-sm flex items-start gap-3">
                     <WalletIcon className="h-5 w-5 text-info shrink-0 mt-0.5" />

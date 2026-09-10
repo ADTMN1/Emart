@@ -17,69 +17,127 @@ import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Loading, NoSearchResults, ProductCardSkeleton } from '@/components/ui/States'
-import { products, categories } from '@/data/mockData'
+import type { Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { api } from '@/lib/api'
+
+interface ProductImage {
+  id: string
+  productId: string
+  path: string
+  url: string
+  isPrimary: boolean
+  sortOrder: number
+  createdAt: string
+}
+
+interface ApiProduct {
+  id: string
+  name: string
+  image?: string
+  images?: string[]
+  price: number
+  estimatedPriceUsd: number
+  condition: string
+  seller: string
+  sellerType: string
+  source: string
+  domesticShipping: number
+  internationalShippingUsd: number
+  serviceFee: number
+  description: string
+  categoryId: string
+  category?: { id: string; name: string }
+  tags: string[]
+  isNew?: boolean
+  isBestSeller?: boolean
+  rating?: number
+  reviewCount?: number
+  productImages?: ProductImage[]
+}
 
 const Marketplace: React.FC = () => {
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = React.useState(params.get('q') || '')
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [isLoading, setIsLoading] = React.useState(true)
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = React.useState(false)
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(params.get('cat') || null)
   const [selectedSubcategory, setSelectedSubcategory] = React.useState<string | null>(params.get('sub') || null)
-
-  // Filter products based on search query, category, and subcategory
-  const filteredProducts = React.useMemo(() => {
-    let filtered = [...products]
-    
-    // Filter by search query
-    const searchQuery = params.get('q')?.toLowerCase()
-    if (searchQuery) {
-      filtered = filtered.filter(p => 
-        p.name.toLowerCase().includes(searchQuery) ||
-        p.description.toLowerCase().includes(searchQuery) ||
-        p.tags.some(tag => tag.toLowerCase().includes(searchQuery))
-      )
-    }
-    
-    // Filter by category
-    if (selectedCategory) {
-      filtered = filtered.filter(p => p.category === selectedCategory)
-    }
-    
-    // Filter by source (marketplace)
-    const sourceParam = params.get('source')
-    if (sourceParam) {
-      const sourceMap: Record<string, string> = {
-        mercari: 'Marketplace A',
-        yahoo: 'Marketplace B',
-        rakuten: 'Marketplace C',
-        amazon: 'Marketplace D',
-        ebay: 'Marketplace E',
-      }
-      const mappedSource = sourceMap[sourceParam]
-      if (mappedSource) {
-        filtered = filtered.filter(p => p.source === mappedSource)
-      }
-    }
-    
-    // Filter by subcategory (would need subcategory field in product data)
-    if (selectedSubcategory) {
-      // For now, this is a placeholder - would need subcategory mapping
-    }
-    
-    return filtered
-  }, [params, selectedCategory, selectedSubcategory])
+  const [products, setProducts] = React.useState<ApiProduct[]>([])
+  const [totalCount, setTotalCount] = React.useState(0)
+  const [categories, setCategories] = React.useState<Category[]>([])
+  const [categoriesLoading, setCategoriesLoading] = React.useState(true)
+  const fetchRef = React.useRef<number>(0)
 
   React.useEffect(() => {
-    if (params.get('q') || params.get('cat')) {
+    const fetchCategories = async () => {
+      try {
+        setCategoriesLoading(true)
+        const catData = await api.get<Category[]>('/categories')
+        if (Array.isArray(catData) && catData.length > 0) {
+          setCategories(catData)
+        }
+      } catch {
+        // no fallback, categories stay empty
+      } finally {
+        setCategoriesLoading(false)
+      }
+    }
+    fetchCategories()
+  }, [])
+
+  const fetchProducts = React.useCallback(async () => {
+    const reqId = ++fetchRef.current
+    try {
       setIsLoading(true)
-      const t = setTimeout(() => setIsLoading(false), 500)
-      return () => clearTimeout(t)
+      const searchParams = new URLSearchParams()
+      
+      const q = params.get('q')
+      const cat = params.get('cat')
+      const source = params.get('source')
+      
+      if (q) searchParams.set('q', q)
+      if (cat) searchParams.set('category', cat)
+      if (source) searchParams.set('source', source)
+      
+      const queryString = searchParams.toString()
+      const endpoint = queryString ? `/products?${queryString}` : '/products'
+      
+      const data = await api.get<{ products: ApiProduct[]; pagination: { total: number } }>(endpoint)
+      
+      if (reqId === fetchRef.current) {
+        setProducts(data?.products || [])
+        setTotalCount(data?.pagination?.total || 0)
+      }
+    } catch (err) {
+      console.error('Failed to fetch products:', err)
+      if (reqId === fetchRef.current) {
+        setProducts([])
+        setTotalCount(0)
+      }
+    } finally {
+      if (reqId === fetchRef.current) {
+        setIsLoading(false)
+      }
     }
   }, [params])
+
+  React.useEffect(() => {
+    fetchProducts()
+  }, [fetchProducts])
+
+  // Auto-refresh when tab becomes visible again (catches stale data after admin edits)
+  React.useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchProducts()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [fetchProducts])
 
   // Update selected category from URL params
   React.useEffect(() => {
@@ -120,11 +178,6 @@ const Marketplace: React.FC = () => {
     setParams(next)
   }
 
-  const activeFilters = [
-    { label: 'Mercari', type: 'source' },
-    { label: 'Under $100', type: 'price' },
-  ].slice(0, Math.random() > 0.5 ? 2 : 0)
-
   return (
     <div className="bg-background">
       <div className="container-page py-6 border-b border-border">
@@ -147,7 +200,7 @@ const Marketplace: React.FC = () => {
               )}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Showing {products.length * 10000}+ products from top global marketplaces
+              Showing {totalCount > 0 ? `${totalCount.toLocaleString()}+` : 'all available'} products from top global marketplaces
             </p>
           </div>
 
@@ -202,7 +255,7 @@ const Marketplace: React.FC = () => {
                         'text-xs',
                         selectedCategory === c.id ? 'text-white/70' : 'text-muted-foreground'
                       )}>
-                        {(c.count / 1000).toFixed(0)}K
+                        {(((c.count || 0)) / 1000).toFixed(0)}K
                       </span>
                     </button>
                   ))}
@@ -275,13 +328,6 @@ const Marketplace: React.FC = () => {
                   <Filter className="h-4 w-4" />
                   Filters
                 </button>
-
-                {activeFilters.map((f) => (
-                  <Badge key={f.label} variant="outline" size="md" className="gap-1.5">
-                    {f.label}
-                    <X className="h-3 w-3 cursor-pointer hover:text-primary" />
-                  </Badge>
-                ))}
               </div>
 
               <div className="flex items-center gap-2">
@@ -323,7 +369,7 @@ const Marketplace: React.FC = () => {
                   <ProductCardSkeleton key={i} />
                 ))}
               </div>
-            ) : filteredProducts.length === 0 ? (
+            ) : products.length === 0 ? (
               <NoSearchResults query={params.get('q') || undefined} />
             ) : (
               <div className={cn(
@@ -332,7 +378,7 @@ const Marketplace: React.FC = () => {
                   ? 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4'
                   : 'flex flex-col',
               )}>
-                {filteredProducts.map((p) => (
+                {products.map((p) => (
                   <ProductCard
                     key={p.id}
                     product={p}
@@ -346,16 +392,23 @@ const Marketplace: React.FC = () => {
 
             <div className="mt-10 flex items-center justify-center gap-2">
               <Button variant="outline" size="md" disabled>Previous</Button>
-              {['1', '2', '3', '...', '127'].map((n, i) => (
-                <Button
-                  key={i}
-                  variant={n === '1' ? 'primary' : 'outline'}
-                  size="icon"
-                  className="h-10 w-10 font-bold"
-                >
-                  {n}
-                </Button>
-              ))}
+              {(() => {
+                const totalPages = Math.max(1, Math.ceil(totalCount / 20))
+                const displayPages = Math.min(totalPages, 5)
+                return Array.from({ length: displayPages }).map((_, i) => {
+                  const pageNum = i === displayPages - 1 && totalPages > 5 ? '...' : String(i + 1)
+                  return (
+                    <Button
+                      key={i}
+                      variant={i === 0 ? 'primary' : 'outline'}
+                      size="icon"
+                      className="h-10 w-10 font-bold"
+                    >
+                      {pageNum}
+                    </Button>
+                  )
+                })
+              })()}
               <Button variant="outline" size="md">Next</Button>
             </div>
           </div>

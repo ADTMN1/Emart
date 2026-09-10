@@ -37,17 +37,42 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Marquee } from '@/components/ui/Marquee'
-import { HeroProductRail } from '@/components/3d/HeroProductRail'
 import { useLanguage } from '@/contexts/LanguageContext'
-
-import {
-  categories,
-  products,
-  howItWorksSteps,
-  trustFeatures,
-  shippingCarriers,
-} from '@/data/mockData'
+import type { Category, Product } from '@/lib/types'
+import { api } from '@/lib/api'
 import { cn, formatCurrency, formatNumber } from '@/lib/utils'
+import { useProgressiveImage } from '@/hooks/useProgressiveImage'
+
+const LazyHeroProductRail = React.lazy(() =>
+  import('@/components/3d/HeroProductRail').then((module) => ({
+    default: module.HeroProductRail,
+  })),
+)
+
+const howItWorksSteps = [
+  { id: 1, icon: 'search' },
+  { id: 2, icon: 'shopping-cart' },
+  { id: 3, icon: 'package-check' },
+  { id: 4, icon: 'plane' },
+  { id: 5, icon: 'map-pin-check' },
+]
+
+const trustFeatures = [
+  { icon: 'warehouse' },
+  { icon: 'shield-check' },
+  { icon: 'camera' },
+  { icon: 'receipt' },
+  { icon: 'credit-card' },
+  { icon: 'headphones' },
+]
+
+const shippingCarriers = [
+  { name: 'EMS', days: '5-8 days', priceFrom: 15 },
+  { name: 'DHL', days: '3-5 days', priceFrom: 22 },
+  { name: 'FedEx', days: '4-7 days', priceFrom: 20 },
+  { name: 'SAL', days: '10-14 days', priceFrom: 10 },
+  { name: 'Sea Mail', days: '25-40 days', priceFrom: 8 },
+]
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   search: Search,
@@ -79,6 +104,85 @@ const Home: React.FC = () => {
   const [activeTab, setActiveTab] = React.useState<'search' | 'url'>('search')
   const [openFaq, setOpenFaq] = React.useState<number | null>(0)
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
+  const [categories, setCategories] = React.useState<Category[]>([])
+  const [products, setProducts] = React.useState<Product[]>([])
+  const [productsLoading, setProductsLoading] = React.useState(true)
+  const [categoriesLoading, setCategoriesLoading] = React.useState(true)
+  const [show3dHero, setShow3dHero] = React.useState(false)
+
+  // Progressive image loading for hero
+  const heroImage = useProgressiveImage('/images/1-placeholder.jpg', '/images/1.jpg')
+
+  React.useEffect(() => {
+    const scheduleIdleLoad = () => {
+      if ('requestIdleCallback' in window) {
+        const idleWindow = window as typeof window & {
+          requestIdleCallback?: (cb: IdleRequestCallback) => number
+        }
+
+        idleWindow.requestIdleCallback?.(() => setShow3dHero(true))
+        return undefined
+      }
+
+      const timer = setTimeout(() => setShow3dHero(true), 250)
+      return () => clearTimeout(timer)
+    }
+
+    const cleanup = scheduleIdleLoad()
+    return cleanup
+  }, [])
+
+  React.useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setCategoriesLoading(true)
+        try {
+          const catData = await api.get<Category[]>('/categories')
+          if (Array.isArray(catData) && catData.length > 0) {
+            setCategories(catData.map((c) => ({
+              ...c,
+              color: c.color || '',
+              icon: c.icon || '',
+              count: c.count || 0,
+            })))
+          }
+        } catch {
+          // no fallback, categories stay empty
+        }
+      } finally {
+        setCategoriesLoading(false)
+      }
+
+      try {
+        setProductsLoading(true)
+        const data = await api.get<{ products: Product[]; pagination?: { total?: number } }>('/products?limit=8').catch(() => ({ products: [] }))
+        setProducts(data?.products || [])
+      } catch {
+        setProducts([])
+      } finally {
+        setProductsLoading(false)
+      }
+    }
+
+    const scheduleFetch = () => {
+      if ('requestIdleCallback' in window) {
+        const idleWindow = window as typeof window & {
+          requestIdleCallback?: (cb: IdleRequestCallback) => number
+        }
+
+        idleWindow.requestIdleCallback?.(() => {
+          void fetchData()
+        })
+        return
+      }
+
+      setTimeout(() => {
+        void fetchData()
+      }, 200)
+    }
+
+    scheduleFetch()
+  }, [])
 
   const testimonials = [
     {
@@ -136,6 +240,26 @@ const Home: React.FC = () => {
     })
   }
 
+  const railAccents = ['#f59e0b', '#6366f1', '#38bdf8', '#f43f5e', '#a855f7', '#f97316', '#22c55e', '#eab308']
+
+  const leftRailProducts = React.useMemo(() =>
+    products.slice(0, 4).map((p, i) => ({
+      name: p.name,
+      image: p.productImages?.[0]?.url || p.image || p.images?.[0] || '',
+      accent: railAccents[i % railAccents.length],
+    })),
+    [products]
+  )
+
+  const rightRailProducts = React.useMemo(() =>
+    products.slice(4, 8).map((p, i) => ({
+      name: p.name,
+      image: p.productImages?.[0]?.url || p.image || p.images?.[0] || '',
+      accent: railAccents[(i + 4) % railAccents.length],
+    })),
+    [products]
+  )
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const q = (activeTab === 'search' ? searchQuery : urlQuery).trim()
@@ -151,11 +275,17 @@ const Home: React.FC = () => {
       {/* ===================== HERO ===================== */}
       <section className="relative overflow-hidden min-h-[600px] lg:min-h-[700px]">
         {/* Background Image with Overlay */}
-        <div className="absolute inset-0">
+        <div className="absolute inset-0 bg-gray-900">
           <img 
-            src="/images/1.jpg" 
+            src={heroImage.src}
             alt="E-commerce background" 
-            className="w-full h-full object-cover"
+            className={cn(
+              "w-full h-full object-cover transition-opacity duration-700",
+              heroImage.loading ? "opacity-50 blur-sm" : "opacity-100 blur-0"
+            )}
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
           />
           {/* Light overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
@@ -171,12 +301,12 @@ const Home: React.FC = () => {
           {/* Decorative side rails stay behind the centered hero content. */}
           <div className="pointer-events-none absolute inset-y-10 left-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
             <div className="pointer-events-auto h-full origin-left scale-75 xl:scale-90 2xl:scale-100">
-              <HeroProductRail side="left" />
+              {show3dHero && <LazyHeroProductRail side="left" products={leftRailProducts} />}
             </div>
           </div>
           <div className="pointer-events-none absolute inset-y-10 right-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
             <div className="pointer-events-auto h-full origin-right scale-75 xl:scale-90 2xl:scale-100">
-              <HeroProductRail side="right" />
+              {show3dHero && <LazyHeroProductRail side="right" products={rightRailProducts} />}
             </div>
           </div>
 
@@ -265,25 +395,6 @@ const Home: React.FC = () => {
                   </div>
                 </div>
               </form>
-            </div>
-
-            {/* Stats */}
-            <div className="mt-16 lg:mt-20 grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6 max-w-4xl mx-auto">
-              {[
-                { v: '12M+', l: t('home.productsAvailable') },
-                { v: '250K+', l: t('home.happyCustomers') },
-                { v: '180+', l: t('home.countriesShipped') },
-                { v: '4.9/5', l: t('home.averageRating') },
-              ].map((s) => (
-                <div key={s.l} className="bg-white/90 backdrop-blur-sm border border-white/50 rounded-2xl p-5 lg:p-6 text-center shadow-lg hover:shadow-xl transition-shadow">
-                  <div className="font-display text-2xl lg:text-3xl font-extrabold text-primary-700">
-                    {s.v}
-                  </div>
-                  <div className="mt-1 text-xs lg:text-sm font-medium text-gray-600">
-                    {s.l}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </section>
@@ -403,7 +514,7 @@ const Home: React.FC = () => {
                     {cat.name}
                   </div>
                   <div className="mt-1 text-[11px] text-muted-foreground">
-                    {formatNumber(cat.count)} {t('home.items')}
+                    {formatNumber(cat.count || 0)} {t('home.items')}
                   </div>
                 </Link>
               )
@@ -412,9 +523,9 @@ const Home: React.FC = () => {
 
           <Link
             to="/categories"
-            className="md:hidden mt-6 flex items-center justify-center gap-1.5 text-sm font-bold text-primary py-3 rounded-xl bg-primary-50 w-full"
+            className="md:hidden mt-6 flex items-center justify-center gap-2 text-sm font-bold text-primary py-3 rounded-xl bg-primary-50 border border-primary-100"
           >
-            {t('home.viewAllCategories')}
+            <span>{t('home.viewAllCategories')}</span>
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -446,14 +557,38 @@ const Home: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
-            {products.slice(0, 8).map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onFavorite={toggleFavorite}
-                isFavorite={favorites.has(p.id)}
-              />
-            ))}
+            {productsLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="aspect-square bg-muted animate-pulse" />
+                  <div className="p-4 space-y-3">
+                    <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+                    <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
+                  </div>
+                </div>
+              ))
+            ) : products.length === 0 ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-border bg-card overflow-hidden opacity-60">
+                  <div className="aspect-square bg-muted flex items-center justify-center">
+                    <Package className="h-12 w-12 text-muted-foreground/30" />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-sm font-semibold text-muted-foreground text-center">No products yet</h3>
+                    <p className="text-xs text-muted-foreground/70 text-center mt-1">Add products via Admin</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              products.slice(0, 8).map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onFavorite={toggleFavorite}
+                  isFavorite={favorites.has(p.id)}
+                />
+              ))
+            )}
           </div>
         </div>
       </section>
@@ -535,7 +670,7 @@ const Home: React.FC = () => {
               const Icon = iconMap[f.icon] || ShieldCheck
               return (
                 <Card
-                  key={f.title}
+                  key={f.icon}
                   className="bg-white/5 border-white/10 backdrop-blur hover:bg-white/10 hover:border-white/20 transition-all"
                 >
                   <CardContent className="p-6 lg:p-7">
@@ -563,9 +698,11 @@ const Home: React.FC = () => {
                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-primary-100 to-secondary-100" />
                 <div className="absolute inset-4 rounded-2xl bg-gray-50 shadow-xl ring-1 ring-black/5 flex items-center justify-center overflow-hidden">
                   <img
-                    src="https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=international%20shipping%20package%20boxes%20warehouse%20global%20logistics%20clean%20professional%20photo&image_size=square_hd"
+                    src="/images/shipping.jpg"
                     alt="International shipping"
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </div>
 

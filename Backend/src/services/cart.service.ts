@@ -11,6 +11,9 @@ export class CartService {
             product: {
               include: {
                 category: true,
+                productImages: {
+                  orderBy: { sortOrder: 'asc' },
+                },
               },
             },
           },
@@ -28,6 +31,9 @@ export class CartService {
               product: {
                 include: {
                   category: true,
+                  productImages: {
+                    orderBy: { sortOrder: 'asc' },
+                  },
                 },
               },
             },
@@ -75,6 +81,9 @@ export class CartService {
           product: {
             include: {
               category: true,
+              productImages: {
+                orderBy: { sortOrder: 'asc' },
+              },
             },
           },
         },
@@ -92,6 +101,9 @@ export class CartService {
         product: {
           include: {
             category: true,
+            productImages: {
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },
@@ -119,6 +131,9 @@ export class CartService {
         product: {
           include: {
             category: true,
+            productImages: {
+              orderBy: { sortOrder: 'asc' },
+            },
           },
         },
       },

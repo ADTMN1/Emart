@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { useToast } from '@/components/ui/Toast'
 import { cn, formatCurrency } from '@/lib/utils'
+import { api } from '@/lib/api'
 
 type TransactionType = 'DEPOSIT' | 'WITHDRAWAL' | 'PAYMENT' | 'REFUND' | 'BONUS' | 'ADJUSTMENT'
 type TransactionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
@@ -44,46 +45,6 @@ interface Transaction {
   createdAt: string
   processedAt?: string
 }
-
-const mockTransactions: Transaction[] = [
-  {
-    id: '1',
-    type: 'DEPOSIT',
-    amount: 500,
-    balanceBefore: 0,
-    balanceAfter: 500,
-    status: 'COMPLETED',
-    description: 'Deposit via Credit Card',
-    paymentMethod: 'credit_card',
-    createdAt: '2026-09-08T10:00:00Z',
-    processedAt: '2026-09-08T10:00:05Z',
-  },
-  {
-    id: '2',
-    type: 'PAYMENT',
-    amount: 137,
-    balanceBefore: 500,
-    balanceAfter: 363,
-    status: 'COMPLETED',
-    description: 'Payment for order EMT-20240825-48291',
-    reference: 'EMT-20240825-48291',
-    paymentMethod: 'Wallet',
-    createdAt: '2026-09-07T14:30:00Z',
-    processedAt: '2026-09-07T14:30:01Z',
-  },
-  {
-    id: '3',
-    type: 'BONUS',
-    amount: 10,
-    balanceBefore: 363,
-    balanceAfter: 373,
-    status: 'COMPLETED',
-    description: 'Welcome bonus - $10 credit',
-    reference: 'WELCOME2026',
-    createdAt: '2026-09-06T09:00:00Z',
-    processedAt: '2026-09-06T09:00:01Z',
-  },
-]
 
 const transactionConfig: Record<
   TransactionType,
@@ -112,9 +73,34 @@ const Wallet: React.FC = () => {
   const [depositAmount, setDepositAmount] = React.useState('')
   const [withdrawAmount, setWithdrawAmount] = React.useState('')
   const [paymentMethod, setPaymentMethod] = React.useState('credit_card')
+  const [withdrawMethod, setWithdrawMethod] = React.useState('bank_transfer')
+  const [filterType, setFilterType] = React.useState('all')
 
-  // Mock wallet data
-  const walletBalance = 373.0
+  const [walletBalance, setWalletBalance] = React.useState(0)
+  const [transactions, setTransactions] = React.useState<Transaction[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [submitting, setSubmitting] = React.useState(false)
+
+  const fetchWalletData = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const [walletRes, txRes] = await Promise.all([
+        api.get<{ balance: number; currency: string }>('/wallet').catch(() => ({ balance: 0, currency: 'USD' })),
+        api.get<{ transactions: Transaction[] }>('/wallet/transactions').catch(() => ({ transactions: [] })),
+      ])
+      setWalletBalance(walletRes?.balance ?? 0)
+      setTransactions(txRes?.transactions || (Array.isArray(txRes) ? txRes : []))
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Error', description: err.message || 'Failed to load wallet details.' })
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  React.useEffect(() => {
+    fetchWalletData()
+  }, [fetchWalletData])
+
   const currency = 'USD'
 
   const handleDeposit = async () => {
@@ -124,14 +110,22 @@ const Wallet: React.FC = () => {
       return
     }
 
-    // TODO: Integrate with backend API
-    toast({
-      variant: 'success',
-      title: 'Deposit Initiated',
-      description: `Processing deposit of ${formatCurrency(amount, 'USD')}`,
-    })
-    setShowDepositModal(false)
-    setDepositAmount('')
+    try {
+      setSubmitting(true)
+      await api.post('/wallet/deposit', { amount, paymentMethod })
+      toast({
+        variant: 'success',
+        title: 'Deposit Successful',
+        description: `Successfully added ${formatCurrency(amount, 'USD')} to your wallet.`,
+      })
+      setShowDepositModal(false)
+      setDepositAmount('')
+      await fetchWalletData()
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Deposit Failed', description: err.message || 'Unable to process deposit.' })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleWithdraw = async () => {
@@ -154,14 +148,22 @@ const Wallet: React.FC = () => {
       return
     }
 
-    // TODO: Integrate with backend API
-    toast({
-      variant: 'success',
-      title: 'Withdrawal Initiated',
-      description: `Processing withdrawal of ${formatCurrency(amount, 'USD')}`,
-    })
-    setShowWithdrawModal(false)
-    setWithdrawAmount('')
+    try {
+      setSubmitting(true)
+      await api.post('/wallet/withdraw', { amount, withdrawMethod })
+      toast({
+        variant: 'success',
+        title: 'Withdrawal Successful',
+        description: `Processed withdrawal of ${formatCurrency(amount, 'USD')}.`,
+      })
+      setShowWithdrawModal(false)
+      setWithdrawAmount('')
+      await fetchWalletData()
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Withdrawal Failed', description: err.message || 'Unable to process withdrawal.' })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -232,25 +234,37 @@ const Wallet: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-3 border-t border-border">
-              {[
-                { label: 'Total Deposited', value: '$500', icon: TrendingUp, color: 'text-success' },
-                { label: 'Total Spent', value: '$137', icon: ShoppingBag, color: 'text-primary' },
-                { label: 'Bonuses Earned', value: '$10', icon: Gift, color: 'text-secondary' },
-              ].map((stat, idx) => (
-                <div
-                  key={stat.label}
-                  className={cn(
-                    'p-5 text-center',
-                    idx < 2 && 'border-r border-border'
-                  )}
-                >
-                  <div className="flex items-center justify-center gap-1.5 mb-1.5">
-                    <stat.icon className={cn('h-4 w-4', stat.color)} />
-                    <div className="text-xs font-bold text-muted-foreground">{stat.label}</div>
+              {(() => {
+                const totalDeposited = transactions
+                  .filter((t) => (t.type === 'DEPOSIT' || t.type === 'REFUND' || t.type === 'BONUS') && t.status === 'COMPLETED')
+                  .reduce((sum, t) => sum + t.amount, 0)
+                const totalSpent = transactions
+                  .filter((t) => (t.type === 'PAYMENT' || t.type === 'WITHDRAWAL') && t.status === 'COMPLETED')
+                  .reduce((sum, t) => sum + t.amount, 0)
+                const totalBonuses = transactions
+                  .filter((t) => t.type === 'BONUS' && t.status === 'COMPLETED')
+                  .reduce((sum, t) => sum + t.amount, 0)
+
+                return [
+                  { label: 'Total Deposited', value: formatCurrency(totalDeposited, 'USD'), icon: TrendingUp, color: 'text-success' },
+                  { label: 'Total Spent', value: formatCurrency(totalSpent, 'USD'), icon: ShoppingBag, color: 'text-primary' },
+                  { label: 'Bonuses Earned', value: formatCurrency(totalBonuses, 'USD'), icon: Gift, color: 'text-secondary' },
+                ].map((stat, idx) => (
+                  <div
+                    key={stat.label}
+                    className={cn(
+                      'p-5 text-center',
+                      idx < 2 && 'border-r border-border'
+                    )}
+                  >
+                    <div className="flex items-center justify-center gap-1.5 mb-1.5">
+                      <stat.icon className={cn('h-4 w-4', stat.color)} />
+                      <div className="text-xs font-bold text-muted-foreground">{stat.label}</div>
+                    </div>
+                    <div className="font-display text-xl font-extrabold">{stat.value}</div>
                   </div>
-                  <div className="font-display text-xl font-extrabold">{stat.value}</div>
-                </div>
-              ))}
+                ))
+              })()}
             </div>
           </CardContent>
         </Card>
@@ -259,7 +273,7 @@ const Wallet: React.FC = () => {
         <div>
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-display text-xl font-extrabold">Transaction History</h2>
-            <Select className="w-48">
+            <Select className="w-48" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
               <option value="all">All Transactions</option>
               <option value="DEPOSIT">Deposits</option>
               <option value="WITHDRAWAL">Withdrawals</option>
@@ -269,88 +283,97 @@ const Wallet: React.FC = () => {
             </Select>
           </div>
 
-          <div className="space-y-3">
-            {mockTransactions.map((tx) => {
-              const cfg = transactionConfig[tx.type]
-              const statusCfg = statusConfig[tx.status]
-              const Icon = cfg.icon
-              const StatusIcon = statusCfg.icon
+          {loading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading transactions...</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {transactions
+                .filter((tx) => filterType === 'all' || tx.type === filterType)
+                .map((tx) => {
+                  const cfg = transactionConfig[tx.type] || transactionConfig.DEPOSIT
+                  const statusCfg = statusConfig[tx.status] || statusConfig.COMPLETED
+                  const Icon = cfg.icon
+                  const StatusIcon = statusCfg.icon
 
-              return (
-                <Card key={tx.id} className="transition-all hover:shadow-card-hover">
-                  <CardContent className="p-5">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div
-                          className={cn(
-                            'h-12 w-12 rounded-xl flex items-center justify-center shrink-0',
-                            tx.type === 'DEPOSIT' || tx.type === 'REFUND' || tx.type === 'BONUS'
-                              ? 'bg-success/10'
-                              : 'bg-destructive/10'
-                          )}
-                        >
-                          <Icon className={cn('h-5 w-5', cfg.color)} />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <div className="font-bold text-sm">{tx.description}</div>
-                            <Badge variant={statusCfg.variant} size="sm" className="gap-1">
-                              <StatusIcon className="h-2.5 w-2.5" />
-                              {statusCfg.label}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(tx.createdAt).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                  return (
+                    <Card key={tx.id} className="transition-all hover:shadow-card-hover">
+                      <CardContent className="p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div
+                              className={cn(
+                                'h-12 w-12 rounded-xl flex items-center justify-center shrink-0',
+                                tx.type === 'DEPOSIT' || tx.type === 'REFUND' || tx.type === 'BONUS'
+                                  ? 'bg-success/10'
+                                  : 'bg-destructive/10'
+                              )}
+                            >
+                              <Icon className={cn('h-5 w-5', cfg.color)} />
                             </div>
-                            {tx.paymentMethod && (
-                              <div className="flex items-center gap-1">
-                                <CreditCard className="h-3 w-3" />
-                                {tx.paymentMethod.replace('_', ' ')}
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="font-bold text-sm">{tx.description}</div>
+                                <Badge variant={statusCfg.variant} size="sm" className="gap-1">
+                                  <StatusIcon className="h-2.5 w-2.5" />
+                                  {statusCfg.label}
+                                </Badge>
                               </div>
-                            )}
-                            {tx.reference && (
-                              <div className="flex items-center gap-1">
-                                Ref: {tx.reference}
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(tx.createdAt).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </div>
+                                {tx.paymentMethod && (
+                                  <div className="flex items-center gap-1">
+                                    <CreditCard className="h-3 w-3" />
+                                    {tx.paymentMethod.replace('_', ' ')}
+                                  </div>
+                                )}
+                                {tx.reference && (
+                                  <div className="flex items-center gap-1">
+                                    Ref: {tx.reference}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div
+                              className={cn(
+                                'font-display text-xl font-extrabold',
+                                cfg.sign === '+' ? 'text-success' : 'text-destructive'
+                              )}
+                            >
+                              {cfg.sign}{formatCurrency(tx.amount, 'USD')}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Balance: {formatCurrency(tx.balanceAfter, 'USD')}
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+            </div>
+          )}
 
-                      <div className="text-right">
-                        <div
-                          className={cn(
-                            'font-display text-xl font-extrabold',
-                            cfg.sign === '+' ? 'text-success' : 'text-destructive'
-                          )}
-                        >
-                          {cfg.sign}{formatCurrency(tx.amount, 'USD')}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Balance: {formatCurrency(tx.balanceAfter, 'USD')}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-
-          {mockTransactions.length === 0 && (
+          {!loading && transactions.filter((tx) => filterType === 'all' || tx.type === filterType).length === 0 && (
             <Card>
               <CardContent className="p-12 text-center">
                 <WalletIcon className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-                <h3 className="font-display text-lg font-bold mb-2">No Transactions Yet</h3>
+                <h3 className="font-display text-lg font-bold mb-2">No Transactions Found</h3>
                 <p className="text-sm text-muted-foreground mb-4">
                   Start by adding funds to your wallet
                 </p>

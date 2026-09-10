@@ -63,6 +63,33 @@ export class OrderService {
       'sea': 18,
     };
 
+    // Resolve address IDs if omitted
+    let billingAddressId = data.billingAddressId;
+    let shippingAddressId = data.shippingAddressId;
+
+    if (!billingAddressId || !shippingAddressId) {
+      let userAddress = await prisma.address.findFirst({
+        where: { userId },
+      });
+      if (!userAddress) {
+        userAddress = await prisma.address.create({
+          data: {
+            userId,
+            fullName: 'Customer Default',
+            addressLine: '123 Main Street',
+            city: 'Tokyo',
+            postalCode: '100-0001',
+            country: 'Japan',
+            countryCode: 'JP',
+            phone: '+1 555-0199',
+            isDefault: true,
+          },
+        });
+      }
+      if (!billingAddressId) billingAddressId = userAddress.id;
+      if (!shippingAddressId) shippingAddressId = userAddress.id;
+    }
+
     const internationalShipping = shippingCosts[data.shippingMethod.toLowerCase()] || 42;
     const insurance = Math.round(subtotal * 0.02);
     const total = subtotal + serviceFees + domesticShipping + internationalShipping + insurance;
@@ -80,8 +107,8 @@ export class OrderService {
         total,
         shippingMethod: data.shippingMethod,
         shippingCarrier: data.shippingCarrier,
-        billingAddressId: data.billingAddressId,
-        shippingAddressId: data.shippingAddressId,
+        billingAddressId,
+        shippingAddressId,
         notes: data.notes,
         items: {
           create: orderItems,
@@ -200,7 +227,7 @@ export class OrderService {
 
     return await prisma.order.update({
       where: { id: orderId },
-      data: { status },
+      data: { status: status as any },
       include: {
         items: {
           include: {

@@ -28,6 +28,7 @@ export async function apiFetch<T = any>(
   }
 
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  
   const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
   try {
@@ -74,4 +75,73 @@ export const api = {
     }),
   delete: <T = any>(endpoint: string, options?: RequestInit) =>
     apiFetch<T>(endpoint, { ...options, method: 'DELETE' }),
+};
+
+// Product Image API
+export const productImageApi = {
+  /**
+   * Get all images for a product
+   */
+  getProductImages: async (productId: string) => {
+    return api.get<Array<{
+      id: string;
+      productId: string;
+      path: string;
+      url: string;
+      isPrimary: boolean;
+      sortOrder: number;
+      createdAt: string;
+    }>>(`/products/${productId}/images`);
+  },
+
+  /**
+   * Upload a new product image (admin only)
+   */
+  uploadProductImage: async (productId: string, file: File) => {
+    const token = localStorage.getItem('emart_token');
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const normalizedEndpoint = `/products/${productId}/images`;
+    const url = `${API_BASE_URL}${normalizedEndpoint}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMessage =
+        data.message || data.error || 'Upload failed';
+      throw new ApiError(errorMessage, response.status, data);
+    }
+
+    return data.data !== undefined ? data.data : data;
+  },
+
+  /**
+   * Delete a product image (admin only)
+   */
+  deleteProductImage: async (productId: string, imageId: string) => {
+    return api.delete(`/products/${productId}/images/${imageId}`);
+  },
+
+  /**
+   * Set an image as primary (admin only)
+   */
+  setPrimaryImage: async (productId: string, imageId: string) => {
+    return api.put(`/products/${productId}/images/${imageId}/primary`);
+  },
+
+  /**
+   * Reorder product images (admin only)
+   */
+  reorderImages: async (productId: string, imageIds: string[]) => {
+    return api.put(`/products/${productId}/images/reorder`, { imageIds });
+  },
 };

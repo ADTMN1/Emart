@@ -21,22 +21,20 @@ import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
 import { EmptyCart } from '@/components/ui/States'
 import { Select } from '@/components/ui/Select'
-import { products } from '@/data/mockData'
+import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { api } from '@/lib/api'
 
 interface CartItem {
   id: string
   productId: string
   quantity: number
+  product?: Product
 }
 
-const initialCart: CartItem[] = [
-  { id: 'c1', productId: products[0].id, quantity: 1 },
-  { id: 'c2', productId: products[2].id, quantity: 1 },
-  { id: 'c3', productId: products[4].id, quantity: 2 },
-]
+const initialCart: CartItem[] = []
 
 const Cart: React.FC = () => {
   const { t } = useLanguage()
@@ -45,10 +43,53 @@ const Cart: React.FC = () => {
   const [items, setItems] = React.useState<CartItem[]>(initialCart)
   const [shipCountry, setShipCountry] = React.useState('US')
   const [shippingMethod, setShippingMethod] = React.useState('dhl')
+  const [loading, setLoading] = React.useState(true)
+
+  const fetchCart = React.useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await api.get<any>('/cart').catch(() => null)
+      const rawItems = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
+      const items = rawItems.filter((item: any) => item && (item.product || item.productId))
+      setItems(items)
+    } catch {
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    fetchCart()
+    const handleCartUpdate = () => fetchCart()
+    window.addEventListener('cart:updated', handleCartUpdate)
+    return () => window.removeEventListener('cart:updated', handleCartUpdate)
+  }, [fetchCart])
+
+  // Helper function to get product image - matches ProductDetails logic
+  const getProductImage = (product: any): string => {
+    // Try productImages array first (with url property)
+    if (product?.productImages && Array.isArray(product.productImages)) {
+      const validImages = product.productImages.filter((img: any) => img && img.url)
+      if (validImages.length > 0) {
+        return validImages[0].url
+      }
+    }
+    // Fall back to image field
+    if (product?.image) {
+      return product.image
+    }
+    // Fall back to images array
+    if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+      return product.images[0]
+    }
+    // Return placeholder if no image found
+    return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
+  }
 
   const cartItems = items
-    .map((i) => ({ ...i, product: products.find((p) => p.id === i.productId)! }))
     .filter((i) => i.product)
+    .map((i) => ({ ...i, product: i.product! }))
 
   const subtotal = cartItems.reduce(
     (sum, i) => sum + i.product.estimatedPriceUsd * i.quantity,
@@ -66,19 +107,44 @@ const Cart: React.FC = () => {
   const insurance = Math.round(subtotal * 0.02)
   const total = subtotal + proxyFees + domestic + shipping + insurance
 
-  const updateQty = (id: string, qty: number) => {
+  const updateQty = async (id: string, qty: number) => {
     if (qty < 1) return removeItem(id)
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.min(10, qty) } : i)))
+    const nextQty = Math.min(10, qty)
+
+    try {
+      const updated = await api.put<{ quantity?: number }>(`/cart/items/${id}`, { quantity: nextQty })
+      setItems((prev) => prev.map((i) => i.id === id ? { ...i, quantity: updated?.quantity ?? nextQty } : i))
+      window.dispatchEvent(new CustomEvent('cart:updated'))
+    } catch {
+      toast({ variant: 'error', title: 'Update failed', description: 'Could not update item quantity.' })
+    }
   }
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
+  const removeItem = async (id: string) => {
+    try {
+      await api.delete(`/cart/items/${id}`)
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      window.dispatchEvent(new CustomEvent('cart:updated'))
+      toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
+    } catch {
+      toast({ variant: 'error', title: 'Remove failed', description: 'Could not remove item from cart.' })
+    }
   }
 
   const saveForLater = (id: string) => {
     removeItem(id)
     toast({ variant: 'success', title: t('cart.saveForLater'), description: 'You can find this in your favorites.' })
+  }
+
+  if (loading) {
+    return (
+      <div className="container-page py-12 min-h-[60vh]">
+        <div className="max-w-xl mx-auto text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading your cart...</p>
+        </div>
+      </div>
+    )
   }
 
   if (cartItems.length === 0) {
@@ -128,7 +194,7 @@ const Cart: React.FC = () => {
                     to={`/product/${item.product.id}`}
                     className="w-24 h-24 lg:w-32 lg:h-32 shrink-0 rounded-xl overflow-hidden bg-muted border border-border"
                   >
-                    <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
+                    <img src={getProductImage(item.product)} alt={item.product.name} className="w-full h-full object-cover" />
                   </Link>
 
                   <div className="flex-1 min-w-0 flex flex-col">
