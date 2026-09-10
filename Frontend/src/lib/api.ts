@@ -1,3 +1,5 @@
+import { apiCache, getCacheKey, cacheConfig } from './apiCache'
+
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '') + '/api/v1';
 
 export class ApiError extends Error {
@@ -12,15 +14,21 @@ export class ApiError extends Error {
   }
 }
 
+interface FetchOptions extends RequestInit {
+  useCache?: boolean
+  cacheTTL?: number
+}
+
 export async function apiFetch<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: FetchOptions = {}
 ): Promise<T> {
+  const { useCache = false, cacheTTL, ...fetchOptions } = options
   const token = localStorage.getItem('emart_token');
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...(fetchOptions.headers as Record<string, string>),
   };
 
   if (token) {
@@ -28,9 +36,24 @@ export async function apiFetch<T = any>(
   }
 
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
   const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
+  // Use cache for GET requests if enabled
+  if (useCache && fetchOptions.method === 'GET') {
+    const cacheKey = getCacheKey(endpoint)
+    return apiCache.get(cacheKey, async () => {
+      return performFetch<T>(url, fetchOptions, headers)
+    }, { ttl: cacheTTL })
+  }
+
+  return performFetch<T>(url, fetchOptions, headers)
+}
+
+async function performFetch<T>(
+  url: string,
+  options: RequestInit,
+  headers: Record<string, string>
+): Promise<T> {
   try {
     const response = await fetch(url, {
       ...options,
@@ -59,23 +82,47 @@ export async function apiFetch<T = any>(
 }
 
 export const api = {
-  get: <T = any>(endpoint: string, options?: RequestInit) =>
+  get: <T = any>(endpoint: string, options?: FetchOptions) =>
     apiFetch<T>(endpoint, { ...options, method: 'GET' }),
-  post: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+  post: <T = any>(endpoint: string, body?: any, options?: FetchOptions) =>
     apiFetch<T>(endpoint, {
       ...options,
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  put: <T = any>(endpoint: string, body?: any, options?: RequestInit) =>
+  put: <T = any>(endpoint: string, body?: any, options?: FetchOptions) =>
     apiFetch<T>(endpoint, {
       ...options,
       method: 'PUT',
       body: JSON.stringify(body),
     }),
-  delete: <T = any>(endpoint: string, options?: RequestInit) =>
+  delete: <T = any>(endpoint: string, options?: FetchOptions) =>
     apiFetch<T>(endpoint, { ...options, method: 'DELETE' }),
 };
+
+// Cached API calls for static/semi-static data
+export const cachedApi = {
+  getCategories: () => 
+    api.get('/categories', { useCache: true, cacheTTL: cacheConfig.categories.ttl }),
+  
+  getProducts: (params?: Record<string, string>) => {
+    const endpoint = params && Object.keys(params).length > 0
+      ? `/products?${new URLSearchParams(params).toString()}`
+      : '/products'
+    return api.get(endpoint, { useCache: true, cacheTTL: cacheConfig.products.ttl })
+  },
+  
+  getProduct: (id: string) =>
+    api.get(`/products/${id}`, { useCache: true, cacheTTL: cacheConfig.productDetails.ttl }),
+}
+
+// Cache invalidation helpers
+export const invalidateCache = {
+  products: () => apiCache.invalidatePattern(/^\/products/),
+  categories: () => apiCache.invalidate('/categories'),
+  product: (id: string) => apiCache.invalidate(`/products/${id}`),
+  all: () => apiCache.clear(),
+}
 
 // Product Image API
 export const productImageApi = {

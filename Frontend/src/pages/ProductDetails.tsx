@@ -25,9 +25,11 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
 import { ProductCard } from '@/components/ui/ProductCard'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { useToast } from '@/components/ui/Toast'
 import { cn, formatCurrency } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { cachedApi, api } from '@/lib/api'
+import { getOptimizedImageUrl } from '@/lib/imageOptimization'
 
 interface ProductImage {
   id: string
@@ -100,7 +102,7 @@ const ProductDetails: React.FC = () => {
   const [relatedLoading, setRelatedLoading] = React.useState(false)
   const [isAddingToCart, setIsAddingToCart] = React.useState(false)
 
-  // Fetch product from API with cache-busting timestamp
+  // Fetch product from API with caching
   React.useEffect(() => {
     if (!id) return
 
@@ -108,9 +110,8 @@ const ProductDetails: React.FC = () => {
       try {
         setLoading(true)
         setError(null)
-        const cacheBuster = `t=${Date.now()}-${reloadKey}`
-        const separator = id.includes('?') ? '&' : '?'
-        const data = await api.get<Product>(`/products/${id}${separator}${cacheBuster}`)
+        // Use cached API for faster loads
+        const data = await cachedApi.getProduct(id)
         setProduct(data)
       } catch (err: any) {
         console.error('Failed to fetch product:', err)
@@ -284,10 +285,15 @@ const ProductDetails: React.FC = () => {
         <div className="grid lg:grid-cols-5 gap-8 lg:gap-10">
           {/* Images */}
           <div className="lg:col-span-2 space-y-3">
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-muted border border-border">
-              <img
+            <div className="relative rounded-2xl overflow-hidden bg-muted border border-border">
+              <OptimizedImage
                 src={displayImages[imgIdx]}
-                alt={product.name}
+                alt={`${product.name} - Image ${imgIdx + 1}`}
+                size="large"
+                context="detail"
+                priority={imgIdx === 0}
+                showShimmer
+                aspectRatio="aspect-square"
                 className="w-full h-full object-cover"
               />
               {displayImages.length > 1 && (
@@ -328,7 +334,16 @@ const ProductDetails: React.FC = () => {
                         : 'border-transparent hover:border-border',
                     )}
                   >
-                    <img src={img} alt={`View ${i + 1}`} className="w-full h-full object-cover" />
+                    <OptimizedImage
+                      src={img}
+                      alt={`${product.name} thumbnail ${i + 1}`}
+                      size="thumb"
+                      context="thumbnail"
+                      lazy
+                      showShimmer
+                      aspectRatio="aspect-square"
+                      className="w-full h-full object-cover"
+                    />
                   </button>
                 ))}
               </div>

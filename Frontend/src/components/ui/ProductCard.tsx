@@ -11,6 +11,7 @@ import {
 import { cn, formatCurrency, truncate } from '@/lib/utils'
 import { Badge } from './Badge'
 import { Button } from './Button'
+import { OptimizedImage } from './OptimizedImage'
 
 interface ProductImage {
   id: string
@@ -113,7 +114,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isFavorite = false,
   compact = false,
 }) => {
-  const [imgLoaded, setImgLoaded] = React.useState(false)
   const [hoverFav, setHoverFav] = React.useState(false)
   const imageUrl = getProductImageUrl(product)
   const displayCondition = normalizeCondition(product.condition)
@@ -128,21 +128,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       )}
     >
       <Link to={`/product/${product.id}`} className="relative block overflow-hidden bg-muted">
-        <div className="aspect-square w-full relative overflow-hidden">
-          {!imgLoaded && (
-            <div className="absolute inset-0 shimmer animate-shimmer rounded-none" />
-          )}
-          <img
-            src={imageUrl}
-            alt={product.name}
-            loading="lazy"
-            onLoad={() => setImgLoaded(true)}
-            className={cn(
-              'w-full h-full object-cover transition-transform duration-500 group-hover:scale-105',
-              !imgLoaded && 'opacity-0',
-            )}
-          />
-        </div>
+        <OptimizedImage
+          src={imageUrl}
+          alt={product.name}
+          size="medium"
+          context="card"
+          lazy
+          showShimmer
+          aspectRatio="aspect-square"
+          containerClassName="relative overflow-hidden"
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
 
         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
           {product.isNew && (

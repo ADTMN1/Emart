@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
@@ -405,9 +406,14 @@ const Checkout: React.FC = () => {
                           return (
                             <div key={item.id} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
                               <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
-                                <img
+                                <OptimizedImage
                                   src={getProductImage(product)}
                                   alt={product.name}
+                                  size="thumb"
+                                  context="thumbnail"
+                                  lazy
+                                  showShimmer
+                                  aspectRatio="aspect-square"
                                   className="h-full w-full object-cover"
                                 />
                               </div>

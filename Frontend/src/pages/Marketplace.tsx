@@ -17,9 +17,10 @@ import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Loading, NoSearchResults, ProductCardSkeleton } from '@/components/ui/States'
+import { ProductListSkeleton, CategorySkeleton } from '@/components/ui/Skeleton'
 import type { Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { cachedApi, api, invalidateCache } from '@/lib/api'
 
 interface ProductImage {
   id: string
@@ -59,7 +60,7 @@ interface ApiProduct {
 const Marketplace: React.FC = () => {
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = React.useState(params.get('q') || '')
-  const [isLoading, setIsLoading] = React.useState(true)
+  const [isLoading, setIsLoading] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = React.useState(false)
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
@@ -68,19 +69,21 @@ const Marketplace: React.FC = () => {
   const [products, setProducts] = React.useState<ApiProduct[]>([])
   const [totalCount, setTotalCount] = React.useState(0)
   const [categories, setCategories] = React.useState<Category[]>([])
-  const [categoriesLoading, setCategoriesLoading] = React.useState(true)
+  const [categoriesLoading, setCategoriesLoading] = React.useState(false)
   const fetchRef = React.useRef<number>(0)
+  const abortControllerRef = React.useRef<AbortController | null>(null)
 
+  // Fetch categories (cached) once
   React.useEffect(() => {
     const fetchCategories = async () => {
       try {
         setCategoriesLoading(true)
-        const catData = await api.get<Category[]>('/categories')
+        const catData = await cachedApi.getCategories()
         if (Array.isArray(catData) && catData.length > 0) {
           setCategories(catData)
         }
-      } catch {
-        // no fallback, categories stay empty
+      } catch (error) {
+        console.error('Failed to load categories:', error)
       } finally {
         setCategoriesLoading(false)
       }
@@ -89,7 +92,15 @@ const Marketplace: React.FC = () => {
   }, [])
 
   const fetchProducts = React.useCallback(async () => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
     const reqId = ++fetchRef.current
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
+
     try {
       setIsLoading(true)
       const searchParams = new URLSearchParams()
@@ -105,20 +116,27 @@ const Marketplace: React.FC = () => {
       const queryString = searchParams.toString()
       const endpoint = queryString ? `/products?${queryString}` : '/products'
       
-      const data = await api.get<{ products: ApiProduct[]; pagination: { total: number } }>(endpoint)
+      const data = await api.get<{ products: ApiProduct[]; pagination: { total: number } }>(
+        endpoint,
+        { signal: abortController.signal } as any
+      )
       
-      if (reqId === fetchRef.current) {
+      if (reqId === fetchRef.current && !abortController.signal.aborted) {
         setProducts(data?.products || [])
         setTotalCount(data?.pagination?.total || 0)
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        // Request was cancelled, ignore
+        return
+      }
       console.error('Failed to fetch products:', err)
       if (reqId === fetchRef.current) {
         setProducts([])
         setTotalCount(0)
       }
     } finally {
-      if (reqId === fetchRef.current) {
+      if (reqId === fetchRef.current && !abortController.signal.aborted) {
         setIsLoading(false)
       }
     }

@@ -53,18 +53,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // Don't block rendering - load profile in background
+      setToken(storedToken);
+      setIsLoading(false);
+
       try {
         const userData = await api.get<User>('/auth/profile');
         console.log('[Auth] User profile loaded:', userData);
         setUser(userData);
-        setToken(storedToken);
       } catch (error) {
         console.error('[Auth] Session restoration failed:', error);
         localStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setUser(null);
-      } finally {
-        setIsLoading(false);
       }
     };
 

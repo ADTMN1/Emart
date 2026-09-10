@@ -37,11 +37,13 @@ import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Marquee } from '@/components/ui/Marquee'
+import { CategorySkeleton, ProductListSkeleton } from '@/components/ui/Skeleton'
 import { useLanguage } from '@/contexts/LanguageContext'
 import type { Category, Product } from '@/lib/types'
-import { api } from '@/lib/api'
+import { cachedApi, invalidateCache } from '@/lib/api'
 import { cn, formatCurrency, formatNumber } from '@/lib/utils'
 import { useProgressiveImage } from '@/hooks/useProgressiveImage'
+import { useInView } from '@/hooks/useInView'
 
 const LazyHeroProductRail = React.lazy(() =>
   import('@/components/3d/HeroProductRail').then((module) => ({
@@ -106,13 +108,21 @@ const Home: React.FC = () => {
   const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
   const [categories, setCategories] = React.useState<Category[]>([])
   const [products, setProducts] = React.useState<Product[]>([])
-  const [productsLoading, setProductsLoading] = React.useState(true)
-  const [categoriesLoading, setCategoriesLoading] = React.useState(true)
+  const [productsLoading, setProductsLoading] = React.useState(false)
+  const [categoriesLoading, setCategoriesLoading] = React.useState(false)
   const [show3dHero, setShow3dHero] = React.useState(false)
+  const [productsError, setProductsError] = React.useState(false)
+  const [categoriesError, setCategoriesError] = React.useState(false)
 
   // Progressive image loading for hero
   const heroImage = useProgressiveImage('/images/1-placeholder.jpg', '/images/1.jpg')
+  
+  // Lazy load below-the-fold sections
+  const [howItWorksRef, howItWorksInView] = useInView({ rootMargin: '200px' })
+  const [trustRef, trustInView] = useInView({ rootMargin: '200px' })
+  const [shippingRef, shippingInView] = useInView({ rootMargin: '200px' })
 
+  // Defer 3D hero and heavy components
   React.useEffect(() => {
     const scheduleIdleLoad = () => {
       if ('requestIdleCallback' in window) {
@@ -120,11 +130,11 @@ const Home: React.FC = () => {
           requestIdleCallback?: (cb: IdleRequestCallback) => number
         }
 
-        idleWindow.requestIdleCallback?.(() => setShow3dHero(true))
+        idleWindow.requestIdleCallback?.(() => setShow3dHero(true), { timeout: 2000 })
         return undefined
       }
 
-      const timer = setTimeout(() => setShow3dHero(true), 250)
+      const timer = setTimeout(() => setShow3dHero(true), 1000)
       return () => clearTimeout(timer)
     }
 
@@ -132,56 +142,54 @@ const Home: React.FC = () => {
     return cleanup
   }, [])
 
+  // Fetch categories (cached) - non-blocking
   React.useEffect(() => {
-    const fetchData = async () => {
+    const fetchCategories = async () => {
       try {
         setCategoriesLoading(true)
-        try {
-          const catData = await api.get<Category[]>('/categories')
-          if (Array.isArray(catData) && catData.length > 0) {
-            setCategories(catData.map((c) => ({
-              ...c,
-              color: c.color || '',
-              icon: c.icon || '',
-              count: c.count || 0,
-            })))
-          }
-        } catch {
-          // no fallback, categories stay empty
+        setCategoriesError(false)
+        const catData = await cachedApi.getCategories()
+        if (Array.isArray(catData) && catData.length > 0) {
+          setCategories(catData.map((c) => ({
+            ...c,
+            color: c.color || '',
+            icon: c.icon || '',
+            count: c.count || 0,
+          })))
         }
+      } catch (error) {
+        console.error('Failed to load categories:', error)
+        setCategoriesError(true)
       } finally {
         setCategoriesLoading(false)
       }
+    }
 
+    // Defer categories fetch slightly
+    const timer = setTimeout(fetchCategories, 100)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Fetch products (cached) - non-blocking
+  React.useEffect(() => {
+    const fetchProducts = async () => {
       try {
         setProductsLoading(true)
-        const data = await api.get<{ products: Product[]; pagination?: { total?: number } }>('/products?limit=8').catch(() => ({ products: [] }))
+        setProductsError(false)
+        const data = await cachedApi.getProducts({ limit: '8' })
         setProducts(data?.products || [])
-      } catch {
+      } catch (error) {
+        console.error('Failed to load products:', error)
+        setProductsError(true)
         setProducts([])
       } finally {
         setProductsLoading(false)
       }
     }
 
-    const scheduleFetch = () => {
-      if ('requestIdleCallback' in window) {
-        const idleWindow = window as typeof window & {
-          requestIdleCallback?: (cb: IdleRequestCallback) => number
-        }
-
-        idleWindow.requestIdleCallback?.(() => {
-          void fetchData()
-        })
-        return
-      }
-
-      setTimeout(() => {
-        void fetchData()
-      }, 200)
-    }
-
-    scheduleFetch()
+    // Defer products fetch
+    const timer = setTimeout(fetchProducts, 200)
+    return () => clearTimeout(timer)
   }, [])
 
   const testimonials = [
@@ -494,31 +502,45 @@ const Home: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 lg:gap-4">
-            {categories.map((cat) => {
-              const Icon = iconMap[cat.icon] || Star
-              return (
-                <Link
-                  key={cat.id}
-                  to={`/categories?id=${cat.id}`}
-                  className="group flex flex-col items-center p-4 lg:p-5 rounded-2xl bg-gray-50 border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 text-center"
-                >
-                  <div
-                    className={cn(
-                      'h-12 w-12 lg:h-14 lg:w-14 rounded-2xl flex items-center justify-center mb-3 transition-transform group-hover:scale-110',
-                      cat.color,
-                    )}
+            {categoriesLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <CategorySkeleton key={i} />
+              ))
+            ) : categoriesError ? (
+              <div className="col-span-full text-center py-8">
+                <p className="text-muted-foreground">Failed to load categories</p>
+              </div>
+            ) : categories.length === 0 ? (
+              <div className="col-span-full text-center py-8">
+                <p className="text-muted-foreground">No categories available</p>
+              </div>
+            ) : (
+              categories.map((cat) => {
+                const Icon = iconMap[cat.icon] || Star
+                return (
+                  <Link
+                    key={cat.id}
+                    to={`/categories?id=${cat.id}`}
+                    className="group flex flex-col items-center p-4 lg:p-5 rounded-2xl bg-gray-50 border border-border hover:border-primary-300 hover:shadow-card-hover transition-all duration-300 text-center"
                   >
-                    <Icon className="h-6 w-6 lg:h-7 lg:w-7" />
-                  </div>
-                  <div className="text-sm font-bold text-foreground leading-tight">
-                    {cat.name}
-                  </div>
-                  <div className="mt-1 text-[11px] text-muted-foreground">
-                    {formatNumber(cat.count || 0)} {t('home.items')}
-                  </div>
-                </Link>
-              )
-            })}
+                    <div
+                      className={cn(
+                        'h-12 w-12 lg:h-14 lg:w-14 rounded-2xl flex items-center justify-center mb-3 transition-transform group-hover:scale-110',
+                        cat.color,
+                      )}
+                    >
+                      <Icon className="h-6 w-6 lg:h-7 lg:w-7" />
+                    </div>
+                    <div className="text-sm font-bold text-foreground leading-tight">
+                      {cat.name}
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {formatNumber(cat.count || 0)} {t('home.items')}
+                    </div>
+                  </Link>
+                )
+              })
+            )}
           </div>
 
           <Link
@@ -558,15 +580,13 @@ const Home: React.FC = () => {
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 lg:gap-6">
             {productsLoading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-border bg-card overflow-hidden">
-                  <div className="aspect-square bg-muted animate-pulse" />
-                  <div className="p-4 space-y-3">
-                    <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
-                    <div className="h-4 bg-muted rounded animate-pulse w-1/2" />
-                  </div>
-                </div>
-              ))
+              <ProductListSkeleton count={8} />
+            ) : productsError ? (
+              <div className="col-span-full text-center py-12">
+                <Package className="h-16 w-16 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-foreground mb-2">Failed to load products</h3>
+                <p className="text-sm text-muted-foreground">Please try again later</p>
+              </div>
             ) : products.length === 0 ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-border bg-card overflow-hidden opacity-60">
@@ -594,8 +614,9 @@ const Home: React.FC = () => {
       </section>
 
       {/* ===================== HOW IT WORKS ===================== */}
-      <section id="how" className="py-16 lg:py-24">
-        <div className="container-page">
+      <section id="how" ref={howItWorksRef} className="py-16 lg:py-24">
+        {howItWorksInView && (
+          <div className="container-page">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge variant="primary" size="sm" className="mb-3">
               {t('home.simpleProcess')}
@@ -644,15 +665,17 @@ const Home: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
       </section>
 
       {/* ===================== TRUST & SECURITY ===================== */}
-      <section id="trust" className="py-16 lg:py-24 bg-primary-900 text-white relative overflow-hidden">
+      <section id="trust" ref={trustRef} className="py-16 lg:py-24 bg-primary-900 text-white relative overflow-hidden">
         <div className="absolute inset-0 bg-hero-pattern opacity-10" />
         <div className="absolute top-0 right-0 h-96 w-96 rounded-full bg-secondary-500/10 blur-3xl" />
         <div className="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-primary-500/10 blur-3xl" />
 
-        <div className="container-page relative">
+        {trustInView && (
+          <div className="container-page relative">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <Badge variant="accent" size="sm" className="mb-3">
               {t('home.yourTrustMatters')}
@@ -687,11 +710,13 @@ const Home: React.FC = () => {
             })}
           </div>
         </div>
+        )}
       </section>
 
       {/* ===================== INTERNATIONAL SHIPPING ===================== */}
-      <section id="shipping" className="py-16 lg:py-24">
-        <div className="container-page">
+      <section id="shipping" ref={shippingRef} className="py-16 lg:py-24">
+        {shippingInView && (
+          <div className="container-page">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div className="order-2 lg:order-1">
               <div className="relative aspect-square max-w-lg mx-auto lg:mx-0">
@@ -780,6 +805,7 @@ const Home: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
       </section>
 
       {/* ===================== TESTIMONIALS ===================== */}

@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import type { Category } from '@/lib/types'
 import { cn, formatNumber } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { cachedApi, api } from '@/lib/api'
 import { ProductCardSkeleton } from '@/components/ui/States'
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
@@ -58,7 +58,7 @@ const Categories: React.FC = () => {
   const [params] = useSearchParams()
   const selectedCategoryId = params.get('id')
   const [categoryProducts, setCategoryProducts] = React.useState<Record<string, CategoryProduct[]>>({})
-  const [loading, setLoading] = React.useState(true)
+  const [loading, setLoading] = React.useState(false)
   const [reloadKey, setReloadKey] = React.useState(0)
   const [categories, setCategories] = React.useState<Category[]>([])
 
@@ -84,26 +84,34 @@ const Categories: React.FC = () => {
         setLoading(true)
         let loadedCategories: Category[] = []
         try {
-          const catData = await api.get<Category[]>('/categories')
+          // Use cached categories
+          const catData = await cachedApi.getCategories()
           if (Array.isArray(catData) && catData.length > 0) {
             loadedCategories = catData
             setCategories(loadedCategories)
           }
-        } catch {
-          // no fallback, categories stay empty
+        } catch (error) {
+          console.error('Failed to load categories:', error)
         }
 
-        const results: Record<string, CategoryProduct[]> = {}
-        for (const cat of loadedCategories) {
+        // Load products for each category in parallel
+        const productPromises = loadedCategories.map(async (cat) => {
           try {
-            const data = await api.get<{ products: CategoryProduct[] }>(
-              `/products?category=${encodeURIComponent(cat.id)}&limit=4`
-            )
-            results[cat.id] = data?.products || []
+            const data = await cachedApi.getProducts({
+              category: cat.id,
+              limit: '4'
+            })
+            return { catId: cat.id, products: data?.products || [] }
           } catch {
-            results[cat.id] = []
+            return { catId: cat.id, products: [] }
           }
-        }
+        })
+
+        const productResults = await Promise.all(productPromises)
+        const results: Record<string, CategoryProduct[]> = {}
+        productResults.forEach(({ catId, products }) => {
+          results[catId] = products
+        })
         setCategoryProducts(results)
       } finally {
         setLoading(false)
