@@ -116,6 +116,10 @@ export class CartService {
         id: true,
         isAvailable: true,
         stock: true,
+        name: true,
+        price: true,
+        estimatedPriceUsd: true,
+        condition: true,
       },
     });
 
@@ -134,76 +138,42 @@ export class CartService {
       update: {},
       select: { id: true },
     });
-
-    // Check if item already exists in cart
-    const existingItem = await prisma.cartItem.findUnique({
+    const cartItem = await prisma.cartItem.upsert({
       where: {
         cartId_productId: {
           cartId: cart.id,
           productId,
         },
       },
-      select: { id: true, quantity: true },
-    });
-
-    if (existingItem) {
-      // Update quantity
-      return await prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: {
-          quantity: existingItem.quantity + quantity,
-        },
-        select: {
-          id: true,
-          quantity: true,
-          product: {
-            select: {
-              id: true,
-              name: true,
-              price: true,
-              estimatedPriceUsd: true,
-              condition: true,
-              productImages: {
-                where: { isPrimary: true },
-                take: 1,
-                select: {
-                  url: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    }
-
-    // Add new item
-    return await prisma.cartItem.create({
-      data: {
+      update: {
+        quantity: { increment: quantity },
+      },
+      create: {
         cartId: cart.id,
         productId,
         quantity,
       },
       select: {
         id: true,
+        cartId: true,
+        productId: true,
         quantity: true,
-        product: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            estimatedPriceUsd: true,
-            condition: true,
-            productImages: {
-              where: { isPrimary: true },
-              take: 1,
-              select: {
-                url: true,
-              },
-            },
-          },
-        },
+        createdAt: true,
+        updatedAt: true,
       },
     });
+
+    return {
+      ...cartItem,
+      product: {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        estimatedPriceUsd: product.estimatedPriceUsd,
+        condition: product.condition,
+        productImages: [],
+      },
+    };
   }
 
   async updateCartItem(userId: string, itemId: string, quantity: number) {

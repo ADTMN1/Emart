@@ -15,6 +15,7 @@ import {
   Info,
   CheckCircle2,
   ArrowRight,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -26,6 +27,8 @@ import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useCart } from '@/contexts/CartContext'
+import { useFavorites } from '@/contexts/FavoritesContext'
 import { api } from '@/lib/api'
 
 interface CartItem {
@@ -41,10 +44,14 @@ const Cart: React.FC = () => {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { incrementCartCount, decrementCartCount } = useCart()
+  const { toggleFavorite, isFavorite } = useFavorites()
   const [items, setItems] = React.useState<CartItem[]>(initialCart)
   const [shipCountry, setShipCountry] = React.useState('US')
   const [shippingMethod, setShippingMethod] = React.useState('dhl')
   const [loading, setLoading] = React.useState(true)
+  const [updatingIds, setUpdatingIds] = React.useState<Set<string>>(new Set())
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set())
 
   const fetchCart = React.useCallback(async () => {
     try {
@@ -62,9 +69,6 @@ const Cart: React.FC = () => {
 
   React.useEffect(() => {
     fetchCart()
-    const handleCartUpdate = () => fetchCart()
-    window.addEventListener('cart:updated', handleCartUpdate)
-    return () => window.removeEventListener('cart:updated', handleCartUpdate)
   }, [fetchCart])
 
   // Helper function to get product image - matches ProductDetails logic
@@ -111,38 +115,78 @@ const Cart: React.FC = () => {
   const updateQty = async (id: string, qty: number) => {
     if (qty < 1) return removeItem(id)
     const nextQty = Math.min(10, qty)
+    if (updatingIds.has(id) || deletingIds.has(id)) return
+    const previousItem = items.find((item) => item.id === id)
+    if (!previousItem || previousItem.quantity === nextQty) return
+    const delta = nextQty - previousItem.quantity
+
+    setUpdatingIds((prev) => new Set(prev).add(id))
+    setItems((prev) => prev.map((item) => item.id === id ? { ...item, quantity: nextQty } : item))
+    if (delta > 0) incrementCartCount(delta)
+    else decrementCartCount(-delta)
 
     try {
       const updated = await api.put<{ quantity?: number }>(`/cart/items/${id}`, { quantity: nextQty })
-      setItems((prev) => {
-        const nextItems = prev.map((i) => i.id === id ? { ...i, quantity: updated?.quantity ?? nextQty } : i)
-        const newTotal = nextItems.reduce((s, i) => s + i.quantity, 0)
-        window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: newTotal } }))
-        return nextItems
-      })
+      const confirmedQty = updated?.quantity ?? nextQty
+      const correction = confirmedQty - nextQty
+      setItems((prev) => prev.map((item) => item.id === id ? { ...item, quantity: confirmedQty } : item))
+      if (correction > 0) incrementCartCount(correction)
+      else if (correction < 0) decrementCartCount(-correction)
     } catch {
+      setItems((prev) => prev.map((item) => item.id === id ? previousItem : item))
+      if (delta > 0) decrementCartCount(delta)
+      else incrementCartCount(-delta)
       toast({ variant: 'error', title: 'Update failed', description: 'Could not update item quantity.' })
+    } finally {
+      setUpdatingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     }
   }
 
   const removeItem = async (id: string) => {
+    if (deletingIds.has(id) || updatingIds.has(id)) return
+    const itemIndex = items.findIndex((item) => item.id === id)
+    const removedItem = items[itemIndex]
+    if (!removedItem) return
+
+    setDeletingIds((prev) => new Set(prev).add(id))
+    setItems((prev) => prev.filter((item) => item.id !== id))
+    decrementCartCount(removedItem.quantity)
+
     try {
       await api.delete(`/cart/items/${id}`)
-      setItems((prev) => {
-        const nextItems = prev.filter((i) => i.id !== id)
-        const newTotal = nextItems.reduce((s, i) => s + i.quantity, 0)
-        window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: newTotal } }))
-        return nextItems
-      })
       toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
     } catch {
+      setItems((prev) => {
+        const next = [...prev]
+        next.splice(itemIndex, 0, removedItem)
+        return next
+      })
+      incrementCartCount(removedItem.quantity)
       toast({ variant: 'error', title: 'Remove failed', description: 'Could not remove item from cart.' })
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     }
   }
 
-  const saveForLater = (id: string) => {
-    removeItem(id)
-    toast({ variant: 'success', title: t('cart.saveForLater'), description: 'You can find this in your favorites.' })
+  const saveForLater = async (item: CartItem) => {
+    if (!item.product) return
+    const wasFavorite = isFavorite(item.product.id)
+    await toggleFavorite(item.product.id)
+    toast({
+      variant: 'success',
+      title: wasFavorite ? 'Removed from favorites' : 'Added to favorites',
+      description: wasFavorite
+        ? 'This item was removed from your favorites.'
+        : 'You can find this item in your favorites.',
+    })
   }
 
   if (loading) {
@@ -244,34 +288,42 @@ const Cart: React.FC = () => {
                         <div className="inline-flex items-center border border-border rounded-lg overflow-hidden">
                           <button
                             onClick={() => updateQty(item.id, item.quantity - 1)}
-                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors"
+                            disabled={updatingIds.has(item.id) || deletingIds.has(item.id)}
+                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50 disabled:pointer-events-none"
                           >
-                            <Minus className="h-3.5 w-3.5" />
+                            {updatingIds.has(item.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Minus className="h-3.5 w-3.5" />}
                           </button>
                           <span className="h-8 min-w-10 text-center font-bold text-sm flex items-center justify-center">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => updateQty(item.id, item.quantity + 1)}
-                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors"
+                            disabled={updatingIds.has(item.id) || deletingIds.has(item.id)}
+                            className="h-8 w-8 flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-50 disabled:pointer-events-none"
                           >
                             <Plus className="h-3.5 w-3.5" />
                           </button>
                         </div>
 
                         <button
-                          onClick={() => saveForLater(item.id)}
-                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-secondary transition-colors"
-                          title="Save for later"
+                          onClick={() => saveForLater(item)}
+                          className={cn(
+                            'p-2 rounded-lg transition-colors',
+                            isFavorite(item.product.id)
+                              ? 'text-orange-500 bg-orange-500/10 hover:bg-orange-500/15'
+                              : 'text-muted-foreground hover:bg-muted hover:text-orange-500',
+                          )}
+                          title={isFavorite(item.product.id) ? 'Remove from favorites' : 'Add to favorites'}
                         >
-                          <Heart className="h-4 w-4" />
+                          <Heart className={cn('h-4 w-4', isFavorite(item.product.id) && 'fill-current')} />
                         </button>
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                          disabled={updatingIds.has(item.id) || deletingIds.has(item.id)}
+                          className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50 disabled:pointer-events-none"
                           title="Remove"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deletingIds.has(item.id) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                         </button>
                       </div>
 
