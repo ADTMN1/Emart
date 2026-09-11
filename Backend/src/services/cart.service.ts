@@ -13,6 +13,7 @@ export class CartService {
         items: {
           select: {
             id: true,
+            productId: true,
             quantity: true,
             createdAt: true,
             product: {
@@ -63,9 +64,10 @@ export class CartService {
           createdAt: true,
           updatedAt: true,
           items: {
-            select: {
-              id: true,
-              quantity: true,
+          select: {
+            id: true,
+            productId: true,
+            quantity: true,
               createdAt: true,
               product: {
                 select: {

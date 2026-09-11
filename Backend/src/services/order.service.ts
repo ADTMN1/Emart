@@ -9,6 +9,25 @@ export class OrderService {
     return `EM-${timestamp}-${random}`.toUpperCase();
   }
 
+  private addressData(userId: string, address: {
+    fullName: string; addressLine: string; city: string; state?: string;
+    postalCode: string; country: string; countryCode: string; phone: string;
+  }) {
+    // Pick known database fields explicitly so form-only values can never reach Prisma.
+    return {
+      userId,
+      fullName: address.fullName,
+      addressLine: address.addressLine,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      country: address.country,
+      countryCode: address.countryCode,
+      phone: address.phone,
+      isDefault: false,
+    };
+  }
+
   async createOrder(userId: string, data: {
     items: Array<{ productId: string; quantity: number }>;
     shippingMethod: string;
@@ -16,6 +35,14 @@ export class OrderService {
     billingAddressId: string;
     shippingAddressId: string;
     notes?: string;
+    shippingAddress?: {
+      fullName: string; addressLine: string; city: string; state?: string;
+      postalCode: string; country: string; countryCode: string; phone: string;
+    };
+    billingAddress?: {
+      fullName: string; addressLine: string; city: string; state?: string;
+      postalCode: string; country: string; countryCode: string; phone: string;
+    };
   }) {
     // Validate products and calculate totals
     let subtotal = 0;
@@ -86,6 +113,17 @@ export class OrderService {
     let billingAddressId = data.billingAddressId;
     let shippingAddressId = data.shippingAddressId;
 
+    if (data.shippingAddress) {
+      const address = await prisma.address.create({ data: this.addressData(userId, data.shippingAddress) });
+      shippingAddressId = address.id;
+      if (!data.billingAddress) billingAddressId = address.id;
+    }
+
+    if (data.billingAddress) {
+      const address = await prisma.address.create({ data: this.addressData(userId, data.billingAddress) });
+      billingAddressId = address.id;
+    }
+
     if (!billingAddressId || !shippingAddressId) {
       let userAddress = await prisma.address.findFirst({
         where: { userId },
@@ -95,12 +133,12 @@ export class OrderService {
           data: {
             userId,
             fullName: 'Customer Default',
-            addressLine: '123 Main Street',
-            city: 'Tokyo',
-            postalCode: '100-0001',
-            country: 'Japan',
-            countryCode: 'JP',
-            phone: '+1 555-0199',
+            addressLine: 'Address required',
+            city: 'Unknown',
+            postalCode: '00000',
+            country: 'Unknown',
+            countryCode: 'XX',
+            phone: '0000000000',
             isDefault: true,
           },
         });

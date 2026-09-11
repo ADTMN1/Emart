@@ -45,6 +45,44 @@ interface Order {
   trackingCode?: string
 }
 
+interface ApiOrder {
+  id: string
+  orderNumber: string
+  status: string
+  total: number
+  trackingNumber?: string | null
+  createdAt: string
+  items: Array<{
+    quantity: number
+    product?: { productImages?: Array<{ url?: string | null }> } | null
+  }>
+}
+
+const orderStatusMap: Record<string, OrderStatus> = {
+  PENDING: 'awaiting_payment',
+  PAYMENT_RECEIVED: 'processing',
+  PURCHASING: 'purchasing',
+  PURCHASED: 'purchasing',
+  IN_WAREHOUSE: 'in_warehouse',
+  CONSOLIDATED: 'in_warehouse',
+  SHIPPED: 'shipping',
+  IN_TRANSIT: 'shipping',
+  DELIVERED: 'delivered',
+  CANCELLED: 'cancelled',
+  REFUNDED: 'cancelled',
+}
+
+const toDisplayOrder = (order: ApiOrder): Order => ({
+  id: order.id,
+  number: order.orderNumber,
+  date: new Date(order.createdAt).toLocaleDateString(),
+  status: orderStatusMap[order.status] || 'processing',
+  itemsCount: order.items.reduce((count, item) => count + item.quantity, 0),
+  totalUsd: order.total,
+  thumbnail: order.items[0]?.product?.productImages?.[0]?.url || undefined,
+  trackingCode: order.trackingNumber || undefined,
+})
+
 const statusConfig: Record<OrderStatus, { label: string; variant: any; icon: React.FC<any>; color: string }> = {
   awaiting_payment: { label: 'Awaiting Payment', variant: 'warning', icon: CircleDollarSign, color: 'text-warning' },
   processing: { label: 'Processing', variant: 'info', icon: Clock, color: 'text-info' },
@@ -66,8 +104,9 @@ const MyOrders: React.FC = () => {
     const fetchOrders = async () => {
       try {
         setLoading(true)
-        const data = await api.get<Order[]>('/orders').catch(() => [])
-        setOrders(Array.isArray(data) ? data : [])
+        const data = await api.get<{ orders?: ApiOrder[] }>('/orders').catch(() => ({ orders: [] }))
+        const apiOrders = Array.isArray(data) ? data : data?.orders || []
+        setOrders(apiOrders.map(toDisplayOrder))
       } catch {
         setOrders([])
       } finally {

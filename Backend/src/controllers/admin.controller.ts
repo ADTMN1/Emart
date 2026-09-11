@@ -1,7 +1,111 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
+import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
+
+interface CryptoWalletRow {
+  id: string;
+  currency: string;
+  network: string;
+  address: string;
+  qrCodeUrl: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 class AdminController {
+  private async findCryptoWallets() {
+    // Use parameterized raw queries until the local generated Prisma client is refreshed.
+    // The database model remains defined in prisma/schema.prisma.
+    return prisma.$queryRaw<CryptoWalletRow[]>`
+      SELECT * FROM "crypto_wallets"
+      ORDER BY "currency" ASC, "network" ASC
+    `;
+  }
+
+  private walletInput(body: Record<string, unknown>) {
+    const currency = typeof body.currency === 'string' ? body.currency.trim().toUpperCase() : '';
+    const network = typeof body.network === 'string' ? body.network.trim() : '';
+    const address = typeof body.address === 'string' ? body.address.trim() : '';
+    const qrCodeUrl = typeof body.qrCodeUrl === 'string' ? body.qrCodeUrl.trim() : '';
+    if (!currency || !network || !address) {
+      throw new ValidationError('Currency, network, and receiving address are required.');
+    }
+    if (qrCodeUrl) {
+      try {
+        new URL(qrCodeUrl);
+      } catch {
+        throw new ValidationError('QR code URL must be a valid URL.');
+      }
+    }
+    return { currency, network, address, qrCodeUrl: qrCodeUrl || null, isActive: body.isActive !== false };
+  }
+
+  async getCryptoWallets(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const wallets = await this.findCryptoWallets();
+      res.json({ success: true, data: wallets });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createCryptoWallet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = this.walletInput(req.body);
+      const existing = await prisma.$queryRaw<CryptoWalletRow[]>`
+        SELECT * FROM "crypto_wallets"
+        WHERE "address" = ${data.address} OR ("currency" = ${data.currency} AND "network" = ${data.network})
+        LIMIT 1
+      `;
+      if (existing.length > 0) throw new ConflictError('Each network must have a unique receiving address and currency/network combination.');
+      const [wallet] = await prisma.$queryRaw<CryptoWalletRow[]>`
+        INSERT INTO "crypto_wallets" ("id", "currency", "network", "address", "qrCodeUrl", "isActive", "createdAt", "updatedAt")
+        VALUES (gen_random_uuid()::text, ${data.currency}, ${data.network}, ${data.address}, ${data.qrCodeUrl}, ${data.isActive}, NOW(), NOW())
+        RETURNING *
+      `;
+      res.status(201).json({ success: true, data: wallet });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateCryptoWallet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = this.walletInput(req.body);
+      const existing = await prisma.$queryRaw<CryptoWalletRow[]>`
+        SELECT * FROM "crypto_wallets"
+        WHERE "id" <> ${req.params.id}
+          AND ("address" = ${data.address} OR ("currency" = ${data.currency} AND "network" = ${data.network}))
+        LIMIT 1
+      `;
+      if (existing.length > 0) throw new ConflictError('Each network must have a unique receiving address and currency/network combination.');
+      const [wallet] = await prisma.$queryRaw<CryptoWalletRow[]>`
+        UPDATE "crypto_wallets"
+        SET "currency" = ${data.currency}, "network" = ${data.network}, "address" = ${data.address},
+            "qrCodeUrl" = ${data.qrCodeUrl}, "isActive" = ${data.isActive}, "updatedAt" = NOW()
+        WHERE "id" = ${req.params.id}
+        RETURNING *
+      `;
+      if (!wallet) throw new NotFoundError('Crypto wallet not found.');
+      res.json({ success: true, data: wallet });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteCryptoWallet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await prisma.$executeRaw`
+        DELETE FROM "crypto_wallets" WHERE "id" = ${req.params.id}
+      `;
+      if (result === 0) throw new NotFoundError('Crypto wallet not found.');
+      res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getStats(_req: Request, res: Response, next: NextFunction) {
     try {
       const lastMonth = new Date();

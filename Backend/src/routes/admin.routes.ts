@@ -14,5 +14,9 @@ router.put('/users/:id', adminController.updateUser);
 router.delete('/users/:id', adminController.deleteUser);
 router.get('/warehouse-packages', adminController.getWarehousePackages);
 router.get('/shipments', adminController.getShipments);
+router.get('/crypto-wallets', adminController.getCryptoWallets.bind(adminController));
+router.post('/crypto-wallets', adminController.createCryptoWallet.bind(adminController));
+router.put('/crypto-wallets/:id', adminController.updateCryptoWallet.bind(adminController));
+router.delete('/crypto-wallets/:id', adminController.deleteCryptoWallet.bind(adminController));
 
 export default router;

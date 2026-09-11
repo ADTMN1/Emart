@@ -30,6 +30,7 @@ const AdminWarehouse = lazy(() => import('./pages/admin/Warehouse').then((module
 const AdminShipping = lazy(() => import('./pages/admin/Shipping').then((module) => ({ default: module.AdminShipping })))
 const AdminCustomers = lazy(() => import('./pages/admin/Customers').then((module) => ({ default: module.AdminCustomers })))
 const AdminSettings = lazy(() => import('./pages/admin/Settings').then((module) => ({ default: module.AdminSettings })))
+const AdminWallets = lazy(() => import('./pages/admin/Wallets').then((module) => ({ default: module.AdminWallets })))
 
 function App() {
   return (
@@ -64,6 +65,7 @@ function App() {
           <Route path="warehouse" element={<AdminWarehouse />} />
           <Route path="shipping" element={<AdminShipping />} />
           <Route path="customers" element={<AdminCustomers />} />
+          <Route path="wallets" element={<AdminWallets />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
