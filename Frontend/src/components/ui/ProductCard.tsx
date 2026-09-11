@@ -179,8 +179,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={(e) => {
             e.preventDefault()
+            e.stopPropagation()
             onFavorite?.(product.id)
           }}
           onMouseEnter={() => setHoverFav(true)}
@@ -283,10 +285,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             size={compact ? 'sm' : 'sm'}
             variant="outline"
             className={cn('shrink-0', compact && 'h-8 px-2.5')}
-            onClick={(e) => {
-              e.preventDefault()
-              onFavorite?.(product.id)
-            }}
             asChild
           >
             <Link to={`/product/${product.id}`}>

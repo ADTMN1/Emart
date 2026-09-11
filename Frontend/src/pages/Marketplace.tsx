@@ -17,7 +17,7 @@ import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { Loading, NoSearchResults, ProductCardSkeleton } from '@/components/ui/States'
-import { ProductListSkeleton, CategorySkeleton } from '@/components/ui/Skeleton'
+import { useFavorites } from '@/contexts/FavoritesContext'
 import type { Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { cachedApi, api, invalidateCache } from '@/lib/api'
@@ -58,12 +58,12 @@ interface ApiProduct {
 }
 
 const Marketplace: React.FC = () => {
+  const { toggleFavorite, isFavorite } = useFavorites()
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = React.useState(params.get('q') || '')
   const [isLoading, setIsLoading] = React.useState(false)
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
   const [showFilters, setShowFilters] = React.useState(false)
-  const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
   const [selectedCategory, setSelectedCategory] = React.useState<string | null>(params.get('cat') || null)
   const [selectedSubcategory, setSelectedSubcategory] = React.useState<string | null>(params.get('sub') || null)
   const [products, setProducts] = React.useState<ApiProduct[]>([])
@@ -162,15 +162,6 @@ const Marketplace: React.FC = () => {
     setSelectedCategory(params.get('cat') || null)
     setSelectedSubcategory(params.get('sub') || null)
   }, [params])
-
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -401,7 +392,7 @@ const Marketplace: React.FC = () => {
                     key={p.id}
                     product={p}
                     onFavorite={toggleFavorite}
-                    isFavorite={favorites.has(p.id)}
+                    isFavorite={isFavorite(p.id)}
                     compact={viewMode === 'list'}
                   />
                 ))}
