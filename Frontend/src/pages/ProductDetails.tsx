@@ -144,13 +144,13 @@ const ProductDetails: React.FC = () => {
     if (buyNow) setIsBuyingNow(true)
     else setIsAddingToCart(true)
 
+    incrementCartCount(qty)
+
     try {
       await api.post('/cart/items', {
         productId: product.id,
         quantity: qty,
       })
-
-      incrementCartCount(qty)
 
       toast({
         variant: 'success',
@@ -164,6 +164,7 @@ const ProductDetails: React.FC = () => {
         navigate('/checkout', { replace: true })
       }
     } catch (err: any) {
+      incrementCartCount(-qty)
       const status = err?.status || err?.response?.status
       if (status === 401) {
         toast({
