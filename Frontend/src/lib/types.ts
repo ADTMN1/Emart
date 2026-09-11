@@ -14,7 +14,7 @@ export interface Product {
   internationalShippingUsd: number
   serviceFee: number
   description: string
-  category?: string
+  category?: string | Category
   categoryId?: string
   tags: string[]
   isNew?: boolean

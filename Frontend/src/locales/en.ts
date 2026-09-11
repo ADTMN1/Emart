@@ -229,5 +229,20 @@ export const en = {
     sort: 'Sort',
     apply: 'Apply',
     reset: 'Reset',
+    backToHome: 'Back to Home',
+    tryAgain: 'Try Again',
+  },
+  // Favorites
+  favorites: {
+    signInRequired: 'Sign In to See Your Favorites',
+    signInDescription: 'Create an account to save your favorite products and access them from any device.',
+    browseMerketplace: 'Browse Marketplace',
+    item: 'item',
+    items: 'items',
+    loadError: 'Failed to Load Favorites',
+    loadErrorDescription: 'We couldn\'t load your favorites. Please try again.',
+    emptyTitle: 'No Favorites Yet',
+    emptyDescription: 'Start browsing products and click the heart icon to save your favorites here.',
+    startShopping: 'Start Shopping',
   },
 }

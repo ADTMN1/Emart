@@ -229,5 +229,20 @@ export const es = {
     sort: 'Ordenar',
     apply: 'Aplicar',
     reset: 'Restablecer',
+    backToHome: 'Volver a Inicio',
+    tryAgain: 'Intentar de Nuevo',
+  },
+  // Favorites
+  favorites: {
+    signInRequired: 'Inicia Sesión para Ver tus Favoritos',
+    signInDescription: 'Crea una cuenta para guardar tus productos favoritos y acceder a ellos desde cualquier dispositivo.',
+    browseMerketplace: 'Explorar Mercado',
+    item: 'artículo',
+    items: 'artículos',
+    loadError: 'Error al Cargar Favoritos',
+    loadErrorDescription: 'No pudimos cargar tus favoritos. Por favor, inténtalo de nuevo.',
+    emptyTitle: 'Aún No Hay Favoritos',
+    emptyDescription: 'Comienza a navegar productos y haz clic en el ícono del corazón para guardar tus favoritos aquí.',
+    startShopping: 'Comenzar a Comprar',
   },
 }

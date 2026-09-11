@@ -17,6 +17,7 @@ const Warehouse = lazy(() => import('./pages/Warehouse'))
 const Shipping = lazy(() => import('./pages/Shipping'))
 const Account = lazy(() => import('./pages/Account'))
 const Wallet = lazy(() => import('./pages/Wallet'))
+const Favorites = lazy(() => import('./pages/Favorites'))
 
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard').then((module) => ({ default: module.Dashboard })))
@@ -50,6 +51,7 @@ function App() {
           <Route path="shipping" element={<Shipping />} />
           <Route path="account" element={<Account />} />
           <Route path="wallet" element={<Wallet />} />
+          <Route path="favorites" element={<Favorites />} />
         </Route>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />

@@ -6,7 +6,7 @@ interface Product {
   name: string
   image: string
   price: string
-  category: string
+  category: string | { id: string; name: string }
 }
 
 interface ProductCarouselCSSProps {
@@ -191,7 +191,7 @@ export const ProductCarouselCSS: React.FC<ProductCarouselCSSProps> = ({ products
                     />
                     <div className="absolute top-2 right-2">
                       <span className="px-2 py-0.5 rounded-md bg-[#F5F8FC]/90 backdrop-blur-sm text-[10px] font-bold text-primary-700 shadow-sm">
-                        {product.category}
+                        {typeof product.category === 'string' ? product.category : product.category?.name || ''}
                       </span>
                     </div>
                   </div>

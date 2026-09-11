@@ -229,5 +229,20 @@ export const fr = {
     sort: 'Trier',
     apply: 'Appliquer',
     reset: 'Réinitialiser',
+    backToHome: 'Retour à l\'Accueil',
+    tryAgain: 'Réessayer',
+  },
+  // Favorites
+  favorites: {
+    signInRequired: 'Connectez-vous pour Voir vos Favoris',
+    signInDescription: 'Créez un compte pour enregistrer vos produits favoris et y accéder depuis n\'importe quel appareil.',
+    browseMerketplace: 'Parcourir le Marché',
+    item: 'article',
+    items: 'articles',
+    loadError: 'Erreur de Chargement des Favoris',
+    loadErrorDescription: 'Nous n\'avons pas pu charger vos favoris. Veuillez réessayer.',
+    emptyTitle: 'Pas Encore de Favoris',
+    emptyDescription: 'Commencez à parcourir les produits et cliquez sur l\'icône du cœur pour enregistrer vos favoris ici.',
+    startShopping: 'Commencer les Achats',
   },
 }

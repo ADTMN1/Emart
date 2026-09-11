@@ -18,59 +18,22 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
-import { api } from '@/lib/api'
+import { useCart } from '@/contexts/CartContext'
+import { useFavorites } from '@/contexts/FavoritesContext'
 
 export const Navbar: React.FC = () => {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading, logout } = useAuth()
+  const { cartCount } = useCart() // Use shared cart context
+  const { favoritesCount } = useFavorites() // Use favorites context
   const [userDropdownOpen, setUserDropdownOpen] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
   const [searchOpen, setSearchOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState('')
   const [openDropdown, setOpenDropdown] = React.useState<string | null>(null)
-  const [cartCount, setCartCount] = React.useState(0)
   const location = useLocation()
   const navigate = useNavigate()
-
-  React.useEffect(() => {
-    const loadCartCount = async () => {
-      if (!isAuthenticated || !user) {
-        setCartCount(0)
-        ;(window as any).__emartCartCount = 0
-        return
-      }
-
-      try {
-        const cart = await api.get<{ items?: Array<{ quantity?: number }> } | null>('/cart').catch(() => null)
-        const items = Array.isArray(cart?.items) ? cart.items : []
-        const total = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
-        setCartCount(total)
-        ;(window as any).__emartCartCount = total
-      } catch {
-        setCartCount(0)
-        ;(window as any).__emartCartCount = 0
-      }
-    }
-
-    loadCartCount()
-
-    const handleCartUpdate = (event?: Event) => {
-      const customEvent = event as CustomEvent<{ total?: number }> | undefined
-      const incomingTotal = customEvent?.detail?.total
-      if (typeof incomingTotal === 'number') {
-        setCartCount(incomingTotal)
-        ;(window as any).__emartCartCount = incomingTotal
-        return
-      }
-      loadCartCount()
-    }
-
-    window.addEventListener('cart:updated', handleCartUpdate)
-    return () => {
-      window.removeEventListener('cart:updated', handleCartUpdate)
-    }
-  }, [isAuthenticated, user?.id])
 
   React.useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10)
@@ -129,11 +92,6 @@ export const Navbar: React.FC = () => {
     { name: t('categories.homeLiving'), to: '/marketplace?cat=home' },
     { name: t('categories.sports'), to: '/marketplace?cat=sports' },
   ]
-
-  // Debug logging
-  React.useEffect(() => {
-    console.log('[Navbar] Auth state:', { isLoading, isAuthenticated, hasUser: !!user });
-  }, [isLoading, isAuthenticated, user]);
 
   return (
     <>
@@ -242,13 +200,16 @@ export const Navbar: React.FC = () => {
               </button>
 
               <button
-                className="hidden sm:flex p-2.5 rounded-lg hover:bg-muted text-foreground relative"
+                onClick={() => navigate('/favorites')}
+                className="hidden sm:flex p-2.5 rounded-lg hover:bg-muted text-foreground relative group"
                 aria-label="Favorites"
               >
-                <Heart className="h-5 w-5" />
-                <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold rounded-full bg-secondary text-white flex items-center justify-center">
-                  12
-                </span>
+                <Heart className="h-5 w-5 group-hover:text-secondary transition-colors" />
+                {favoritesCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 h-4 min-w-4 px-1 text-[9px] font-bold rounded-full bg-secondary text-white flex items-center justify-center ring-2 ring-background">
+                    {favoritesCount > 99 ? '99+' : favoritesCount}
+                  </span>
+                )}
               </button>
 
               <Link
