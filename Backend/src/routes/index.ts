@@ -7,6 +7,7 @@ import orderRoutes from './order.routes';
 import aiRoutes from './ai.routes';
 import walletRoutes from './wallet.routes';
 import adminRoutes from './admin.routes';
+import favoriteRoutes from './favorite.routes';
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use('/orders', orderRoutes);
 router.use('/ai', aiRoutes);
 router.use('/wallet', walletRoutes);
 router.use('/admin', adminRoutes);
+router.use('/favorites', favoriteRoutes);
 
 // Health check
 router.get('/health', (req, res) => {

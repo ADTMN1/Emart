@@ -25,6 +25,7 @@ model User {
   walletTransactions WalletTransaction[]
   wallet             Wallet?
   warehousePackages  WarehousePackage[]
+  favorites          Favorite[]
 
   @@index([email])
   @@map("users")
@@ -92,6 +93,7 @@ model Product {
   orderItems               OrderItem[]
   category                 Category         @relation(fields: [categoryId], references: [id])
   productImages            ProductImage[]
+  favorites                Favorite[]
 
   @@index([categoryId])
   @@index([categoryId, isAvailable, createdAt])
@@ -378,4 +380,19 @@ enum TransactionStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@index([productId])
+  @@index([userId, createdAt])
+  @@map("favorites")
 }

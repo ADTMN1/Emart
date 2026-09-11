@@ -84,8 +84,8 @@ function ProductCard({ product, position, tilt }: { product: Product; position: 
 
 function GlowParticles() {
   const points = React.useMemo(() => {
-    const positions = new Float32Array(42 * 3)
-    for (let index = 0; index < 42; index += 1) {
+    const positions = new Float32Array(20 * 3)
+    for (let index = 0; index < 20; index += 1) {
       positions[index * 3] = (Math.random() - 0.5) * 5.5
       positions[index * 3 + 1] = (Math.random() - 0.5) * 6.2
       positions[index * 3 + 2] = -1.8 - Math.random() * 1.6
@@ -158,7 +158,7 @@ export function HeroProductRail({ side, products }: HeroProductRailProps) {
     <div className="h-full w-full cursor-grab touch-none active:cursor-grabbing" aria-label={`${side} product carousel`}>
       <Canvas
         camera={{ position: [0, 0, 6.3], fov: 42 }}
-        dpr={[1, 1.5]}
+        dpr={[1, 1.25]}
         gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
         shadows
       >

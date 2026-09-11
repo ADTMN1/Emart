@@ -35,6 +35,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'emart_token';
+const PROFILE_CACHE_KEY = 'emart_profile_cache';
+const PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const TOKEN_REFRESH_INTERVAL = 6 * 60 * 60 * 1000; // Refresh every 6 hours
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -46,24 +48,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       const storedToken = localStorage.getItem(TOKEN_KEY);
-      console.log('[Auth] Initializing auth, token exists:', !!storedToken);
       
       if (!storedToken) {
         setIsLoading(false);
         return;
       }
 
-      // Don't block rendering - load profile in background
+      // Try cache first
+      const cachedProfile = localStorage.getItem(PROFILE_CACHE_KEY);
+      if (cachedProfile) {
+        try {
+          const { profile, timestamp } = JSON.parse(cachedProfile);
+          if (Date.now() - timestamp < PROFILE_CACHE_TTL) {
+            setUser(profile);
+            setToken(storedToken);
+            setIsLoading(false);
+            return; // Skip API call
+          }
+        } catch (e) {
+          // Invalid cache, continue to fetch
+        }
+      }
+
+      // No valid cache, fetch profile
       setToken(storedToken);
       setIsLoading(false);
 
       try {
         const userData = await api.get<User>('/auth/profile');
-        console.log('[Auth] User profile loaded:', userData);
         setUser(userData);
+        // Cache profile
+        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+          profile: userData,
+          timestamp: Date.now(),
+        }));
       } catch (error) {
-        console.error('[Auth] Session restoration failed:', error);
         localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(PROFILE_CACHE_KEY);
         setToken(null);
         setUser(null);
       }
@@ -111,10 +132,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       localStorage.setItem(TOKEN_KEY, res.token);
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+        profile: res.user,
+        timestamp: Date.now(),
+      }));
       setToken(res.token);
       setUser(res.user);
     } catch (error) {
-      console.error('[Auth] Login failed:', error);
       if (error instanceof ApiError) {
         throw new Error(error.message);
       }
@@ -127,6 +151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.post<{ user: User; token: string }>('/auth/register', data);
 
       localStorage.setItem(TOKEN_KEY, res.token);
+      localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+        profile: res.user,
+        timestamp: Date.now(),
+      }));
       setToken(res.token);
       setUser(res.user);
     } catch (error) {
@@ -146,6 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PROFILE_CACHE_KEY);
     setToken(null);
     setUser(null);
   }, [token]);
@@ -155,6 +184,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const updatedUser = await api.put<User>('/auth/profile', data);
         setUser(updatedUser);
+        // Update cache
+        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+          profile: updatedUser,
+          timestamp: Date.now(),
+        }));
       } catch (error) {
         if (error instanceof ApiError) {
           throw new Error(error.message);
@@ -184,8 +218,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const setAuthData = useCallback((newToken: string, newUser: User) => {
-    console.log('[Auth] Setting auth data:', { user: newUser, hasToken: !!newToken });
     localStorage.setItem(TOKEN_KEY, newToken);
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+      profile: newUser,
+      timestamp: Date.now(),
+    }));
     setToken(newToken);
     setUser(newUser);
   }, []);

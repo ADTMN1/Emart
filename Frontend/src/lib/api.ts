@@ -192,3 +192,56 @@ export const productImageApi = {
     return api.put(`/products/${productId}/images/reorder`, { imageIds });
   },
 };
+
+// Favorites API
+export const favoritesApi = {
+  /**
+   * Get all user favorites
+   */
+  getFavorites: async () => {
+    return api.get<{
+      favorites: Array<{
+        id: string;
+        productId: string;
+        createdAt: string;
+        product: any;
+      }>;
+      count: number;
+    }>('/favorites');
+  },
+
+  /**
+   * Get favorites count
+   */
+  getFavoritesCount: async () => {
+    return api.get<{ count: number }>('/favorites/count');
+  },
+
+  /**
+   * Get favorite product IDs
+   */
+  getFavoriteIds: async () => {
+    return api.get<{ productIds: string[] }>('/favorites/ids');
+  },
+
+  /**
+   * Add product to favorites
+   */
+  addFavorite: async (productId: string) => {
+    return api.post('/favorites', { productId });
+  },
+
+  /**
+   * Remove product from favorites
+   */
+  removeFavorite: async (productId: string) => {
+    return api.delete(`/favorites/${productId}`);
+  },
+
+  /**
+   * Toggle favorite status
+   */
+  toggleFavorite: async (productId: string) => {
+    return api.post<{ message: string; isFavorite: boolean }>('/favorites/toggle', { productId });
+  },
+};

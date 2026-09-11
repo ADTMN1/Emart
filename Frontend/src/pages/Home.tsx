@@ -39,12 +39,14 @@ import { ProductCard } from '@/components/ui/ProductCard'
 import { Marquee } from '@/components/ui/Marquee'
 import { CategorySkeleton, ProductListSkeleton } from '@/components/ui/Skeleton'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useFavorites } from '@/contexts/FavoritesContext'
 import type { Category, Product } from '@/lib/types'
 import { cachedApi, invalidateCache } from '@/lib/api'
 import { cn, formatCurrency, formatNumber } from '@/lib/utils'
 import { useProgressiveImage } from '@/hooks/useProgressiveImage'
 import { useInView } from '@/hooks/useInView'
 
+// Lazy load Three.js hero rails (saves 789 KB until needed)
 const LazyHeroProductRail = React.lazy(() =>
   import('@/components/3d/HeroProductRail').then((module) => ({
     default: module.HeroProductRail,
@@ -101,16 +103,16 @@ const iconMap: Record<string, React.FC<{ className?: string }>> = {
 const Home: React.FC = () => {
   const { t } = useLanguage()
   const navigate = useNavigate()
+  const { toggleFavorite, isFavorite } = useFavorites()
   const [searchQuery, setSearchQuery] = React.useState('')
   const [urlQuery, setUrlQuery] = React.useState('')
   const [activeTab, setActiveTab] = React.useState<'search' | 'url'>('search')
   const [openFaq, setOpenFaq] = React.useState<number | null>(0)
-  const [favorites, setFavorites] = React.useState<Set<string>>(new Set())
   const [categories, setCategories] = React.useState<Category[]>([])
   const [products, setProducts] = React.useState<Product[]>([])
   const [productsLoading, setProductsLoading] = React.useState(false)
   const [categoriesLoading, setCategoriesLoading] = React.useState(false)
-  const [show3dHero, setShow3dHero] = React.useState(false)
+  const [show3dRails, setShow3dRails] = React.useState(false)
   const [productsError, setProductsError] = React.useState(false)
   const [categoriesError, setCategoriesError] = React.useState(false)
 
@@ -122,7 +124,7 @@ const Home: React.FC = () => {
   const [trustRef, trustInView] = useInView({ rootMargin: '200px' })
   const [shippingRef, shippingInView] = useInView({ rootMargin: '200px' })
 
-  // Defer 3D hero and heavy components
+  // Defer 3D hero rails and heavy components
   React.useEffect(() => {
     const scheduleIdleLoad = () => {
       if ('requestIdleCallback' in window) {
@@ -130,11 +132,11 @@ const Home: React.FC = () => {
           requestIdleCallback?: (cb: IdleRequestCallback) => number
         }
 
-        idleWindow.requestIdleCallback?.(() => setShow3dHero(true), { timeout: 2000 })
+        idleWindow.requestIdleCallback?.(() => setShow3dRails(true), { timeout: 2000 })
         return undefined
       }
 
-      const timer = setTimeout(() => setShow3dHero(true), 1000)
+      const timer = setTimeout(() => setShow3dRails(true), 1000)
       return () => clearTimeout(timer)
     }
 
@@ -239,31 +241,14 @@ const Home: React.FC = () => {
     },
   ]
 
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
   const railAccents = ['#f59e0b', '#6366f1', '#38bdf8', '#f43f5e', '#a855f7', '#f97316', '#22c55e', '#eab308']
 
-  const leftRailProducts = React.useMemo(() =>
-    products.slice(0, 4).map((p, i) => ({
+  const railProducts = React.useMemo(() =>
+    products.slice(0, 8).map((p, idx) => ({
       name: p.name,
       image: p.productImages?.[0]?.url || p.image || p.images?.[0] || '',
-      accent: railAccents[i % railAccents.length],
-    })),
-    [products]
-  )
-
-  const rightRailProducts = React.useMemo(() =>
-    products.slice(4, 8).map((p, i) => ({
-      name: p.name,
-      image: p.productImages?.[0]?.url || p.image || p.images?.[0] || '',
-      accent: railAccents[(i + 4) % railAccents.length],
+      images: p.images,
+      accent: railAccents[idx % railAccents.length],
     })),
     [products]
   )
@@ -306,17 +291,25 @@ const Home: React.FC = () => {
         <div className="absolute top-1/2 -left-32 h-96 w-96 rounded-full bg-primary-400/20 blur-3xl" />
 
         <div className="container-page relative py-16 lg:py-24">
-          {/* Decorative side rails stay behind the centered hero content. */}
-          <div className="pointer-events-none absolute inset-y-10 left-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
-            <div className="pointer-events-auto h-full origin-left scale-75 xl:scale-90 2xl:scale-100">
-              {show3dHero && <LazyHeroProductRail side="left" products={leftRailProducts} />}
-            </div>
-          </div>
-          <div className="pointer-events-none absolute inset-y-10 right-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
-            <div className="pointer-events-auto h-full origin-right scale-75 xl:scale-90 2xl:scale-100">
-              {show3dHero && <LazyHeroProductRail side="right" products={rightRailProducts} />}
-            </div>
-          </div>
+          {/* Decorative 3D side rails - desktop only */}
+          {show3dRails && railProducts.length >= 4 && (
+            <>
+              <div className="pointer-events-none absolute inset-y-10 left-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
+                <div className="pointer-events-auto h-full origin-left scale-75 xl:scale-90 2xl:scale-100">
+                  <React.Suspense fallback={<div className="opacity-0" />}>
+                    <LazyHeroProductRail side="left" products={railProducts.slice(0, 4)} />
+                  </React.Suspense>
+                </div>
+              </div>
+              <div className="pointer-events-none absolute inset-y-10 right-0 hidden w-[26%] opacity-55 lg:block xl:opacity-80 2xl:w-[30%]">
+                <div className="pointer-events-auto h-full origin-right scale-75 xl:scale-90 2xl:scale-100">
+                  <React.Suspense fallback={<div className="opacity-0" />}>
+                    <LazyHeroProductRail side="right" products={railProducts.slice(4, 8)} />
+                  </React.Suspense>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="relative z-10 max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-6 animate-fade-in">
@@ -382,9 +375,9 @@ const Home: React.FC = () => {
                       wrapperClassName="flex-1"
                     />
                   )}
-                  <Button type="submit" size="xl" className="sm:w-auto w-full shadow-lg shadow-primary/25">
-                    {activeTab === 'search' ? t('home.searchButton') : t('home.getQuote')}
-                    <ArrowRight className="h-4 w-4 ml-1" />
+                  <Button type="submit" size="xl" className="sm:w-auto w-full shadow-lg shadow-primary/25 min-w-[140px] px-6">
+                    <span className="font-semibold">{activeTab === 'search' ? t('home.searchButton') : t('home.getQuote')}</span>
+                    <ArrowRight className="h-5 w-5 ml-2" />
                   </Button>
                 </div>
 
@@ -492,13 +485,12 @@ const Home: React.FC = () => {
                 {t('home.categoryDescription')}
               </p>
             </div>
-            <Link
-              to="/categories"
-              className="hidden md:inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary-700 transition-colors group"
-            >
-              {t('home.viewAllCategories')}
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
+            <Button variant="ghost" size="md" asChild className="hidden md:inline-flex">
+              <Link to="/categories" className="group">
+                <span>{t('home.viewAllCategories')}</span>
+                <ArrowRight className="h-4 w-4 ml-2 transition-transform group-hover:translate-x-1" />
+              </Link>
+            </Button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 lg:gap-4">
@@ -543,13 +535,12 @@ const Home: React.FC = () => {
             )}
           </div>
 
-          <Link
-            to="/categories"
-            className="md:hidden mt-6 flex items-center justify-center gap-2 text-sm font-bold text-primary py-3 rounded-xl bg-primary-50 border border-primary-100"
-          >
-            <span>{t('home.viewAllCategories')}</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+          <Button variant="primary" size="lg" asChild className="md:hidden mt-6 w-full max-w-md mx-auto shadow-md">
+            <Link to="/categories" className="flex items-center justify-center gap-2">
+              <span>{t('home.viewAllCategories')}</span>
+              <ArrowRight className="h-5 w-5" />
+            </Link>
+          </Button>
         </div>
       </section>
 
@@ -569,10 +560,10 @@ const Home: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="md" asChild>
-                <Link to="/marketplace">
-                  {t('home.viewAllProducts')}
-                  <ArrowRight className="h-4 w-4 ml-1" />
+              <Button variant="outline" size="lg" asChild className="shadow-sm">
+                <Link to="/marketplace" className="flex items-center">
+                  <span>{t('home.viewAllProducts')}</span>
+                  <ArrowRight className="h-5 w-5 ml-2" />
                 </Link>
               </Button>
             </div>
@@ -605,7 +596,7 @@ const Home: React.FC = () => {
                   key={p.id}
                   product={p}
                   onFavorite={toggleFavorite}
-                  isFavorite={favorites.has(p.id)}
+                  isFavorite={isFavorite(p.id)}
                 />
               ))
             )}
@@ -863,9 +854,9 @@ const Home: React.FC = () => {
               <p className="text-muted-foreground leading-relaxed mb-6">
                 {t('home.faqDescription')}
               </p>
-              <Button variant="outline" size="md">
-                <Headphones className="h-4 w-4 mr-2" />
-                {t('home.contactSupport')}
+              <Button variant="outline" size="lg" className="shadow-sm">
+                <Headphones className="h-5 w-5 mr-2" />
+                <span>{t('home.contactSupport')}</span>
               </Button>
             </div>
 
@@ -917,22 +908,32 @@ const Home: React.FC = () => {
         <div className="container-page">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-800 via-primary to-primary-700 p-8 lg:p-16">
             <div className="relative max-w-3xl mx-auto text-center text-white">
-              <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight text-foreground leading-[1.05] text-balance animate-slide-up">
+              <h2 className="font-display text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1] text-balance mb-6">
                 Ready to Shop Global Markets?
               </h2>
               <p className="text-primary-100 text-lg mb-8 max-w-xl mx-auto leading-relaxed">
                 Join 250,000+ shoppers worldwide enjoying authentic products with transparent pricing and reliable delivery. Signing up takes 30 seconds.
               </p>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Button
                   size="xl"
                   variant="outline"
-                  className="w-full sm:w-auto !bg-white/10 !text-white !border-white/20 hover:!bg-white/20"
+                  className="w-full sm:w-auto !bg-white !text-primary hover:!bg-white/90 !border-white shadow-lg min-w-[200px]"
                   asChild
                 >
-                  <Link to="/marketplace">
-                    <Globe2 className="h-4 w-4 mr-1.5" />
-                    Start Browsing
+                  <Link to="/register" className="flex items-center justify-center">
+                    <span className="font-semibold">Get Started Free</span>
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </Link>
+                </Button>
+                <Button
+                  size="xl"
+                  className="w-full sm:w-auto !bg-white/10 !text-white !border-white/20 hover:!bg-white/20 shadow-lg min-w-[200px]"
+                  asChild
+                >
+                  <Link to="/marketplace" className="flex items-center justify-center">
+                    <Globe2 className="h-5 w-5 mr-2" />
+                    <span className="font-semibold">Start Browsing</span>
                   </Link>
                 </Button>
               </div>
