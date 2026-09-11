@@ -6,6 +6,7 @@ import cartRoutes from './cart.routes';
 import orderRoutes from './order.routes';
 import aiRoutes from './ai.routes';
 import walletRoutes from './wallet.routes';
+import paymentRoutes from './payment.routes';
 import adminRoutes from './admin.routes';
 import favoriteRoutes from './favorite.routes';
 
@@ -19,6 +20,7 @@ router.use('/cart', cartRoutes);
 router.use('/orders', orderRoutes);
 router.use('/ai', aiRoutes);
 router.use('/wallet', walletRoutes);
+router.use('/payments', paymentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/favorites', favoriteRoutes);
 

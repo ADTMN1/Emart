@@ -128,6 +128,21 @@ model ProductImage {
   @@map("product_images")
 }
 
+model CryptoWallet {
+  id        String   @id @default(uuid())
+  currency  String
+  network   String
+  address   String   @unique
+  qrCodeUrl String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([currency, network])
+  @@index([isActive, currency, network])
+  @@map("crypto_wallets")
+}
+
 model Cart {
   id        String     @id @default(uuid())
   userId    String     @unique

@@ -11,6 +11,9 @@ import {
   MapPin,
   Package,
   ChevronDown,
+  Loader2,
+  Copy,
+  QrCode,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -31,16 +34,60 @@ interface CartItem {
   product?: Product
 }
 
+interface AddressForm {
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  country: string
+  state: string
+  postalCode: string
+  addressLine: string
+  city: string
+}
+
+const emptyAddress: AddressForm = {
+  firstName: '', lastName: '', email: '', phone: '', country: '', state: '',
+  postalCode: '', addressLine: '', city: '',
+}
+
+const toOrderAddress = (address: AddressForm) => ({
+  fullName: `${address.firstName} ${address.lastName}`.trim(),
+  addressLine: address.addressLine,
+  city: address.city,
+  state: address.state,
+  postalCode: address.postalCode,
+  country: address.country,
+  countryCode: address.country,
+  phone: address.phone,
+})
+
+const InlineField: React.FC<{ error?: string; children: React.ReactNode }> = ({ error, children }) => (
+  <div className="space-y-1">
+    {children}
+    {error && <p className="text-xs font-medium text-destructive" role="alert">{error}</p>}
+  </div>
+)
+
 const Checkout: React.FC = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
   const [step, setStep] = React.useState<1 | 2 | 3>(1)
   const [sameAddress, setSameAddress] = React.useState(true)
-  const [payment, setPayment] = React.useState<'card' | 'paypal' | 'apple' | 'bank'>('card')
+  const [payment] = React.useState<'crypto'>('crypto')
+  const [cryptoConfig, setCryptoConfig] = React.useState<{ walletId: string; address: string; network: string; currency: string; qrCodeUrl: string | null; networks: { id: string; network: string; currency: string }[] } | null>(null)
+  const [selectedWalletId, setSelectedWalletId] = React.useState('')
+  const [cryptoLoading, setCryptoLoading] = React.useState(true)
+  const [copied, setCopied] = React.useState(false)
+  const [paymentSubmitted, setPaymentSubmitted] = React.useState(false)
   const [submitted, setSubmitted] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [cartItems, setCartItems] = React.useState<CartItem[]>([])
   const [quantities, setQuantities] = React.useState<Record<string, number>>({})
+  const [shippingAddress, setShippingAddress] = React.useState<AddressForm>(emptyAddress)
+  const [billingAddress, setBillingAddress] = React.useState<AddressForm>(emptyAddress)
+  const [touchedFields, setTouchedFields] = React.useState<Record<string, boolean>>({})
+  const [shippingSubmitted, setShippingSubmitted] = React.useState(false)
 
   // Helper function to get product image - matches ProductDetails logic
   const getProductImage = (product: any): string => {
@@ -68,7 +115,9 @@ const Checkout: React.FC = () => {
       setLoading(true)
       const data = await api.get<any>('/cart').catch(() => null)
       const rawItems = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
-      const items = rawItems.filter((item: any) => item && item.product)
+      const items = rawItems
+        .map((item: any) => ({ ...item, productId: item?.productId || item?.product?.id }))
+        .filter((item: any) => item.product && item.productId)
       setCartItems(items)
       const qtyMap: Record<string, number> = {}
       items.forEach((item: any) => {
@@ -89,6 +138,25 @@ const Checkout: React.FC = () => {
     window.addEventListener('cart:updated', handleCartUpdate)
     return () => window.removeEventListener('cart:updated', handleCartUpdate)
   }, [fetchCart])
+
+  React.useEffect(() => {
+    api.get<any>('/payments/crypto').then((config) => { setCryptoConfig(config); setSelectedWalletId(config.walletId) }).catch(() => setCryptoConfig(null)).finally(() => setCryptoLoading(false))
+  }, [])
+
+  const loadCryptoNetwork = async (walletId: string) => {
+    setSelectedWalletId(walletId)
+    setCryptoLoading(true)
+    setPaymentSubmitted(false)
+    try {
+      const config = await api.get<any>(`/payments/crypto?walletId=${encodeURIComponent(walletId)}`)
+      setCryptoConfig(config)
+      setSelectedWalletId(config.walletId)
+    } catch {
+      setCryptoConfig(null)
+    } finally {
+      setCryptoLoading(false)
+    }
+  }
 
   const subtotal = cartItems.reduce(
     (s, i) => s + (i.product?.estimatedPriceUsd || 0) * (quantities[i.productId] || 1),
@@ -114,6 +182,10 @@ const Checkout: React.FC = () => {
         })),
         shippingMethod: 'dhl',
         paymentMethod: payment,
+        shippingAddress: toOrderAddress(shippingAddress),
+        ...(!sameAddress ? {
+          billingAddress: toOrderAddress(billingAddress),
+        } : {}),
       })
       setCreatedOrder(res)
       setSubmitted(true)
@@ -131,6 +203,29 @@ const Checkout: React.FC = () => {
     } finally {
       setSubmittingOrder(false)
     }
+  }
+
+  const updateAddress = (setter: React.Dispatch<React.SetStateAction<AddressForm>>, field: keyof AddressForm, prefix = 'shipping') =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      setTouchedFields((previous) => ({ ...previous, [`${prefix}.${field}`]: true }))
+      setter((previous) => ({ ...previous, [field]: event.target.value }))
+    }
+
+  const fieldError = (address: AddressForm, field: keyof AddressForm, prefix = 'shipping') =>
+    (shippingSubmitted || touchedFields[`${prefix}.${field}`]) && !address[field].trim()
+      ? `${field === 'postalCode' ? 'ZIP / Postal code' : field === 'addressLine' ? 'Street address' : field.charAt(0).toUpperCase() + field.slice(1)} is required.`
+      : undefined
+
+  const continueToPayment = () => {
+    setShippingSubmitted(true)
+    const required = ['firstName', 'lastName', 'email', 'phone', 'country', 'state', 'postalCode', 'addressLine', 'city'] as const
+    const billingRequired = ['firstName', 'lastName', 'phone', 'country', 'state', 'postalCode', 'addressLine', 'city'] as const
+    if (required.some((field) => !shippingAddress[field].trim()) || (!sameAddress && billingRequired.some((field) => !billingAddress[field].trim()))) {
+      const firstInvalid = required.find((field) => !shippingAddress[field].trim())
+      requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-address-field="shipping.${firstInvalid || 'firstName'}"]`)?.focus())
+      return
+    }
+    setStep(2)
   }
 
   if (submitted) {
@@ -248,23 +343,23 @@ const Checkout: React.FC = () => {
                   {step === 1 ? (
                     <div className="space-y-4">
                       <div className="grid sm:grid-cols-2 gap-4">
-                        <Input placeholder="First name" />
-                        <Input placeholder="Last name" />
+                        <InlineField error={fieldError(shippingAddress, 'firstName')}><Input data-address-field="shipping.firstName" aria-invalid={!!fieldError(shippingAddress, 'firstName')} className={fieldError(shippingAddress, 'firstName') ? 'border-destructive focus:border-destructive' : ''} placeholder="First name" value={shippingAddress.firstName} onChange={updateAddress(setShippingAddress, 'firstName')} required /></InlineField>
+                        <InlineField error={fieldError(shippingAddress, 'lastName')}><Input data-address-field="shipping.lastName" aria-invalid={!!fieldError(shippingAddress, 'lastName')} className={fieldError(shippingAddress, 'lastName') ? 'border-destructive focus:border-destructive' : ''} placeholder="Last name" value={shippingAddress.lastName} onChange={updateAddress(setShippingAddress, 'lastName')} required /></InlineField>
                       </div>
-                      <Input placeholder="Email address" type="email" />
-                      <Input placeholder="Phone number" type="tel" />
+                      <InlineField error={fieldError(shippingAddress, 'email')}><Input data-address-field="shipping.email" aria-invalid={!!fieldError(shippingAddress, 'email')} className={fieldError(shippingAddress, 'email') ? 'border-destructive focus:border-destructive' : ''} placeholder="Email address" type="email" value={shippingAddress.email} onChange={updateAddress(setShippingAddress, 'email')} required /></InlineField>
+                      <InlineField error={fieldError(shippingAddress, 'phone')}><Input data-address-field="shipping.phone" aria-invalid={!!fieldError(shippingAddress, 'phone')} className={fieldError(shippingAddress, 'phone') ? 'border-destructive focus:border-destructive' : ''} placeholder="Phone number" type="tel" value={shippingAddress.phone} onChange={updateAddress(setShippingAddress, 'phone')} required /></InlineField>
                       <div className="grid sm:grid-cols-3 gap-4">
-                        <Select>
-                          <option>Country</option>
-                          <option>United States</option>
-                          <option>United Kingdom</option>
-                          <option>Canada</option>
-                        </Select>
-                        <Input placeholder="State / Province" />
-                        <Input placeholder="ZIP / Postal code" />
+                        <InlineField error={fieldError(shippingAddress, 'country')}><Select data-address-field="shipping.country" className={fieldError(shippingAddress, 'country') ? 'border-destructive focus:border-destructive' : ''} value={shippingAddress.country} onChange={updateAddress(setShippingAddress, 'country')} required>
+                          <option value="">Country</option>
+                          <option value="US">United States</option>
+                          <option value="GB">United Kingdom</option>
+                          <option value="CA">Canada</option>
+                        </Select></InlineField>
+                        <InlineField error={fieldError(shippingAddress, 'state')}><Input data-address-field="shipping.state" className={fieldError(shippingAddress, 'state') ? 'border-destructive focus:border-destructive' : ''} placeholder="State / Province" value={shippingAddress.state} onChange={updateAddress(setShippingAddress, 'state')} required /></InlineField>
+                        <InlineField error={fieldError(shippingAddress, 'postalCode')}><Input data-address-field="shipping.postalCode" className={fieldError(shippingAddress, 'postalCode') ? 'border-destructive focus:border-destructive' : ''} placeholder="ZIP / Postal code" value={shippingAddress.postalCode} onChange={updateAddress(setShippingAddress, 'postalCode')} required /></InlineField>
                       </div>
-                      <Input placeholder="Street address, apartment, suite" />
-                      <Input placeholder="City" />
+                      <InlineField error={fieldError(shippingAddress, 'addressLine')}><Input data-address-field="shipping.addressLine" className={fieldError(shippingAddress, 'addressLine') ? 'border-destructive focus:border-destructive' : ''} placeholder="Street address, apartment, suite" value={shippingAddress.addressLine} onChange={updateAddress(setShippingAddress, 'addressLine')} required /></InlineField>
+                      <InlineField error={fieldError(shippingAddress, 'city')}><Input data-address-field="shipping.city" className={fieldError(shippingAddress, 'city') ? 'border-destructive focus:border-destructive' : ''} placeholder="City" value={shippingAddress.city} onChange={updateAddress(setShippingAddress, 'city')} required /></InlineField>
                       <label className="flex items-start gap-2.5 cursor-pointer pt-1">
                         <input
                           type="checkbox"
@@ -276,22 +371,44 @@ const Checkout: React.FC = () => {
                           Billing address is different from shipping
                         </span>
                       </label>
+                      {!sameAddress && (
+                        <div className="space-y-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+                          <div className="text-sm font-bold text-foreground">Billing address</div>
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            <Input placeholder="First name" value={billingAddress.firstName} onChange={updateAddress(setBillingAddress, 'firstName')} required />
+                            <Input placeholder="Last name" value={billingAddress.lastName} onChange={updateAddress(setBillingAddress, 'lastName')} required />
+                          </div>
+                          <Input placeholder="Phone number" type="tel" value={billingAddress.phone} onChange={updateAddress(setBillingAddress, 'phone')} required />
+                          <div className="grid sm:grid-cols-3 gap-4">
+                            <Select value={billingAddress.country} onChange={updateAddress(setBillingAddress, 'country')} required>
+                              <option value="">Country</option>
+                              <option value="US">United States</option>
+                              <option value="GB">United Kingdom</option>
+                              <option value="CA">Canada</option>
+                            </Select>
+                            <Input placeholder="State / Province" value={billingAddress.state} onChange={updateAddress(setBillingAddress, 'state')} required />
+                            <Input placeholder="ZIP / Postal code" value={billingAddress.postalCode} onChange={updateAddress(setBillingAddress, 'postalCode')} required />
+                          </div>
+                          <Input placeholder="Street address, apartment, suite" value={billingAddress.addressLine} onChange={updateAddress(setBillingAddress, 'addressLine')} required />
+                          <Input placeholder="City" value={billingAddress.city} onChange={updateAddress(setBillingAddress, 'city')} required />
+                        </div>
+                      )}
                       <Button
                         size="lg"
                         className="w-full sm:w-auto shadow-md shadow-primary/20"
-                        onClick={() => setStep(2)}
+                        onClick={continueToPayment}
+                        disabled={submittingOrder}
                       >
-                        Continue to Payment
-                        <ChevronRight className="h-4 w-4 ml-1" />
+                        {submittingOrder ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Processing...</> : <>Continue to Payment<ChevronRight className="h-4 w-4 ml-1" /></>}
                       </Button>
                     </div>
                   ) : (
                     <div className="rounded-xl bg-muted/40 border border-border/60 p-4 text-sm">
-                      <div className="font-bold mb-1">John Doe</div>
+                      <div className="font-bold mb-1">{shippingAddress.firstName} {shippingAddress.lastName}</div>
                       <div className="text-muted-foreground leading-relaxed">
-                        123 Main Street, Apt 4B<br />
-                        New York, NY 10001, United States<br />
-                        +1 (555) 123-4567 · john.doe@email.com
+                        {shippingAddress.addressLine}<br />
+                        {shippingAddress.city}, {shippingAddress.state} {shippingAddress.postalCode}, {shippingAddress.country}<br />
+                        {shippingAddress.phone} · {shippingAddress.email}
                       </div>
                     </div>
                   )}
@@ -314,44 +431,28 @@ const Checkout: React.FC = () => {
                   </div>
                   {step === 2 ? (
                     <div className="space-y-5">
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        {[
-                          { id: 'card', name: 'Credit Card', icon: '💳' },
-                          { id: 'paypal', name: 'PayPal', icon: '🅿️' },
-                          { id: 'apple', name: 'Apple Pay', icon: '🍎' },
-                          { id: 'bank', name: 'Bank Transfer', icon: '🏦' },
-                        ].map((m) => (
-                          <button
-                            key={m.id}
-                            onClick={() => setPayment(m.id as any)}
-                            className={cn(
-                              'p-4 rounded-xl border-2 transition-all text-left flex flex-col items-center gap-2',
-                              payment === m.id
-                                ? 'border-primary bg-primary-50/40 ring-2 ring-primary/15'
-                                : 'border-border hover:border-border/80',
-                            )}
-                          >
-                            <span className="text-2xl">{m.icon}</span>
-                            <span className="text-xs font-bold">{m.name}</span>
-                          </button>
-                        ))}
+                      <div className="rounded-xl border-2 border-primary bg-primary-50/40 p-4 flex items-center gap-3">
+                        <div className="h-11 w-11 shrink-0 rounded-lg bg-primary text-white flex items-center justify-center"><QrCode className="h-5 w-5" /></div>
+                        <div className="font-bold">Crypto Payment</div>
                       </div>
 
-                      {payment === 'card' && (
-                        <div className="space-y-4 p-5 rounded-xl bg-muted/30 border border-border/60">
-                          <Input placeholder="Card number" />
-                          <div className="grid grid-cols-2 gap-4">
-                            <Input placeholder="MM / YY" />
-                            <Input placeholder="CVC" />
+                      {!cryptoLoading && cryptoConfig?.networks?.length ? <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground">Network</label><Select value={selectedWalletId} onChange={(event) => loadCryptoNetwork(event.target.value)}>{cryptoConfig.networks.map((option) => <option key={option.id} value={option.id}>{option.currency} — {option.network}</option>)}</Select></div> : null}
+                      {cryptoLoading ? <div className="p-5 text-sm text-muted-foreground">Loading payment details...</div> : cryptoConfig?.address ? (
+                        <div className="space-y-4 rounded-xl border border-border/60 bg-muted/30 p-5">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Cryptocurrency</div><div className="mt-1 font-bold text-primary">{cryptoConfig.currency}</div></div>
+                            <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Selected network</div><div className="mt-1 font-bold text-primary">{cryptoConfig.network}</div></div>
                           </div>
-                          <Input placeholder="Name on card" />
+                          <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Order total</div><div className="mt-1 font-bold">{formatCurrency(total)}</div><p className="mt-1 text-xs text-muted-foreground">Send {cryptoConfig.currency} only on the {cryptoConfig.network} network.</p></div>
+                          <div className="space-y-2"><div className="text-xs font-bold text-muted-foreground">EMART Receiving Address</div><div className="flex flex-col gap-2 sm:flex-row"><Input value={cryptoConfig.address} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(cryptoConfig.address); setCopied(true); setTimeout(() => setCopied(false), 1600) }}><Copy className="h-4 w-4 mr-1" />{copied ? 'Copied' : 'Copy Address'}</Button></div></div>
+                          {cryptoConfig.qrCodeUrl && <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-background p-4"><div className="text-xs font-bold text-muted-foreground self-start">QR Code</div><img src={cryptoConfig.qrCodeUrl} alt={`QR code for ${cryptoConfig.currency} on ${cryptoConfig.network}`} className="h-44 w-44 rounded-md" /></div>}
+                          {paymentSubmitted ? (
+                            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><div className="font-bold text-sm">Payment Verification</div><p className="mt-1 text-sm text-muted-foreground">Your payment is being verified. We'll update your order once the payment is confirmed.</p></div>
+                          ) : (
+                            <Button type="button" className="w-full" onClick={() => setPaymentSubmitted(true)}>I've Completed the Payment</Button>
+                          )}
                         </div>
-                      )}
-
-                      <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 text-xs text-muted-foreground">
-                        <Lock className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                        Payment information is encrypted and processed through PCI-DSS Level 1 certified providers. EMART never stores your full card details.
-                      </div>
+                      ) : <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">No active crypto payment network is currently configured.</div>}
 
                       <div className="flex gap-3">
                         <Button variant="outline" size="lg" onClick={() => setStep(1)}>
@@ -361,6 +462,7 @@ const Checkout: React.FC = () => {
                           size="lg"
                           className="flex-1 sm:flex-none shadow-md shadow-primary/20"
                           onClick={() => setStep(3)}
+                          disabled={!cryptoConfig?.address || cryptoLoading}
                         >
                           Review Order
                           <ChevronRight className="h-4 w-4 ml-1" />
@@ -373,8 +475,8 @@ const Checkout: React.FC = () => {
                         💳
                       </div>
                       <div>
-                        <div className="font-bold">{payment === 'card' ? 'Visa ending in 4242' : 'PayPal'}</div>
-                        <div className="text-xs text-muted-foreground">John Doe · Expires 12/28</div>
+                        <div className="font-bold">Crypto Payment</div>
+                        <div className="text-xs text-muted-foreground">Payment verification pending</div>
                       </div>
                     </div>
                   )}
