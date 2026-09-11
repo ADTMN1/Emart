@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/Toast'
 import { cn, formatCurrency } from '@/lib/utils'
 import { cachedApi, api } from '@/lib/api'
 import { getOptimizedImageUrl } from '@/lib/imageOptimization'
+import { useCart } from '@/contexts/CartContext'
 
 interface ProductImage {
   id: string
@@ -91,6 +92,7 @@ const ProductDetails: React.FC = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { incrementCartCount } = useCart()
   const [imgIdx, setImgIdx] = React.useState(0)
   const [qty, setQty] = React.useState(1)
   const [isFav, setIsFav] = React.useState(false)
@@ -101,6 +103,7 @@ const ProductDetails: React.FC = () => {
   const [relatedProducts, setRelatedProducts] = React.useState<Product[]>([])
   const [relatedLoading, setRelatedLoading] = React.useState(false)
   const [isAddingToCart, setIsAddingToCart] = React.useState(false)
+  const [isBuyingNow, setIsBuyingNow] = React.useState(false)
 
   // Fetch product from API with caching
   React.useEffect(() => {
@@ -136,28 +139,18 @@ const ProductDetails: React.FC = () => {
   }, [])
 
   const addToCart = async (buyNow = false) => {
-    if (!product || isAddingToCart) return
+    if (!product || (buyNow ? isBuyingNow : isAddingToCart)) return
 
-    setIsAddingToCart(true)
+    if (buyNow) setIsBuyingNow(true)
+    else setIsAddingToCart(true)
 
     try {
-      const currentCartCount = Number((window as any).__emartCartCount || 0)
-      const optimisticCount = currentCartCount + qty
-      ;(window as any).__emartCartCount = optimisticCount
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: optimisticCount } }))
-
       await api.post('/cart/items', {
         productId: product.id,
         quantity: qty,
       })
 
-      const refreshedCart = await api.get<{ items?: Array<{ quantity?: number }> } | null>('/cart').catch(() => null)
-      const cartTotal = Array.isArray(refreshedCart?.items)
-        ? refreshedCart.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
-        : optimisticCount
-
-      ;(window as any).__emartCartCount = cartTotal
-      window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: cartTotal } }))
+      incrementCartCount(qty)
 
       toast({
         variant: 'success',
@@ -188,7 +181,8 @@ const ProductDetails: React.FC = () => {
         description: err?.message || 'Please try again.',
       })
     } finally {
-      setIsAddingToCart(false)
+      if (buyNow) setIsBuyingNow(false)
+      else setIsAddingToCart(false)
     }
   }
 
@@ -513,37 +507,41 @@ const ProductDetails: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex flex-col lg:flex-row gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 min-w-0">
                 <Button
                   size="xl"
                   variant="primary"
-                  className="sm:flex-1 shadow-lg shadow-primary/25"
+                  className="w-full whitespace-nowrap shadow-lg shadow-primary/25 disabled:shadow-none"
                   onClick={() => addToCart(false)}
                   disabled={isAddingToCart}
+                  isLoading={isAddingToCart}
+                  leftIcon={<Package className="h-4 w-4" />}
                 >
-                  <Package className="h-4 w-4 mr-2" />
                   {isAddingToCart ? 'Adding...' : 'Add to Cart'}
                 </Button>
                 <Button
                   size="xl"
                   variant="secondary"
-                  className="sm:flex-1 shadow-lg shadow-secondary/25"
+                  className="w-full whitespace-nowrap shadow-lg shadow-secondary/25 disabled:shadow-none"
                   onClick={() => addToCart(true)}
-                  disabled={isAddingToCart}
+                  disabled={isBuyingNow}
+                  isLoading={isBuyingNow}
                 >
-                  {isAddingToCart ? 'Processing...' : 'Buy Now'}
+                  {isBuyingNow ? 'Processing...' : 'Buy Now'}
                 </Button>
-                <div className="flex sm:flex-col gap-2">
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:w-28 shrink-0">
                   <Button
                     variant="outline"
                     size="xl"
-                    className={cn(isFav && 'text-secondary border-secondary bg-secondary/5')}
+                    className={cn('w-full whitespace-nowrap', isFav && 'text-secondary border-secondary bg-secondary/5')}
                     onClick={() => setIsFav(!isFav)}
                   >
                     <Heart className={cn('h-4 w-4 mr-1.5', isFav && 'fill-current')} />
                     Save
                   </Button>
-                  <Button variant="outline" size="xl">
+                  <Button variant="outline" size="xl" className="w-full whitespace-nowrap">
                     <Share2 className="h-4 w-4 mr-1.5" />
                     Share
                   </Button>

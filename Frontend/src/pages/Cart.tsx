@@ -114,8 +114,12 @@ const Cart: React.FC = () => {
 
     try {
       const updated = await api.put<{ quantity?: number }>(`/cart/items/${id}`, { quantity: nextQty })
-      setItems((prev) => prev.map((i) => i.id === id ? { ...i, quantity: updated?.quantity ?? nextQty } : i))
-      window.dispatchEvent(new CustomEvent('cart:updated'))
+      setItems((prev) => {
+        const nextItems = prev.map((i) => i.id === id ? { ...i, quantity: updated?.quantity ?? nextQty } : i)
+        const newTotal = nextItems.reduce((s, i) => s + i.quantity, 0)
+        window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: newTotal } }))
+        return nextItems
+      })
     } catch {
       toast({ variant: 'error', title: 'Update failed', description: 'Could not update item quantity.' })
     }
@@ -124,8 +128,12 @@ const Cart: React.FC = () => {
   const removeItem = async (id: string) => {
     try {
       await api.delete(`/cart/items/${id}`)
-      setItems((prev) => prev.filter((i) => i.id !== id))
-      window.dispatchEvent(new CustomEvent('cart:updated'))
+      setItems((prev) => {
+        const nextItems = prev.filter((i) => i.id !== id)
+        const newTotal = nextItems.reduce((s, i) => s + i.quantity, 0)
+        window.dispatchEvent(new CustomEvent('cart:updated', { detail: { total: newTotal } }))
+        return nextItems
+      })
       toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
     } catch {
       toast({ variant: 'error', title: 'Remove failed', description: 'Could not remove item from cart.' })
