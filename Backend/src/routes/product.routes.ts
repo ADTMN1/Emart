@@ -18,6 +18,15 @@ router.get(
 
 router.get('/featured', productController.getFeaturedProducts);
 
+// Admin-only bulk delete — must be registered before /:id routes so that
+// "bulk-delete" is not captured as a product id.
+router.post(
+  '/bulk-delete',
+  authenticate,
+  authorize('ADMIN'),
+  productController.bulkDeleteProducts
+);
+
 router.get('/:id', productController.getProductById);
 
 router.get('/:id/related', productController.getRelatedProducts);
