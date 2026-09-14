@@ -9,8 +9,8 @@ import {
   EyeOff,
   Loader2,
   AlertCircle,
-  MoreVertical,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -47,6 +47,12 @@ interface Category {
   name: string;
 }
 
+interface BulkDeleteResult {
+  deletedCount: number;
+  failedCount: number;
+  failed: Array<{ id: string; reason: string }>;
+}
+
 export const AdminProducts: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
@@ -58,6 +64,11 @@ export const AdminProducts: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [deleting, setDeleting] = React.useState(false);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = React.useState(false);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
 
   const searchQuery = searchParams.get('search') || '';
   const categoryFilter = searchParams.get('category') || '';
@@ -95,6 +106,11 @@ export const AdminProducts: React.FC = () => {
   React.useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Clear selection whenever the visible product list changes
+  React.useEffect(() => {
+    setSelectedIds(new Set());
+  }, [products]);
 
   React.useEffect(() => {
     const fetchCategories = async () => {
@@ -145,6 +161,100 @@ export const AdminProducts: React.FC = () => {
   const handleClearFilters = () => {
     setSearchParams(new URLSearchParams());
   };
+
+  // --- Selection helpers ---
+
+  const allVisibleSelected = products.length > 0 && products.every((p) => selectedIds.has(p.id));
+  const someVisibleSelected = products.some((p) => selectedIds.has(p.id));
+  const selectedCount = selectedIds.size;
+
+  const handleToggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        // Deselect everything visible
+        const next = new Set(prev);
+        products.forEach((p) => next.delete(p.id));
+        return next;
+      }
+      // Select all visible
+      const next = new Set(prev);
+      products.forEach((p) => next.add(p.id));
+      return next;
+    });
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  // --- Bulk delete ---
+
+  const handleBulkDeleteClick = () => {
+    if (selectedCount === 0) return;
+    setBulkDeleteModalOpen(true);
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    if (selectedCount === 0) return;
+
+    try {
+      setBulkDeleting(true);
+      const res = await api.post<BulkDeleteResult>('/products/bulk-delete', {
+        ids: Array.from(selectedIds),
+      });
+
+      const deletedCount = res?.deletedCount ?? 0;
+      const failed = res?.failed ?? [];
+
+      if (deletedCount > 0 && failed.length === 0) {
+        toast({
+          variant: 'success',
+          title: 'Products Deleted',
+          description: `${deletedCount} product${deletedCount === 1 ? '' : 's'} deleted successfully`,
+        });
+      } else if (deletedCount > 0 && failed.length > 0) {
+        toast({
+          variant: 'warning',
+          title: 'Partially Deleted',
+          description: `${deletedCount} deleted, ${failed.length} failed (${failed[0].reason}${failed.length > 1 ? ` and ${failed.length - 1} more` : ''})`,
+          duration: 7000,
+        });
+      } else if (failed.length > 0) {
+        toast({
+          variant: 'error',
+          title: 'Delete Failed',
+          description: failed[0].reason,
+          duration: 7000,
+        });
+      }
+
+      setBulkDeleteModalOpen(false);
+      setSelectedIds(new Set());
+      fetchProducts();
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Delete Failed',
+        description: err.message || 'Failed to delete selected products',
+      });
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // --- Single product actions ---
 
   const handleToggleAvailability = async (product: Product) => {
     try {
@@ -281,6 +391,41 @@ export const AdminProducts: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Bulk selection bar */}
+      {selectedCount > 0 && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-medium">
+                {selectedCount} product{selectedCount === 1 ? '' : 's'} selected
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  disabled={bulkDeleting}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDeleteClick}
+                  isLoading={bulkDeleting}
+                >
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Products Table */}
       <Card>
         <CardContent className="p-0">
@@ -316,6 +461,18 @@ export const AdminProducts: React.FC = () => {
               <table className="w-full">
                 <thead className="bg-muted/50 border-b border-border">
                   <tr>
+                    <th className="p-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected;
+                        }}
+                        onChange={handleToggleSelectAll}
+                        className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                        aria-label="Select all products"
+                      />
+                    </th>
                     <th className="text-left p-4 font-semibold text-sm">Product</th>
                     <th className="text-left p-4 font-semibold text-sm">Category</th>
                     <th className="text-left p-4 font-semibold text-sm">Price</th>
@@ -325,83 +482,130 @@ export const AdminProducts: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product) => (
-                    <tr key={product.id} className="border-b border-border hover:bg-muted/30">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={getPrimaryImage(product)}
-                            alt={product.name}
-                            className="h-12 w-12 rounded-lg object-cover bg-muted"
+                  {products.map((product) => {
+                    const isSelected = selectedIds.has(product.id);
+                    return (
+                      <tr
+                        key={product.id}
+                        className={cn(
+                          'border-b border-border hover:bg-muted/30',
+                          isSelected && 'bg-primary/5'
+                        )}
+                      >
+                        <td className="p-4">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectOne(product.id)}
+                            className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                            aria-label={`Select ${product.name}`}
                           />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{product.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {product.condition}
-                            </p>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={getPrimaryImage(product)}
+                              alt={product.name}
+                              className="h-12 w-12 rounded-lg object-cover bg-muted"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{product.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {product.condition}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <Badge variant="outline" size="sm">
-                          {product.category.name}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-semibold text-sm">
-                          {formatCurrency(product.price, 'JPY')}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          ~{formatCurrency(product.estimatedPriceUsd, 'USD')}
-                        </p>
-                      </td>
-                      <td className="p-4">
-                        <Badge
-                          variant={product.stock > 5 ? 'success' : product.stock > 0 ? 'warning' : 'default'}
-                          size="sm"
-                        >
-                          {product.stock}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <Badge variant={product.isAvailable ? 'success' : 'default'} size="sm">
-                          {product.isAvailable ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleToggleAvailability(product)}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
-                            title={product.isAvailable ? 'Unpublish' : 'Publish'}
+                        </td>
+                        <td className="p-4">
+                          <Badge variant="outline" size="sm">
+                            {product.category.name}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <p className="font-semibold text-sm">
+                            {formatCurrency(product.price, 'JPY')}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            ~{formatCurrency(product.estimatedPriceUsd, 'USD')}
+                          </p>
+                        </td>
+                        <td className="p-4">
+                          <Badge
+                            variant={product.stock > 5 ? 'success' : product.stock > 0 ? 'warning' : 'default'}
+                            size="sm"
                           >
-                            {product.isAvailable ? (
-                              <EyeOff className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <Eye className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </button>
-                          <Link to={`/admin/products/${product.id}/edit`}>
-                            <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                              <Edit className="h-4 w-4 text-muted-foreground" />
+                            {product.stock}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <Badge variant={product.isAvailable ? 'success' : 'default'} size="sm">
+                            {product.isAvailable ? 'Active' : 'Inactive'}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleToggleAvailability(product)}
+                              className="p-2 hover:bg-muted rounded-lg transition-colors"
+                              title={product.isAvailable ? 'Unpublish' : 'Publish'}
+                            >
+                              {product.isAvailable ? (
+                                <EyeOff className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <Eye className="h-4 w-4 text-muted-foreground" />
+                              )}
                             </button>
-                          </Link>
-                          <button
-                            onClick={() => handleDeleteClick(product)}
-                            className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <Link to={`/admin/products/${product.id}/edit`}>
+                              <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+                                <Edit className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </Link>
+                            <button
+                              onClick={() => handleDeleteClick(product)}
+                              className="p-2 hover:bg-destructive/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal
+        isOpen={bulkDeleteModalOpen}
+        onClose={() => !bulkDeleting && setBulkDeleteModalOpen(false)}
+        title="Delete Selected Products"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <strong>{selectedCount}</strong> selected product
+            {selectedCount === 1 ? '' : 's'}? This action cannot be undone.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Note: products that are part of existing orders cannot be deleted and will be skipped.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteModalOpen(false)}
+              disabled={bulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDeleteConfirm} isLoading={bulkDeleting}>
+              Delete {selectedCount} Product{selectedCount === 1 ? '' : 's'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

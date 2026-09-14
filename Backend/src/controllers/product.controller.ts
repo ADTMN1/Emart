@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import productService from '../services/product.service';
 import { sendSuccess } from '../utils/response';
+import { BadRequestError } from '../utils/errors';
 import { AuthRequest } from '../types';
 
 export class ProductController {
@@ -64,6 +65,22 @@ export class ProductController {
       await productService.deleteProduct(req.params.id);
       
       return sendSuccess(res, null, 'Product deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async bulkDeleteProducts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { ids } = req.body as { ids?: unknown };
+
+      if (!Array.isArray(ids) || ids.length === 0) {
+        throw new BadRequestError('ids must be a non-empty array of product ids');
+      }
+
+      const result = await productService.bulkDeleteProducts(ids as string[]);
+      
+      return sendSuccess(res, result, 'Bulk delete completed');
     } catch (error) {
       next(error);
     }

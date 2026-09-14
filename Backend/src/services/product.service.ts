@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import { NotFoundError } from '../utils/errors';
+import { BadRequestError, NotFoundError } from '../utils/errors';
 import { ProductFilters, PaginationParams } from '../types';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -289,6 +289,60 @@ export class ProductService {
     return await prisma.product.delete({
       where: { id },
     });
+  }
+
+  async bulkDeleteProducts(ids: string[]) {
+    // De-duplicate and drop invalid ids to avoid wasted work
+    const uniqueIds = Array.from(new Set(ids)).filter((id) =>
+      UUID_REGEX.test(id)
+    );
+
+    if (uniqueIds.length === 0) {
+      throw new BadRequestError('No valid product ids provided');
+    }
+
+    // Fetch which of the requested products actually exist, and which are
+    // referenced by order items (order_items.product has no cascade delete,
+    // so those products cannot be removed from the database).
+    const existing = await prisma.product.findMany({
+      where: { id: { in: uniqueIds } },
+      select: {
+        id: true,
+        orderItems: { select: { id: true }, take: 1 },
+      },
+    });
+
+    const existingById = new Map(existing.map((p) => [p.id, p]));
+    const deletable = uniqueIds.filter(
+      (id) => existingById.get(id) && existingById.get(id)!.orderItems.length === 0
+    );
+    const blocked = uniqueIds
+      .filter((id) => existingById.get(id)?.orderItems.length)
+      .map((id) => existingById.get(id)!.id);
+    const notFound = uniqueIds.filter((id) => !existingById.has(id));
+
+    let deletedCount = 0;
+    if (deletable.length > 0) {
+      const result = await prisma.product.deleteMany({
+        where: { id: { in: deletable } },
+      });
+      deletedCount = result.count;
+    }
+
+    return {
+      deletedCount,
+      failedCount: blocked.length + notFound.length,
+      failed: [
+        ...blocked.map((id) => ({
+          id,
+          reason: 'Referenced by existing orders',
+        })),
+        ...notFound.map((id) => ({
+          id,
+          reason: 'Product not found',
+        })),
+      ],
+    };
   }
 
   async getFeaturedProducts(limit: number = 8) {
