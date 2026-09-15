@@ -40,8 +40,8 @@ app.use(compression({
     return compression.filter(req, res);
   },
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ extended: true, limit: '20mb' }));
 app.use(morgan('dev'));
 
 // Disable caching for API responses to prevent stale product/image data

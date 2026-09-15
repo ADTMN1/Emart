@@ -18,5 +18,7 @@ router.get('/crypto-wallets', adminController.getCryptoWallets.bind(adminControl
 router.post('/crypto-wallets', adminController.createCryptoWallet.bind(adminController));
 router.put('/crypto-wallets/:id', adminController.updateCryptoWallet.bind(adminController));
 router.delete('/crypto-wallets/:id', adminController.deleteCryptoWallet.bind(adminController));
+router.get('/deposits', adminController.getDepositSubmissions.bind(adminController));
+router.put('/deposits/:id/status', adminController.updateDepositSubmissionStatus.bind(adminController));
 
 export default router;

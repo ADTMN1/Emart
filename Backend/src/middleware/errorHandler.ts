@@ -12,6 +12,17 @@ export const errorHandler = (
     return sendError(res, err.message, err.statusCode);
   }
 
+  // File-upload errors (multer). BadRequestErrors thrown inside file filters
+  // arrive here as AppErrors already; these are multer's own errors.
+  if (err.name === 'MulterError') {
+    const multerErr = err as any;
+    if (multerErr.code === 'LIMIT_FILE_SIZE') {
+      return sendError(res, 'Uploaded file is too large (maximum 5 MB)', 413);
+    }
+    console.error('Upload error:', multerErr.code, multerErr.message);
+    return sendError(res, `Upload error: ${multerErr.message}`, 400);
+  }
+
   // Prisma errors
   if (err.name === 'PrismaClientKnownRequestError') {
     const code = (err as any).code;

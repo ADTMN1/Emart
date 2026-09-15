@@ -77,14 +77,48 @@ Remember: ONLY use information from the knowledge base above. Do not make up pol
 
       return text;
     } catch (error: any) {
+      // Handle timeout specifically
       if (error.message === 'AI service timeout') {
+        // Try fallback to knowledge base
+        const fallback = this.buildFallbackAnswer(userMessage);
+        if (fallback) return fallback;
         throw new Error('The request took too long to process. Please try again.');
       }
 
       // Log error for debugging (in production, use proper logging)
       console.error('AI Service Error:', error);
 
+      // If the generative model is unavailable (503 or network issues), provide a KB-based fallback
+      const fallback = this.buildFallbackAnswer(userMessage);
+      if (fallback) return fallback;
+
       throw new Error('Failed to process your message. Please try again later.');
+    }
+  }
+
+  private buildFallbackAnswer(query: string): string | null {
+    try {
+      const docs = knowledgeService.search(query);
+      if (!docs || docs.length === 0) return null;
+
+      // Build a concise fallback from the top document(s)
+      const snippets = docs.map((doc) => {
+        // Extract first paragraph (up to first double newline)
+        const firstParagraph = doc.content.split(/\n\n+/)[0].replace(/\r/g, '').trim();
+        const snippet = firstParagraph.length > 600 ? firstParagraph.slice(0, 600) + '...' : firstParagraph;
+        return `• ${doc.title}: ${snippet}`;
+      });
+
+      const message = [
+        "Our AI service is temporarily unavailable. Here's relevant information from EMART's knowledge base:",
+        ...snippets,
+        "If this doesn't answer your question, please try again later or contact support.",
+      ].join('\n\n');
+
+      return message;
+    } catch (err) {
+      console.error('Fallback generation error:', err);
+      return null;
     }
   }
 }

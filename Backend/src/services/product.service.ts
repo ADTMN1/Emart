@@ -1,10 +1,72 @@
 import prisma from '../config/database';
-import { BadRequestError, NotFoundError } from '../utils/errors';
+import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors';
 import { ProductFilters, PaginationParams } from '../types';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const SKU_CONFLICT_CODE = 'P2002';
+
 export class ProductService {
+  /**
+   * Normalize a submitted SKU: trim + uppercase. Returns undefined when empty.
+   */
+  private normalizeSku(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const normalized = value.trim().toUpperCase();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  /**
+   * Validate the category provided on a create/update write before it reaches
+   * Prisma. Accepts an existing category UUID or a category name (reusing
+   * resolveCategoryId's name matching); throws a clean 400 instead of letting
+   * an invalid FK surface as a Prisma 500. Returns undefined when no category
+   * was supplied (partial updates).
+   */
+  private async validateAndResolveCategory(data: {
+    categoryId?: unknown;
+    category?: { id?: unknown } | null;
+  }): Promise<string | undefined> {
+    const raw = data.categoryId ?? data.category?.id;
+    if (raw === undefined) return undefined;
+
+    const rawStr = typeof raw === 'string' ? raw.trim() : '';
+    if (!rawStr) return undefined;
+
+    // UUID path: verify it actually exists (resolveCategoryId trusts UUIDs)
+    if (UUID_REGEX.test(rawStr)) {
+      const exists = await prisma.category.findUnique({
+        where: { id: rawStr },
+        select: { id: true },
+      });
+      if (!exists) {
+        throw new BadRequestError(`Category not found for id: ${rawStr}`);
+      }
+      return rawStr;
+    }
+
+    // Non-UUID path: reuse the existing name/slug resolution
+    const resolved = await this.resolveCategoryId(rawStr);
+    if (!resolved) {
+      throw new BadRequestError(`Unknown category: "${rawStr}"`);
+    }
+    return resolved;
+  }
+
+  /**
+   * Translate Prisma unique-constraint violations into a friendly 409 Conflict.
+   * Targets the sku constraint specifically so other unique violations behave as before.
+   */
+  private throwConflictIfSkuDuplicate(error: unknown): void {
+    const err = error as { code?: string; meta?: { target?: string[] } } | null;
+    if (
+      err?.code === SKU_CONFLICT_CODE &&
+      Array.isArray(err.meta?.target) &&
+      err.meta!.target.includes('sku')
+    ) {
+      throw new ConflictError('A product with this SKU already exists');
+    }
+  }
   async resolveCategoryId(categoryFilter: string): Promise<string | null> {
     if (!categoryFilter) return null;
 
@@ -46,12 +108,23 @@ export class ProductService {
 
   async getAllProducts(filters: ProductFilters, pagination: PaginationParams) {
     const page = Math.max(1, Number(pagination.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(pagination.limit) || 20));
+    const limit = Math.min(100, Math.max(1, Number(pagination.limit) || 20));
     const skip = (page - 1) * limit;
 
     const where: any = {
       isAvailable: true,
     };
+
+    // Availability filter: storefront omits "status" and keeps the default
+    // (available only). The admin page sends "active", "inactive", or "all"
+    // to manage unpublished products too.
+    if (filters.status === 'inactive') {
+      where.isAvailable = false;
+    } else if (filters.status === 'all') {
+      delete where.isAvailable;
+    } else if (filters.status === 'active') {
+      where.isAvailable = true;
+    }
 
     if (filters.category) {
       const resolvedCategoryId = await this.resolveCategoryId(filters.category);
@@ -80,6 +153,7 @@ export class ProductService {
     if (filters.search) {
       where.OR = [
         { name: { contains: filters.search, mode: 'insensitive' } },
+        { sku: { contains: filters.search, mode: 'insensitive' } },
         { description: { contains: filters.search, mode: 'insensitive' } },
         { tags: { hasSome: [filters.search] } },
       ];
@@ -94,10 +168,12 @@ export class ProductService {
         where,
         select: {
           id: true,
+          sku: true,
           name: true,
           price: true,
           estimatedPriceUsd: true,
           condition: true,
+          isAvailable: true,
           seller: true,
           sellerType: true,
           source: true,
@@ -152,6 +228,7 @@ export class ProductService {
       where: { id },
       select: {
         id: true,
+        sku: true,
         name: true,
         description: true,
         price: true,
@@ -204,18 +281,16 @@ export class ProductService {
 
   async createProduct(data: any) {
     const { categoryId, category, ...rest } = data;
-    
+
     const createData: any = {
       ...rest,
+      sku: this.normalizeSku(rest.sku),
     };
 
-    if (categoryId) {
+    const resolvedCategoryId = await this.validateAndResolveCategory({ categoryId, category });
+    if (resolvedCategoryId) {
       createData.category = {
-        connect: { id: categoryId },
-      };
-    } else if (category?.id) {
-      createData.category = {
-        connect: { id: category.id },
+        connect: { id: resolvedCategoryId },
       };
     }
 
@@ -240,6 +315,9 @@ export class ProductService {
           ],
         },
       },
+    }).catch((error) => {
+      this.throwConflictIfSkuDuplicate(error);
+      throw error;
     });
   }
 
@@ -252,20 +330,34 @@ export class ProductService {
       ...rest,
     };
 
-    if (categoryId) {
+    const resolvedCategoryId = await this.validateAndResolveCategory({ categoryId, category });
+    if (resolvedCategoryId) {
       updateData.category = {
-        connect: { id: categoryId },
+        connect: { id: resolvedCategoryId },
       };
-    } else if (category?.id) {
-      updateData.category = {
-        connect: { id: category.id },
-      };
+    }
+
+    if ('sku' in updateData) {
+      const normalizedSku = this.normalizeSku(updateData.sku);
+      if (normalizedSku) {
+        updateData.sku = normalizedSku;
+      } else {
+        // Empty/absent value means "clear the SKU" — remember it, because the
+        // null-removal loop below would otherwise drop it before Prisma sees it.
+        delete updateData.sku;
+        (updateData as any).__clearSku = true;
+      }
     }
 
     // Remove any explicit null fields to avoid Prisma trying to set null
     Object.keys(updateData).forEach((k) => {
       if (updateData[k] === null) delete updateData[k];
     });
+
+    if ((updateData as any).__clearSku) {
+      delete (updateData as any).__clearSku;
+      updateData.sku = null;
+    }
 
     return await prisma.product.update({
       where: { id },
@@ -279,12 +371,28 @@ export class ProductService {
           ],
         },
       },
+    }).catch((error) => {
+      this.throwConflictIfSkuDuplicate(error);
+      throw error;
     });
   }
 
   async deleteProduct(id: string) {
     // Validate product exists (throws NotFoundError if not found)
     await this.getProductById(id);
+
+    // order_items.product has no cascade (intentionally, to preserve order
+    // history), so a referenced product would otherwise fail as a Prisma 500.
+    // Mirror the bulk-delete behavior with a clear, safe error instead.
+    const referenced = await prisma.orderItem.findFirst({
+      where: { productId: id },
+      select: { id: true },
+    });
+    if (referenced) {
+      throw new ConflictError(
+        'Cannot delete this product because it is part of an existing order. Unpublish it instead if it should no longer be visible.'
+      );
+    }
 
     return await prisma.product.delete({
       where: { id },

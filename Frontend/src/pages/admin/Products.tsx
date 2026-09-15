@@ -10,7 +10,11 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
   X,
+  Upload,
+  History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,11 +23,12 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { api } from '@/lib/api';
+import { api, invalidateCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 interface Product {
   id: string;
+  sku: string | null;
   name: string;
   price: number;
   estimatedPriceUsd: number;
@@ -53,11 +58,24 @@ interface BulkDeleteResult {
   failed: Array<{ id: string; reason: string }>;
 }
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export const AdminProducts: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [products, setProducts] = React.useState<Product[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination>({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+  });
   const [categories, setCategories] = React.useState<Category[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -72,7 +90,8 @@ export const AdminProducts: React.FC = () => {
 
   const searchQuery = searchParams.get('search') || '';
   const categoryFilter = searchParams.get('category') || '';
-  const statusFilter = searchParams.get('status') || '';
+  const statusFilter = searchParams.get('status') || 'all';
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const fetchProducts = React.useCallback(async () => {
     try {
@@ -82,26 +101,29 @@ export const AdminProducts: React.FC = () => {
       const params = new URLSearchParams();
       if (searchQuery) params.append('search', searchQuery);
       if (categoryFilter) params.append('category', categoryFilter);
-      params.append('limit', '100');
+      params.append('status', statusFilter);
+      params.append('page', String(page));
+      params.append('limit', '20');
 
-      const res = await api.get<{ products: Product[] }>(`/products?${params.toString()}`);
-      let filteredProducts = res.products || [];
+      const res = await api.get<{ products: Product[]; pagination: Pagination }>(
+        `/products?${params.toString()}`
+      );
+      setProducts(res.products || []);
+      if (res.pagination) setPagination(res.pagination);
 
-      // Apply status filter
-      if (statusFilter === 'active') {
-        filteredProducts = filteredProducts.filter((p) => p.isAvailable);
-      } else if (statusFilter === 'inactive') {
-        filteredProducts = filteredProducts.filter((p) => !p.isAvailable);
+      // If the current page is out of range (e.g. after filtering), fall back to page 1
+      if (page > 1 && res.pagination && page > res.pagination.totalPages) {
+        const next = new URLSearchParams(searchParams);
+        next.set('page', '1');
+        setSearchParams(next);
       }
-
-      setProducts(filteredProducts);
     } catch (err: any) {
       console.error('Failed to fetch products:', err);
       setError(err.message || 'Failed to load products');
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, categoryFilter, statusFilter]);
+  }, [searchQuery, categoryFilter, statusFilter, page, searchParams, setSearchParams]);
 
   React.useEffect(() => {
     fetchProducts();
@@ -131,6 +153,7 @@ export const AdminProducts: React.FC = () => {
     } else {
       params.delete('search');
     }
+    params.delete('page');
     setSearchParams(params);
   };
 
@@ -141,6 +164,7 @@ export const AdminProducts: React.FC = () => {
     } else {
       params.delete('category');
     }
+    params.delete('page');
     setSearchParams(params);
   };
 
@@ -151,6 +175,7 @@ export const AdminProducts: React.FC = () => {
     } else {
       params.delete('status');
     }
+    params.delete('page');
     setSearchParams(params);
   };
 
@@ -160,6 +185,16 @@ export const AdminProducts: React.FC = () => {
 
   const handleClearFilters = () => {
     setSearchParams(new URLSearchParams());
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams);
+    if (newPage <= 1) {
+      params.delete('page');
+    } else {
+      params.set('page', String(newPage));
+    }
+    setSearchParams(params);
   };
 
   // --- Selection helpers ---
@@ -215,6 +250,11 @@ export const AdminProducts: React.FC = () => {
         ids: Array.from(selectedIds),
       });
 
+      // Bust the storefront product cache so deleted items disappear immediately
+      if ((res?.deletedCount ?? 0) > 0) {
+        invalidateCache.products();
+      }
+
       const deletedCount = res?.deletedCount ?? 0;
       const failed = res?.failed ?? [];
 
@@ -262,6 +302,9 @@ export const AdminProducts: React.FC = () => {
         isAvailable: !product.isAvailable,
       });
 
+      // Publish/unpublish changes storefront visibility — bust the cached lists
+      invalidateCache.products();
+
       toast({
         variant: 'success',
         title: 'Product Updated',
@@ -289,6 +332,9 @@ export const AdminProducts: React.FC = () => {
     try {
       setDeleting(true);
       await api.delete(`/products/${productToDelete.id}`);
+
+      // Bust the storefront product cache so the deleted product disappears immediately
+      invalidateCache.products();
 
       toast({
         variant: 'success',
@@ -322,15 +368,14 @@ export const AdminProducts: React.FC = () => {
         <div>
           <h1 className="font-display text-2xl lg:text-3xl font-bold">Products</h1>
           <p className="text-muted-foreground mt-1">
-            Manage your product catalog ({products.length} products)
+            Manage your product catalog ({pagination.total} product{pagination.total === 1 ? '' : 's'})
           </p>
         </div>
-        <Link to="/admin/products/new">
-          <Button size="lg">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link to="/admin/products/import/history"><Button variant="outline" leftIcon={<History className="h-4 w-4" />}>Import History</Button></Link>
+          <Link to="/admin/products/import"><Button variant="outline" leftIcon={<Upload className="h-4 w-4" />}>Import CSV</Button></Link>
+          <Link to="/admin/products/new"><Button size="lg"><Plus className="h-4 w-4 mr-2" />Add Product</Button></Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -368,7 +413,7 @@ export const AdminProducts: React.FC = () => {
                 onChange={(e) => handleStatusChange(e.target.value)}
                 className="h-11"
               >
-                <option value="">All Status</option>
+                <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </Select>
@@ -443,7 +488,7 @@ export const AdminProducts: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-96">
               <p className="text-lg font-semibold">No Products Found</p>
               <p className="text-sm text-muted-foreground mt-2">
-                {searchQuery || categoryFilter || statusFilter
+                {searchQuery || categoryFilter || (statusFilter && statusFilter !== 'all')
                   ? 'Try adjusting your filters'
                   : 'Get started by adding your first product'}
               </p>
@@ -474,6 +519,7 @@ export const AdminProducts: React.FC = () => {
                       />
                     </th>
                     <th className="text-left p-4 font-semibold text-sm">Product</th>
+                    <th className="text-left p-4 font-semibold text-sm">SKU</th>
                     <th className="text-left p-4 font-semibold text-sm">Category</th>
                     <th className="text-left p-4 font-semibold text-sm">Price</th>
                     <th className="text-left p-4 font-semibold text-sm">Stock</th>
@@ -515,6 +561,11 @@ export const AdminProducts: React.FC = () => {
                               </p>
                             </div>
                           </div>
+                        </td>
+                        <td className="p-4">
+                          <p className="text-xs font-mono text-muted-foreground">
+                            {product.sku || '—'}
+                          </p>
                         </td>
                         <td className="p-4">
                           <Badge variant="outline" size="sm">
@@ -573,6 +624,36 @@ export const AdminProducts: React.FC = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && !error && products.length > 0 && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-border px-4 py-3">
+              <p className="text-sm text-muted-foreground">
+                Page {pagination.page} of {pagination.totalPages} · {pagination.total} product
+                {pagination.total === 1 ? '' : 's'}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page <= 1}
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page >= pagination.totalPages}
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

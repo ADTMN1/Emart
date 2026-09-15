@@ -14,6 +14,8 @@ import {
   Loader2,
   Copy,
   QrCode,
+  Upload,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -80,6 +82,9 @@ const Checkout: React.FC = () => {
   const [cryptoLoading, setCryptoLoading] = React.useState(true)
   const [copied, setCopied] = React.useState(false)
   const [paymentSubmitted, setPaymentSubmitted] = React.useState(false)
+  const [paymentScreenshot, setPaymentScreenshot] = React.useState<File | null>(null)
+  const [paymentScreenshotPreview, setPaymentScreenshotPreview] = React.useState<string | null>(null)
+  const [paymentScreenshotError, setPaymentScreenshotError] = React.useState('')
   const [submitted, setSubmitted] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [cartItems, setCartItems] = React.useState<CartItem[]>([])
@@ -147,6 +152,9 @@ const Checkout: React.FC = () => {
     setSelectedWalletId(walletId)
     setCryptoLoading(true)
     setPaymentSubmitted(false)
+    setPaymentScreenshot(null)
+    setPaymentScreenshotPreview(null)
+    setPaymentScreenshotError('')
     try {
       const config = await api.get<any>(`/payments/crypto?walletId=${encodeURIComponent(walletId)}`)
       setCryptoConfig(config)
@@ -156,6 +164,55 @@ const Checkout: React.FC = () => {
     } finally {
       setCryptoLoading(false)
     }
+  }
+
+  const handlePaymentScreenshotChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      setPaymentScreenshot(null)
+      setPaymentScreenshotPreview(null)
+      setPaymentScreenshotError('')
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setPaymentScreenshot(null)
+      setPaymentScreenshotPreview(null)
+      setPaymentScreenshotError('Please upload a valid image file for the payment screenshot.')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setPaymentScreenshot(null)
+      setPaymentScreenshotPreview(null)
+      setPaymentScreenshotError('The payment screenshot must be smaller than 10MB.')
+      event.target.value = ''
+      return
+    }
+
+    setPaymentScreenshot(file)
+    setPaymentScreenshotError('')
+
+    const reader = new FileReader()
+    reader.onload = () => setPaymentScreenshotPreview(typeof reader.result === 'string' ? reader.result : null)
+    reader.readAsDataURL(file)
+  }
+
+  const handlePaymentCompletion = () => {
+    if (!paymentScreenshot) {
+      const errorMessage = 'Please upload a screenshot of the completed crypto payment before continuing.'
+      setPaymentScreenshotError(errorMessage)
+      toast({ variant: 'error', title: 'Payment screenshot required', description: errorMessage })
+      return
+    }
+
+    setPaymentSubmitted(true)
+    toast({
+      variant: 'success',
+      title: 'Payment screenshot uploaded',
+      description: 'Your payment proof has been attached and is pending verification.',
+    })
   }
 
   const subtotal = cartItems.reduce(
@@ -182,6 +239,8 @@ const Checkout: React.FC = () => {
         })),
         shippingMethod: 'dhl',
         paymentMethod: payment,
+        paymentProofUrl: paymentScreenshotPreview || null,
+        paymentStatus: 'PENDING',
         shippingAddress: toOrderAddress(shippingAddress),
         ...(!sameAddress ? {
           billingAddress: toOrderAddress(billingAddress),
@@ -446,10 +505,56 @@ const Checkout: React.FC = () => {
                           <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Order total</div><div className="mt-1 font-bold">{formatCurrency(total)}</div><p className="mt-1 text-xs text-muted-foreground">Send {cryptoConfig.currency} only on the {cryptoConfig.network} network.</p></div>
                           <div className="space-y-2"><div className="text-xs font-bold text-muted-foreground">EMART Receiving Address</div><div className="flex flex-col gap-2 sm:flex-row"><Input value={cryptoConfig.address} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(cryptoConfig.address); setCopied(true); setTimeout(() => setCopied(false), 1600) }}><Copy className="h-4 w-4 mr-1" />{copied ? 'Copied' : 'Copy Address'}</Button></div></div>
                           {cryptoConfig.qrCodeUrl && <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-background p-4"><div className="text-xs font-bold text-muted-foreground self-start">QR Code</div><img src={cryptoConfig.qrCodeUrl} alt={`QR code for ${cryptoConfig.currency} on ${cryptoConfig.network}`} className="h-44 w-44 rounded-md" /></div>}
+                          <div className="space-y-3 rounded-lg border border-dashed border-border bg-background/60 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-xs font-bold text-muted-foreground uppercase tracking-[0.14em]">Payment proof</div>
+                                <p className="mt-1 text-sm text-muted-foreground">Upload a screenshot of your crypto transfer after sending the funds.</p>
+                              </div>
+                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                                <Upload className="h-4 w-4" />
+                                Upload
+                                <input type="file" accept="image/*" className="hidden" onChange={handlePaymentScreenshotChange} />
+                              </label>
+                            </div>
+
+                            {paymentScreenshotPreview ? (
+                              <div className="space-y-3">
+                                <div className="relative overflow-hidden rounded-lg border border-border bg-muted/50 p-2">
+                                  <img src={paymentScreenshotPreview} alt="Payment proof upload preview" className="max-h-52 w-full rounded-md object-contain" />
+                                </div>
+                                <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+                                  <span className="truncate font-medium text-foreground">{paymentScreenshot?.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaymentScreenshot(null)
+                                      setPaymentScreenshotPreview(null)
+                                      setPaymentScreenshotError('')
+                                      setPaymentSubmitted(false)
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-sm text-muted-foreground">
+                                No payment screenshot uploaded yet.
+                              </div>
+                            )}
+
+                            {paymentScreenshotError && (
+                              <p className="text-sm font-medium text-destructive">{paymentScreenshotError}</p>
+                            )}
+                          </div>
+
                           {paymentSubmitted ? (
-                            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><div className="font-bold text-sm">Payment Verification</div><p className="mt-1 text-sm text-muted-foreground">Your payment is being verified. We'll update your order once the payment is confirmed.</p></div>
+                            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><div className="font-bold text-sm">Payment Verification</div><p className="mt-1 text-sm text-muted-foreground">Your payment screenshot has been uploaded and is being reviewed. We'll update your order once the payment is confirmed.</p></div>
                           ) : (
-                            <Button type="button" className="w-full" onClick={() => setPaymentSubmitted(true)}>I've Completed the Payment</Button>
+                            <Button type="button" className="w-full" onClick={handlePaymentCompletion}>I've Completed the Payment</Button>
                           )}
                         </div>
                       ) : <div className="rounded-lg border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">No active crypto payment network is currently configured.</div>}
@@ -462,7 +567,7 @@ const Checkout: React.FC = () => {
                           size="lg"
                           className="flex-1 sm:flex-none shadow-md shadow-primary/20"
                           onClick={() => setStep(3)}
-                          disabled={!cryptoConfig?.address || cryptoLoading}
+                          disabled={!cryptoConfig?.address || cryptoLoading || !paymentScreenshot || !paymentSubmitted}
                         >
                           Review Order
                           <ChevronRight className="h-4 w-4 ml-1" />

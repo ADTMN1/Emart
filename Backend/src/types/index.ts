@@ -28,6 +28,7 @@ export interface ProductFilters {
   maxPrice?: number;
   search?: string;
   tags?: string[];
+  status?: string;
 }
 
 export interface OrderFilters {

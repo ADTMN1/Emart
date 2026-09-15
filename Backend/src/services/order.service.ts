@@ -35,6 +35,9 @@ export class OrderService {
     billingAddressId: string;
     shippingAddressId: string;
     notes?: string;
+    paymentMethod?: string;
+    paymentProofUrl?: string | null;
+    paymentStatus?: 'PENDING' | 'PAID' | 'FAILED' | 'REFUNDED';
     shippingAddress?: {
       fullName: string; addressLine: string; city: string; state?: string;
       postalCode: string; country: string; countryCode: string; phone: string;
@@ -167,6 +170,9 @@ export class OrderService {
         billingAddressId,
         shippingAddressId,
         notes: data.notes,
+        paymentMethod: data.paymentMethod,
+        paymentProofUrl: data.paymentProofUrl,
+        paymentStatus: data.paymentStatus,
         items: {
           create: orderItems,
         },
