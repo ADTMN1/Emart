@@ -26,6 +26,7 @@ model User {
   wallet             Wallet?
   warehousePackages  WarehousePackage[]
   favorites          Favorite[]
+  importRuns         ImportRun[]
 
   @@index([email])
   @@map("users")
@@ -66,6 +67,7 @@ model Category {
 
 model Product {
   id                       String           @id @default(uuid())
+  sku                      String?          @unique
   name                     String
   description              String
   image                    String?
@@ -110,6 +112,31 @@ model Product {
   @@index([createdAt])
   @@index([name])
   @@map("products")
+}
+
+/// One bulk product import run (Phase 3: CREATE mode, CSV only).
+model ImportRun {
+  id          String       @id @default(uuid())
+  userId      String
+  filename    String
+  fileHash    String
+  mode        ImportMode   @default(CREATE)
+  status      ImportStatus @default(PROCESSING)
+  totalRows   Int          @default(0)
+  successRows Int          @default(0)
+  warningRows Int          @default(0)
+  errorRows   Int          @default(0)
+  /// Per-row results: rowNumber, sku, status, errors, warnings, productId.
+  rowResults  Json
+  sourceRows  Json?
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("import_runs")
 }
 
 model ProductImage {
@@ -190,6 +217,7 @@ model Order {
   notes                 String?
   paymentStatus         PaymentStatus      @default(PENDING)
   paymentMethod         String?
+  paymentProofUrl       String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   items                 OrderItem[]
@@ -378,6 +406,19 @@ enum ShipmentStatus {
   DELIVERED
   FAILED
   RETURNED
+}
+
+enum ImportMode {
+  CREATE
+  UPDATE
+  UPSERT
+}
+
+enum ImportStatus {
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
 }
 
 enum TransactionType {

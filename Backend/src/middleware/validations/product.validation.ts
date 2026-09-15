@@ -1,73 +1,17 @@
-import { body, query } from 'express-validator';
+import { query } from 'express-validator';
+import { buildProductFieldRules } from './product-field-rules';
 
-export const createProductValidation = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Product name is required')
-    .isLength({ min: 3 })
-    .withMessage('Product name must be at least 3 characters long'),
-  body('description')
-    .trim()
-    .notEmpty()
-    .withMessage('Product description is required'),
-  body('price')
-    .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number')
-    .toFloat(),
-  body('estimatedPriceUsd')
-    .isFloat({ min: 0 })
-    .withMessage('Estimated USD price must be a positive number')
-    .toFloat(),
-  body('condition')
-    .isIn(['NEW', 'LIKE_NEW', 'VERY_GOOD', 'GOOD', 'ACCEPTABLE'])
-    .withMessage('Invalid product condition'),
-  body('seller')
-    .trim()
-    .notEmpty()
-    .withMessage('Seller name is required'),
-  body('sellerType')
-    .isIn(['SHOP', 'INDIVIDUAL'])
-    .withMessage('Invalid seller type'),
-  body('source')
-    .trim()
-    .notEmpty()
-    .withMessage('Source marketplace is required'),
-  body('domesticShipping')
-    .isFloat({ min: 0 })
-    .withMessage('Domestic shipping must be a positive number')
-    .toFloat(),
-  body('internationalShippingUsd')
-    .isFloat({ min: 0 })
-    .withMessage('International shipping must be a positive number')
-    .toFloat(),
-  body('serviceFee')
-    .isFloat({ min: 0 })
-    .withMessage('Service fee must be a positive number')
-    .toFloat(),
-  body('categoryId')
-    .notEmpty()
-    .withMessage('Category ID is required'),
-  body('stock')
-    .isInt({ min: 0 })
-    .withMessage('Stock must be a non-negative integer')
-    .toInt(),
-  body('tags')
-    .isArray()
-    .withMessage('Tags must be an array'),
-  body('isAvailable')
-    .isBoolean()
-    .withMessage('isAvailable must be a boolean')
-    .toBoolean(),
-  body('isNew')
-    .isBoolean()
-    .withMessage('isNew must be a boolean')
-    .toBoolean(),
-  body('isBestSeller')
-    .isBoolean()
-    .withMessage('isBestSeller must be a boolean')
-    .toBoolean(),
-];
+/**
+ * Product write validation.
+ *
+ * The field rules live in product-field-rules.ts (shared with the bulk
+ * import validator). `required: true` reproduces the original
+ * createProductValidation exactly; `required: false` the original
+ * updateProductValidation.
+ */
+export const createProductValidation = buildProductFieldRules({ required: true });
+
+export const updateProductValidation = buildProductFieldRules({ required: false });
 
 export const searchProductsValidation = [
   query('page')
@@ -85,5 +29,9 @@ export const searchProductsValidation = [
   query('maxPrice')
     .optional()
     .isFloat({ min: 0 })
-    .withMessage('Max price must be a positive number'),
+    .withMessage('Max price must be positive number'),
+  query('status')
+    .optional()
+    .isIn(['active', 'inactive', 'all'])
+    .withMessage('Status must be one of: active, inactive, all'),
 ];

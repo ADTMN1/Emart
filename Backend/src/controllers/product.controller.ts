@@ -13,7 +13,10 @@ export class ProductController {
         condition: req.query.condition as string,
         minPrice: req.query.minPrice ? parseFloat(req.query.minPrice as string) : undefined,
         maxPrice: req.query.maxPrice ? parseFloat(req.query.maxPrice as string) : undefined,
-        search: req.query.q as string,
+        // Accept both "q" (storefront Marketplace) and "search" (admin Products page);
+        // "q" keeps priority when both are present.
+        search: String(req.query.q ?? req.query.search ?? '').trim() || undefined,
+        status: req.query.status as string | undefined,
         tags: req.query.tags ? (req.query.tags as string).split(',') : undefined,
       };
 

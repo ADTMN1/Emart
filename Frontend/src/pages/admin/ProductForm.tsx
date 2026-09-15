@@ -17,7 +17,7 @@ import { Select } from '@/components/ui/Select';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
-import { api, productImageApi } from '@/lib/api';
+import { api, productImageApi, invalidateCache } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface Category {
@@ -33,6 +33,7 @@ interface ProductImage {
 }
 
 interface ProductFormData {
+  sku: string;
   name: string;
   description: string;
   price: number;
@@ -77,8 +78,11 @@ export const AdminProductForm: React.FC = () => {
   const [uploadingImage, setUploadingImage] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [refreshKey, setRefreshKey] = React.useState(0);
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [dragOverId, setDragOverId] = React.useState<string | null>(null);
 
   const [formData, setFormData] = React.useState<ProductFormData>({
+    sku: '',
     name: '',
     description: '',
     price: 0,
@@ -147,6 +151,7 @@ export const AdminProductForm: React.FC = () => {
         const product = await api.get(`/products/${id}?${cacheBuster}`);
         
         setFormData({
+          sku: product.sku || '',
           name: product.name || '',
           description: product.description || '',
           price: product.price || 0,
@@ -267,6 +272,9 @@ export const AdminProductForm: React.FC = () => {
       setRefreshKey((k) => k + 1);
       await refreshProductImages();
 
+      // Image changes alter storefront list/detail payloads — bust the product cache
+      invalidateCache.products();
+
       toast({
         variant: 'success',
         title: 'Images Uploaded',
@@ -314,6 +322,9 @@ export const AdminProductForm: React.FC = () => {
       setRefreshKey((k) => k + 1);
       await refreshProductImages();
 
+      // Primary image appears on storefront cards — bust the product cache
+      invalidateCache.products();
+
       toast({
         variant: 'success',
         title: 'Primary Image Set',
@@ -359,6 +370,9 @@ export const AdminProductForm: React.FC = () => {
       setRefreshKey((k) => k + 1);
       await refreshProductImages();
 
+      // Image removal alters storefront payloads — bust the product cache
+      invalidateCache.products();
+
       toast({
         variant: 'success',
         title: 'Image Deleted',
@@ -368,6 +382,88 @@ export const AdminProductForm: React.FC = () => {
         variant: 'error',
         title: 'Delete Failed',
         description: err.message,
+      });
+    }
+  };
+
+  // --- Drag & drop image reordering ---
+
+  const moveImage = <T extends { id: string }>(list: T[], fromId: string, toId: string): T[] => {
+    const fromIndex = list.findIndex((img) => img.id === fromId);
+    const toIndex = list.findIndex((img) => img.id === toId);
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return list;
+    const next = [...list];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    return next;
+  };
+
+  const handleReorderSavedImages = async (reordered: ProductImage[]) => {
+    setImages(reordered);
+    if (!id) return;
+
+    // Keep slot 0 consistent with the primary-image logic: dragging a
+    // non-primary image into the first position makes it the primary.
+    if (!reordered[0].isPrimary && reordered.some((img) => img.isPrimary)) {
+      try {
+        await productImageApi.setPrimaryImage(id, reordered[0].id);
+        setImages(reordered.map((img, i) => ({ ...img, isPrimary: i === 0 })));
+      } catch (err: any) {
+        console.error('Failed to update primary image after reorder:', err);
+      }
+    }
+
+    try {
+      await productImageApi.reorderImages(
+        id,
+        reordered.map((img, index) => ({ id: img.id, sortOrder: index }))
+      );
+      invalidateCache.products();
+      setRefreshKey((k) => k + 1);
+      await refreshProductImages();
+      toast({ variant: 'success', title: 'Image Order Saved' });
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Reorder Failed', description: err.message });
+      setRefreshKey((k) => k + 1);
+      await refreshProductImages();
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, imageId: string) => {
+    setDraggingId(imageId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', imageId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, imageId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(imageId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+
+  const handleDropSaved = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggingId;
+    handleDragEnd();
+    if (sourceId && sourceId !== targetId) {
+      handleReorderSavedImages(moveImage(images, sourceId, targetId));
+    }
+  };
+
+  const handleDropPending = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer.getData('text/plain') || draggingId;
+    handleDragEnd();
+    if (sourceId && sourceId !== targetId) {
+      setPendingImages((prev) => {
+        const next = moveImage(prev, sourceId, targetId);
+        // Pending images keep the "first = primary" convention
+        return next.map((img, i) => ({ ...img, isPrimary: i === 0 }));
       });
     }
   };
@@ -426,6 +522,7 @@ export const AdminProductForm: React.FC = () => {
             .filter(Boolean);
 
       const payload = {
+        sku: (formData.sku || '').trim().toUpperCase() || null,
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price) || 0,
@@ -448,6 +545,10 @@ export const AdminProductForm: React.FC = () => {
 
       if (isEditMode && id) {
         await api.put(`/products/${id}`, payload);
+
+        // Bust the storefront product cache (lists + detail) so edits show immediately
+        invalidateCache.products();
+
         toast({
           variant: 'success',
           title: 'Product Updated',
@@ -490,6 +591,10 @@ export const AdminProductForm: React.FC = () => {
             ? `Product created with ${pendingImages.length} image(s)`
             : 'Product has been created successfully',
         });
+
+        // Bust the storefront product cache so the new product appears immediately
+        invalidateCache.products();
+
         navigate(`/admin/products/${newProduct.id}/edit`);
       }
     } catch (err: any) {
@@ -590,6 +695,17 @@ export const AdminProductForm: React.FC = () => {
                   rows={4}
                   className="w-full rounded-lg border border-input bg-background text-sm text-foreground placeholder:text-muted-foreground/70 p-3 focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary/15"
                   required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  SKU <span className="text-muted-foreground font-normal">(optional, must be unique)</span>
+                </label>
+                <Input
+                  value={formData.sku}
+                  onChange={(e) => handleInputChange('sku', e.target.value)}
+                  placeholder="e.g., EM-3F2A9C01"
                 />
               </div>
 
@@ -782,16 +898,29 @@ export const AdminProductForm: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {images.map((image) => (
+                    {images.map((image, index) => (
                       <div
                         key={image.id}
-                        className="relative group aspect-square rounded-lg overflow-hidden border border-border"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, image.id)}
+                        onDragOver={(e) => handleDragOver(e, image.id)}
+                        onDragLeave={() => setDragOverId((cur) => (cur === image.id ? null : cur))}
+                        onDrop={(e) => handleDropSaved(e, image.id)}
+                        onDragEnd={handleDragEnd}
+                        className={cn(
+                          'relative group aspect-square rounded-lg overflow-hidden border border-border cursor-move transition-opacity',
+                          draggingId === image.id && 'opacity-40',
+                          dragOverId === image.id && draggingId !== image.id && 'ring-2 ring-primary'
+                        )}
                       >
                         <img
                           src={image.url}
                           alt="Product"
                           className="w-full h-full object-cover"
                         />
+                        <span className="absolute top-2 right-2 z-10 flex items-center justify-center h-5 w-5 rounded bg-black/60 text-white text-[10px] font-bold">
+                          {index + 1}
+                        </span>
                         {image.isPrimary && (
                           <div className="absolute top-2 left-2">
                             <Badge variant="primary" size="sm">
@@ -835,16 +964,29 @@ export const AdminProductForm: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {pendingImages.map((image) => (
+                    {pendingImages.map((image, index) => (
                       <div
                         key={image.id}
-                        className="relative group aspect-square rounded-lg overflow-hidden border border-border"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, image.id)}
+                        onDragOver={(e) => handleDragOver(e, image.id)}
+                        onDragLeave={() => setDragOverId((cur) => (cur === image.id ? null : cur))}
+                        onDrop={(e) => handleDropPending(e, image.id)}
+                        onDragEnd={handleDragEnd}
+                        className={cn(
+                          'relative group aspect-square rounded-lg overflow-hidden border border-border cursor-move transition-opacity',
+                          draggingId === image.id && 'opacity-40',
+                          dragOverId === image.id && draggingId !== image.id && 'ring-2 ring-primary'
+                        )}
                       >
                         <img
                           src={image.previewUrl}
                           alt="Product Preview"
                           className="w-full h-full object-cover"
                         />
+                        <span className="absolute top-2 right-2 z-10 flex items-center justify-center h-5 w-5 rounded bg-black/60 text-white text-[10px] font-bold">
+                          {index + 1}
+                        </span>
                         {image.isPrimary && (
                           <div className="absolute top-2 left-2">
                             <Badge variant="primary" size="sm">

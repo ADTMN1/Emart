@@ -341,6 +341,71 @@ class AdminController {
       next(error);
     }
   }
+
+  async getDepositSubmissions(_req: Request, res: Response, next: NextFunction) {
+    try {
+      const orders = await prisma.order.findMany({
+        where: {
+          paymentProofUrl: { not: null },
+          paymentMethod: 'crypto',
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      });
+
+      const submissions = orders.map((order) => ({
+        id: order.id,
+        customerName: [order.user.firstName, order.user.lastName].filter(Boolean).join(' ') || order.user.email || 'Customer',
+        email: order.user.email,
+        orderNumber: order.orderNumber,
+        amount: Number(order.total),
+        currency: 'USDT',
+        network: 'Tron (TRC-20)',
+        walletAddress: 'Crypto transfer',
+        submittedAt: order.createdAt.toISOString(),
+        status: order.paymentStatus,
+        screenshotUrl: order.paymentProofUrl || '',
+      }));
+
+      return res.json({ success: true, data: submissions });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateDepositSubmissionStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const status = typeof req.body?.status === 'string' ? req.body.status.toUpperCase() : '';
+      const allowedStatus = new Set(['PENDING', 'PAID', 'FAILED', 'REFUNDED']);
+
+      if (!allowedStatus.has(status)) {
+        throw new ValidationError('Invalid payment status.');
+      }
+
+      const order = await prisma.order.update({
+        where: { id: req.params.id },
+        data: {
+          paymentStatus: status,
+          status: status === 'PAID' ? 'PAYMENT_RECEIVED' : status === 'FAILED' ? 'CANCELLED' : 'PENDING',
+        },
+      });
+
+      return res.json({ success: true, data: order });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default new AdminController();

@@ -10,6 +10,10 @@ interface RateLimitStore {
 
 const store: RateLimitStore = {};
 
+// Temporarily disable rate limiting when troubleshooting authentication.
+// Set RATE_LIMIT_DISABLED=true in your environment to turn rate limiting off.
+const RATE_LIMIT_DISABLED = (process.env.RATE_LIMIT_DISABLED || '').toLowerCase() === 'true';
+
 // Clean up old entries every 10 minutes
 setInterval(() => {
   const now = Date.now();
@@ -32,6 +36,11 @@ export interface RateLimitOptions {
  * @param options - Rate limit configuration
  */
 export const rateLimit = (options: RateLimitOptions) => {
+  if (RATE_LIMIT_DISABLED) {
+    // No-op middleware when disabled to avoid blocking auth attempts.
+    return (_req: Request, _res: Response, next: NextFunction): void => next();
+  }
+
   const {
     windowMs,
     max,

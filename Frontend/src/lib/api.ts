@@ -100,6 +100,71 @@ export const api = {
     apiFetch<T>(endpoint, { ...options, method: 'DELETE' }),
 };
 
+async function importRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('emart_token');
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string>),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(data.message || data.error || 'Request failed', response.status, data);
+  return data.data !== undefined ? data.data : data;
+}
+
+export type ImportRunStatus = 'PROCESSING' | 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'FAILED';
+export type ImportRowStatus = 'VALID' | 'WARNING' | 'ERROR' | 'CREATED' | 'WARNING_CREATED' | 'UPDATED' | 'WARNING_UPDATED' | 'FAILED';
+export interface ImportRowResult { rowNumber: number; rawSku?: string; sku?: string; status: ImportRowStatus; productId?: string; imagesUploaded?: number; errors: string[]; warnings: string[]; }
+export interface CsvValidationResult { totalRows: number; validRows: number; warningRows: number; errorRows: number; rows: ImportRowResult[]; }
+export interface ImportRunSummary { id: string; filename: string; mode: string; status: ImportRunStatus | string; totalRows: number; successRows: number; warningRows: number; errorRows: number; createdAt: string; completedAt: string | null; }
+export interface ImportRunDetail extends ImportRunSummary { rowResults: ImportRowResult[]; sourceRows?: unknown[]; }
+export interface ImportResult { runId: string; status: ImportRunStatus | 'PROCESSING' | 'COMPLETED' | 'COMPLETED_WITH_ERRORS' | 'FAILED'; totalRows: number; successRows: number; warningRows: number; errorRows: number; createdProducts: number; updatedProducts: number; rowResults: ImportRowResult[]; imagesUploaded?: number; imagesSkipped?: number; imagesInvalid?: number; imageWarnings?: string[]; message?: string; }
+
+export const productImportApi = {
+  downloadTemplate: async (): Promise<Blob> => {
+    const token = localStorage.getItem('emart_token');
+    const response = await fetch(`${API_BASE_URL}/products/import/template`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new ApiError(data.message || data.error || 'Could not download the CSV template', response.status, data);
+    }
+    return response.blob();
+  },
+  validate: (file: File) => { const formData = new FormData(); formData.append('file', file); return importRequest<CsvValidationResult>('/products/import/validate', { method: 'POST', body: formData }); },
+  importCsv: async (file: File, imagesZip?: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (imagesZip) formData.append('imagesZip', imagesZip);
+    const result = await importRequest<ImportResult | { runId: string; status: 'PROCESSING'; message: string }>(
+      '/products/import',
+      { method: 'POST', body: formData }
+    );
+
+    if (result && typeof result === 'object' && 'status' in result && result.status === 'PROCESSING') {
+      const accepted = result as { runId: string; status: string; message?: string };
+      return {
+        runId: accepted.runId,
+        status: 'PROCESSING',
+        totalRows: 0,
+        successRows: 0,
+        warningRows: 0,
+        errorRows: 0,
+        createdProducts: 0,
+        updatedProducts: 0,
+        rowResults: [],
+        message: accepted.message || 'Import accepted and processing in the background.',
+      } as ImportResult;
+    }
+
+    return result as ImportResult;
+  },
+  getHistory: (page = 1, limit = 20) => api.get<{ items: ImportRunSummary[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/products/import/history?page=${page}&limit=${limit}`),
+  getRun: (runId: string) => api.get<ImportRunDetail>(`/products/import/${runId}`),
+  retryFailedRows: (runId: string) => api.post<ImportResult>(`/products/import/${runId}/retry`),
+};
+
 // Cached API calls for static/semi-static data
 export const cachedApi = {
   getCategories: () => 
@@ -188,8 +253,8 @@ export const productImageApi = {
   /**
    * Reorder product images (admin only)
    */
-  reorderImages: async (productId: string, imageIds: string[]) => {
-    return api.put(`/products/${productId}/images/reorder`, { imageIds });
+  reorderImages: async (productId: string, imageOrders: Array<{ id: string; sortOrder: number }>) => {
+    return api.put(`/products/${productId}/images/reorder`, { imageOrders });
   },
 };
 

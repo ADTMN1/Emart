@@ -152,10 +152,14 @@ export class ProductImageStorageService {
       .getPublicUrl(storagePath);
 
     try {
-      // Get current image count for this product
-      const imageCount = await prisma.productImage.count({
+      // Place the new image after the current last one. Using max(sortOrder)+1
+      // (instead of the row count) keeps sequences dense and collision-free
+      // even after images have been deleted or reordered.
+      const last = await prisma.productImage.aggregate({
         where: { productId },
+        _max: { sortOrder: true },
       });
+      const nextSortOrder = (last._max.sortOrder ?? -1) + 1;
 
       // Save metadata to database
       const productImage = await prisma.productImage.create({
@@ -163,8 +167,8 @@ export class ProductImageStorageService {
           productId,
           path: storagePath,
           url: urlData.publicUrl,
-          isPrimary: imageCount === 0, // First image is primary by default
-          sortOrder: imageCount,
+          isPrimary: nextSortOrder === 0, // First image is primary by default
+          sortOrder: nextSortOrder,
         },
       });
 
@@ -302,8 +306,9 @@ export class ProductImageStorageService {
       throw new BadRequestError('Some images do not belong to this product');
     }
 
-    // Update sort orders
-    await Promise.all(
+    // Update sort orders atomically so a partial failure cannot leave a
+    // half-reordered sequence behind.
+    await prisma.$transaction(
       imageOrders.map(({ id, sortOrder }) =>
         prisma.productImage.update({
           where: { id },

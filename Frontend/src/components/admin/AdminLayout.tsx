@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   WalletCards,
+  ReceiptText,
   Menu,
   X,
   ChevronRight,
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { name: 'Shipping', path: '/admin/shipping', icon: Truck },
   { name: 'Customers', path: '/admin/customers', icon: Users },
   { name: 'Wallets', path: '/admin/wallets', icon: WalletCards },
+  { name: 'Deposits', path: '/admin/deposits', icon: ReceiptText },
   { name: 'Settings', path: '/admin/settings', icon: Settings },
 ];
 

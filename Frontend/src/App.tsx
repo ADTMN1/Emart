@@ -22,6 +22,9 @@ const Favorites = lazy(() => import('./pages/Favorites'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })))
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard').then((module) => ({ default: module.Dashboard })))
 const AdminProducts = lazy(() => import('./pages/admin/Products').then((module) => ({ default: module.AdminProducts })))
+const AdminProductImport = lazy(() => import('./pages/admin/ProductImport').then((module) => ({ default: module.AdminProductImport })))
+const AdminImportHistory = lazy(() => import('./pages/admin/ImportHistory').then((module) => ({ default: module.AdminImportHistory })))
+const AdminImportDetail = lazy(() => import('./pages/admin/ImportDetail').then((module) => ({ default: module.AdminImportDetail })))
 const AdminProductForm = lazy(() => import('./pages/admin/ProductForm').then((module) => ({ default: module.AdminProductForm })))
 const AdminCategories = lazy(() => import('./pages/admin/Categories').then((module) => ({ default: module.AdminCategories })))
 const AdminOrders = lazy(() => import('./pages/admin/Orders').then((module) => ({ default: module.AdminOrders })))
@@ -31,6 +34,7 @@ const AdminShipping = lazy(() => import('./pages/admin/Shipping').then((module) 
 const AdminCustomers = lazy(() => import('./pages/admin/Customers').then((module) => ({ default: module.AdminCustomers })))
 const AdminSettings = lazy(() => import('./pages/admin/Settings').then((module) => ({ default: module.AdminSettings })))
 const AdminWallets = lazy(() => import('./pages/admin/Wallets').then((module) => ({ default: module.AdminWallets })))
+const AdminDeposits = lazy(() => import('./pages/admin/Deposits').then((module) => ({ default: module.AdminDeposits })))
 
 function App() {
   return (
@@ -57,6 +61,9 @@ function App() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="products" element={<AdminProducts />} />
+          <Route path="products/import" element={<AdminProductImport />} />
+          <Route path="products/import/history" element={<AdminImportHistory />} />
+          <Route path="products/import/:runId" element={<AdminImportDetail />} />
           <Route path="products/new" element={<AdminProductForm />} />
           <Route path="products/:id/edit" element={<AdminProductForm />} />
           <Route path="categories" element={<AdminCategories />} />
@@ -66,6 +73,7 @@ function App() {
           <Route path="shipping" element={<AdminShipping />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="wallets" element={<AdminWallets />} />
+          <Route path="deposits" element={<AdminDeposits />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
