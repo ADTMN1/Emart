@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { CsvParseError, parseCsv } from './csv-parser';
 import { IMPORT_COLUMNS } from './import-columns';
-import { validateRows } from './product-row.validator';
+import { validateRows, validateUpsertRows } from './product-row.validator';
 import { getFailedRowsForRetry } from './product-import.service';
 
 const category = (input: string) => input.toLowerCase() === 'electronics'
@@ -39,6 +39,28 @@ test('UPDATE validates supplied values without mutating omitted values', () => {
   assert.deepEqual(row.values, {});
 });
 
+test('UPDATE treats a supplied price as USD without generating an estimated value', () => {
+  const parsed = parseCsv('sku,price\nEM-001,999', 'UPDATE');
+  const [row] = validateRows(parsed.rows, category, 'UPDATE');
+  assert.notEqual(row.status, 'ERROR');
+  assert.equal(row.values.price, 999);
+  assert.equal('estimatedPriceUsd' in row.values, false);
+});
+
+test('UPSERT keeps USD prices for both create and update paths', () => {
+  const upsertColumns = IMPORT_COLUMNS.filter((column) => !column.startsWith('image'));
+  const createCsv = `${upsertColumns.join(',')}\nEM-999,Valid product,Description,999,,NEW,Seller,SHOP,Source,10,2,,Electronics,tag,false,false,1,true`;
+  const [created] = validateUpsertRows(parseCsv(createCsv, 'UPSERT').rows, category, new Set());
+  assert.notEqual(created.status, 'ERROR');
+  assert.equal(created.values.price, 999);
+  assert.equal(created.values.estimatedPriceUsd, 999);
+
+  const [updated] = validateUpsertRows(parseCsv('sku,price\nEM-899,899', 'UPSERT').rows, category, new Set(['EM-899']));
+  assert.notEqual(updated.status, 'ERROR');
+  assert.equal(updated.values.price, 899);
+  assert.equal('estimatedPriceUsd' in updated.values, false);
+});
+
 test('UPDATE duplicate SKUs are deterministic: only later rows fail', () => {
   const parsed = parseCsv('sku,name\nEM-001,First name\nEM-001,Second name', 'UPDATE');
   const rows = validateRows(parsed.rows, category, 'UPDATE');
@@ -46,7 +68,7 @@ test('UPDATE duplicate SKUs are deterministic: only later rows fail', () => {
   assert.match(rows[1].errors.join(' '), /Duplicate SKU/);
 });
 
-test('CREATE still validates a complete canonical row', () => {
+test('CREATE keeps USD prices when estimatedPriceUsd is blank', () => {
   const values: Record<string, string> = {
     sku: 'EM-001', name: 'Valid product', description: 'Description', price: '100', estimatedPriceUsd: '',
     condition: 'NEW', seller: 'Seller', sellerType: 'SHOP', source: 'Source', domesticShipping: '10',
@@ -56,9 +78,27 @@ test('CREATE still validates a complete canonical row', () => {
   const csv = `${IMPORT_COLUMNS.join(',')}\n${IMPORT_COLUMNS.map((column) => values[column]).join(',')}`;
   const [row] = validateRows(parseCsv(csv, 'CREATE').rows, category, 'CREATE');
   assert.notEqual(row.status, 'ERROR');
-  assert.equal(row.values.estimatedPriceUsd, 0.7);
+  assert.equal(row.values.price, 100);
+  assert.equal(row.values.estimatedPriceUsd, 100);
   assert.equal(row.values.serviceFee, 7);
 });
+
+for (const price of [999, 899, 1299]) {
+  test(`CREATE fallback keeps ${price} as ${price} USD`, () => {
+    const values: Record<string, string> = {
+      sku: `EM-${price}`, name: 'Valid product', description: 'Description', price: String(price), estimatedPriceUsd: '',
+      condition: 'NEW', seller: 'Seller', sellerType: 'SHOP', source: 'Source', domesticShipping: '10',
+      internationalShippingUsd: '2', serviceFee: '', category: 'Electronics', tags: 'tag', isNew: 'false',
+      isBestSeller: 'false', stock: '1', isAvailable: 'true', image1: '', image2: '', image3: '', image4: '', image5: '',
+    };
+    const csv = `${IMPORT_COLUMNS.join(',')}\n${IMPORT_COLUMNS.map((column) => values[column]).join(',')}`;
+    const [row] = validateRows(parseCsv(csv, 'CREATE').rows, category, 'CREATE');
+    assert.notEqual(row.status, 'ERROR');
+    assert.equal(row.values.price, price);
+    assert.equal(row.values.estimatedPriceUsd, price);
+    assert.notEqual(row.values.estimatedPriceUsd, 6.99);
+  });
+}
 
 test('failed-row retry helper only selects previously failed rows', () => {
   const sourceRows = [

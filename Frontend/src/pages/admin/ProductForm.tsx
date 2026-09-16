@@ -191,15 +191,14 @@ export const AdminProductForm: React.FC = () => {
   React.useEffect(() => {
     if (formData.price > 0) {
       const fee = Math.round(formData.price * 0.07);
-      setFormData((prev) => ({ ...prev, serviceFee: fee }));
+      setFormData((prev) => ({ ...prev, serviceFee: fee, estimatedPriceUsd: Number(prev.price) || 0 }));
     }
   }, [formData.price]);
 
-  // Auto-calculate estimated USD price
+  // Keep legacy estimatedPriceUsd in sync with the actual USD price.
   React.useEffect(() => {
-    if (formData.price > 0) {
-      const estimatedUsd = Math.round(formData.price * 0.007 * 100) / 100;
-      setFormData((prev) => ({ ...prev, estimatedPriceUsd: estimatedUsd }));
+    if (formData.price <= 0) {
+      setFormData((prev) => ({ ...prev, estimatedPriceUsd: 0 }));
     }
   }, [formData.price]);
 
@@ -526,7 +525,7 @@ export const AdminProductForm: React.FC = () => {
         name: formData.name.trim(),
         description: formData.description.trim(),
         price: Number(formData.price) || 0,
-        estimatedPriceUsd: Number(formData.estimatedPriceUsd) || 0,
+        estimatedPriceUsd: Number(formData.price) || 0,
         condition: validConditions.includes(formData.condition) ? formData.condition : 'NEW',
         seller: (formData.seller || 'Unknown Seller').trim() || 'Unknown Seller',
         sellerType: validSellerTypes.includes(formData.sellerType) ? formData.sellerType : 'SHOP',
@@ -761,7 +760,7 @@ export const AdminProductForm: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Price (JPY)</label>
+                  <label className="block text-sm font-medium mb-2">Price (USD)</label>
                   <Input
                     type="number"
                     value={formData.price}
@@ -774,7 +773,7 @@ export const AdminProductForm: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Estimated USD (Auto-calculated)
+                    USD price mirror (legacy field)
                   </label>
                   <Input
                     type="number"

@@ -6,6 +6,10 @@ export const IMPORT_SIZE_THRESHOLDS = {
   CONCURRENCY_LIMIT: 4,
 } as const;
 
-export function shouldProcessInBackground(rowCount: number): boolean {
-  return rowCount > IMPORT_SIZE_THRESHOLDS.SYNCHRONOUS_MAX_ROWS;
+/**
+ * ZIP image imports perform remote uploads and must not hold an HTTP request
+ * open. They use the existing ImportRun worker regardless of CSV row count.
+ */
+export function shouldProcessInBackground(rowCount: number, hasImagesZip = false): boolean {
+  return hasImagesZip || rowCount > IMPORT_SIZE_THRESHOLDS.SYNCHRONOUS_MAX_ROWS;
 }

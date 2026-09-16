@@ -63,7 +63,7 @@ export class OrderService {
         id: true,
         name: true,
         isAvailable: true,
-        estimatedPriceUsd: true,
+        price: true,
         serviceFee: true,
         domesticShipping: true,
       },
@@ -86,8 +86,9 @@ export class OrderService {
         throw new ValidationError(`Quantity for ${product.name} must be greater than zero`);
       }
 
-      const itemSubtotal = product.estimatedPriceUsd * item.quantity;
-      const itemServiceFee = (product.serviceFee * 0.007) * item.quantity;
+      const itemSubtotal = product.price * item.quantity;
+      // serviceFee is stored in USD (the ProductForm/import fallback computes 7% of price).
+      const itemServiceFee = product.serviceFee * item.quantity;
       const itemDomesticShipping = (product.domesticShipping * 0.007) * item.quantity;
 
       subtotal += itemSubtotal;
@@ -97,7 +98,7 @@ export class OrderService {
       orderItems.push({
         productId: product.id,
         quantity: item.quantity,
-        priceAtPurchase: product.estimatedPriceUsd,
+        priceAtPurchase: product.price,
         serviceFeeAtPurchase: itemServiceFee,
         domesticShippingAtPurchase: itemDomesticShipping,
         productSnapshot: product,

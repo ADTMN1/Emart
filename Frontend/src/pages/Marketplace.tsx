@@ -71,7 +71,7 @@ const Marketplace: React.FC = () => {
   const [categories, setCategories] = React.useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = React.useState(false)
   const fetchRef = React.useRef<number>(0)
-  const abortControllerRef = React.useRef<AbortController | null>(null)
+  const lastRequestKeyRef = React.useRef<string | null>(null)
 
   // Fetch categories (cached) once
   React.useEffect(() => {
@@ -92,51 +92,48 @@ const Marketplace: React.FC = () => {
   }, [])
 
   const fetchProducts = React.useCallback(async () => {
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    const searchParams = new URLSearchParams()
+
+    const q = params.get('q')
+    const cat = params.get('cat')
+    const source = params.get('source')
+    const isDefaultBrowse = !cat && !q && !source && !params.get('sub')
+
+    if (q) searchParams.set('q', q)
+    if (cat) searchParams.set('category', cat)
+    if (source) searchParams.set('source', source)
+    // Default browse (no category/search/source): the backend round-robins the
+    // grid across all available categories so one recent import can't fill it.
+    if (isDefaultBrowse) searchParams.set('mix', 'categories')
+
+    const requestKey = searchParams.toString()
+    if (lastRequestKeyRef.current === requestKey) {
+      return
     }
+    lastRequestKeyRef.current = requestKey
 
     const reqId = ++fetchRef.current
-    const abortController = new AbortController()
-    abortControllerRef.current = abortController
 
     try {
       setIsLoading(true)
-      const searchParams = new URLSearchParams()
-      
-      const q = params.get('q')
-      const cat = params.get('cat')
-      const source = params.get('source')
-      
-      if (q) searchParams.set('q', q)
-      if (cat) searchParams.set('category', cat)
-      if (source) searchParams.set('source', source)
-      
-      const queryString = searchParams.toString()
-      const endpoint = queryString ? `/products?${queryString}` : '/products'
+      const endpoint = requestKey ? `/products?${requestKey}` : '/products'
       
       const data = await api.get<{ products: ApiProduct[]; pagination: { total: number } }>(
         endpoint,
-        { signal: abortController.signal } as any
       )
       
-      if (reqId === fetchRef.current && !abortController.signal.aborted) {
+      if (reqId === fetchRef.current) {
         setProducts(data?.products || [])
         setTotalCount(data?.pagination?.total || 0)
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        // Request was cancelled, ignore
-        return
-      }
       console.error('Failed to fetch products:', err)
       if (reqId === fetchRef.current) {
         setProducts([])
         setTotalCount(0)
       }
     } finally {
-      if (reqId === fetchRef.current && !abortController.signal.aborted) {
+      if (reqId === fetchRef.current) {
         setIsLoading(false)
       }
     }

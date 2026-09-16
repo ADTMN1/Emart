@@ -574,10 +574,7 @@ export const AdminProducts: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <p className="font-semibold text-sm">
-                            {formatCurrency(product.price, 'JPY')}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            ~{formatCurrency(product.estimatedPriceUsd, 'USD')}
+                            {formatCurrency(product.price, 'USD')}
                           </p>
                         </td>
                         <td className="p-4">

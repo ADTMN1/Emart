@@ -304,7 +304,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                     <div className="text-right ml-4">
                       <p className="font-semibold text-sm">
-                        {formatCurrency(product.price, 'JPY')}
+                        {formatCurrency(product.price, 'USD')}
                       </p>
                       <Badge
                         variant={product.isAvailable ? 'success' : 'default'}

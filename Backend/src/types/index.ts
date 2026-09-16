@@ -29,6 +29,8 @@ export interface ProductFilters {
   search?: string;
   tags?: string[];
   status?: string;
+  /** Opt-in round-robin interleave across all categories (default browse grid). */
+  interleave?: boolean;
 }
 
 export interface OrderFilters {

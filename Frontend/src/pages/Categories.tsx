@@ -36,6 +36,7 @@ interface CategoryProduct {
   name: string
   image?: string
   images?: string[]
+  price: number
   estimatedPriceUsd: number
   source: string
   productImages?: { id: string; url: string; isPrimary: boolean }[]
@@ -249,7 +250,7 @@ const Categories: React.FC = () => {
 
                               <div className="mt-auto flex items-center justify-between gap-2">
                                 <span className="text-sm font-bold text-foreground">
-                                  ${p.estimatedPriceUsd}
+                                  ${p.price}
                                 </span>
                                 <Badge variant="outline" size="sm" className="border-border bg-background text-muted-foreground">
                                   {p.source}

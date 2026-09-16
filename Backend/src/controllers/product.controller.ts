@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import productService from '../services/product.service';
+import ratingService from '../services/rating.service';
 import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
 import { AuthRequest } from '../types';
@@ -18,6 +19,9 @@ export class ProductController {
         search: String(req.query.q ?? req.query.search ?? '').trim() || undefined,
         status: req.query.status as string | undefined,
         tags: req.query.tags ? (req.query.tags as string).split(',') : undefined,
+        // Storefront default browse sends ?mix=categories to interleave products
+        // across ALL categories (round-robin) instead of pure newest-first.
+        interleave: req.query.mix === 'categories',
       };
 
       const pagination = {
@@ -84,6 +88,48 @@ export class ProductController {
       const result = await productService.bulkDeleteProducts(ids as string[]);
       
       return sendSuccess(res, result, 'Bulk delete completed');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /products/:id/rating — create or update the authenticated user's
+   * 1-5 star rating. Returns the saved rating plus fresh aggregate so the
+   * client can render the real average/count immediately.
+   */
+  async rateProduct(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const result = await ratingService.rateProduct(
+        req.user!.id,
+        req.params.id,
+        Number(req.body?.rating)
+      );
+
+      return sendSuccess(res, result, result.isNew ? 'Rating submitted' : 'Rating updated');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /products/my-ratings — all of the authenticated user's ratings as a
+   * productId -> rating map. Static segment registered before /:id in routes.
+   */
+  async getMyRatings(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const ratings = await ratingService.getUserRatingMap(req.user!.id);
+      return sendSuccess(res, { ratings }, 'Your ratings retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** GET /products/:id/my-rating — the authenticated user's rating for one product. */
+  async getMyRating(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const rating = await ratingService.getUserRatingForProduct(req.user!.id, req.params.id);
+      return sendSuccess(res, { rating }, 'Your rating retrieved successfully');
     } catch (error) {
       next(error);
     }

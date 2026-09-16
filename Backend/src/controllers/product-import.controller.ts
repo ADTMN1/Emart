@@ -212,7 +212,7 @@ export class ProductImportController {
         throw new ProductImportError('ZIP image imports are not supported in UPDATE mode');
       }
 
-      if (productImportService.shouldProcessInBackground(rows.length)) {
+      if (productImportService.shouldProcessInBackground(rows.length, Boolean(imagesZip))) {
         const accepted = await productImportService.enqueueBackgroundImport({
           userId,
           filename: file.originalname || 'upload.csv',

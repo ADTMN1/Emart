@@ -189,6 +189,27 @@ export const invalidateCache = {
   all: () => apiCache.clear(),
 }
 
+// Product rating API (real user ratings, 1-5 stars)
+export const ratingApi = {
+  /** Create or update the signed-in user's rating for a product. */
+  rate: (productId: string, rating: number) =>
+    api.post<{
+      id: string
+      productId: string
+      rating: number
+      average: number
+      count: number
+      isNew: boolean
+    }>(`/products/${productId}/rating`, { rating }),
+
+  /** All of the signed-in user's ratings, keyed by productId. */
+  getMyRatings: () => api.get<{ ratings: Record<string, number> }>('/products/my-ratings'),
+
+  /** The signed-in user's rating for a single product (null when unrated). */
+  getMyRatingFor: (productId: string) =>
+    api.get<{ rating: number | null }>(`/products/${productId}/my-rating`),
+}
+
 // Product Image API
 export const productImageApi = {
   /**

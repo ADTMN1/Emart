@@ -27,6 +27,7 @@ model User {
   warehousePackages  WarehousePackage[]
   favorites          Favorite[]
   importRuns         ImportRun[]
+  productRatings     ProductRating[]
 
   @@index([email])
   @@map("users")
@@ -96,6 +97,11 @@ model Product {
   category                 Category         @relation(fields: [categoryId], references: [id])
   productImages            ProductImage[]
   favorites                Favorite[]
+  productRatings           ProductRating[]
+  /// Denormalized rating aggregate (maintained by the rating API on write).
+  ratingAgg                Float            @default(0)
+  /// Number of distinct user ratings backing ratingAgg.
+  ratingCount              Int              @default(0)
 
   @@index([categoryId])
   @@index([categoryId, isAvailable, createdAt])
@@ -451,4 +457,22 @@ model Favorite {
   @@index([productId])
   @@index([userId, createdAt])
   @@map("favorites")
+}
+
+/// One user's 1-5 star rating for a product; unique per (user, product) so
+/// re-rating updates the existing row instead of creating a duplicate.
+model ProductRating {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  rating    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([userId])
+  @@map("product_ratings")
 }
