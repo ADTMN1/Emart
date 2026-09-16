@@ -92,8 +92,8 @@ export interface BackgroundImportJob {
 const activeBackgroundImports = new Set<string>();
 
 export class ProductImportService {
-  shouldProcessInBackground(rowCount: number): boolean {
-    return shouldProcessInBackground(rowCount);
+  shouldProcessInBackground(rowCount: number, hasImagesZip = false): boolean {
+    return shouldProcessInBackground(rowCount, hasImagesZip);
   }
 
   async enqueueBackgroundImport(job: BackgroundImportJob): Promise<{ runId: string; status: 'PROCESSING'; message: string }> {
@@ -258,23 +258,15 @@ export class ProductImportService {
   }
 
   private async runRowsWithConcurrency<T>(items: T[], worker: (item: T) => Promise<void>, limit: number): Promise<void> {
-    const queue = [...items];
-    const running: Promise<void>[] = [];
-
-    const startNext = (): void => {
-      const next = queue.shift();
-      if (!next) return;
-      const task = Promise.resolve(worker(next)).finally(() => {
-        if (queue.length > 0) startNext();
-      });
-      running.push(task);
+    let nextIndex = 0;
+    const runWorker = async (): Promise<void> => {
+      while (nextIndex < items.length) {
+        const item = items[nextIndex++];
+        await worker(item);
+      }
     };
 
-    for (let i = 0; i < Math.min(limit, queue.length); i += 1) {
-      startNext();
-    }
-
-    await Promise.all(running);
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runWorker));
   }
 
   /**

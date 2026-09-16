@@ -216,7 +216,7 @@ const Checkout: React.FC = () => {
   }
 
   const subtotal = cartItems.reduce(
-    (s, i) => s + (i.product?.estimatedPriceUsd || 0) * (quantities[i.productId] || 1),
+    (s, i) => s + (i.product?.price || 0) * (quantities[i.productId] || 1),
     0
   )
   const fees = cartItems.length > 0 ? Math.round(subtotal * 0.07) : 0
@@ -634,7 +634,7 @@ const Checkout: React.FC = () => {
                               </div>
                               <div className="text-right">
                                 <div className="font-bold text-sm">
-                                  {formatCurrency(product.estimatedPriceUsd * qty, 'USD')}
+                                  {formatCurrency(product.price * qty, 'USD')}
                                 </div>
                               </div>
                             </div>
@@ -743,9 +743,6 @@ const Checkout: React.FC = () => {
                   <div>
                     <div className="font-display text-2xl font-extrabold">
                       {formatCurrency(total, 'USD')}
-                    </div>
-                    <div className="text-[10px] text-right text-muted-foreground">
-                      JPY {Math.round(total / 0.0069).toLocaleString()}
                     </div>
                   </div>
                 </div>

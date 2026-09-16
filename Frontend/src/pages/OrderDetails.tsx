@@ -270,7 +270,7 @@ const OrderDetails: React.FC = () => {
                             <Badge variant="success" size="sm">{row.product.condition}</Badge>
                             <div className="flex items-center gap-4">
                               <span className="text-xs text-muted-foreground">Qty: {row.qty}</span>
-                              <span className="font-bold">{formatCurrency(row.product.estimatedPriceUsd * row.qty, 'USD')}</span>
+                              <span className="font-bold">{formatCurrency(row.product.price * row.qty, 'USD')}</span>
                             </div>
                           </div>
                         </div>

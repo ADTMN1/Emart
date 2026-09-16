@@ -6,12 +6,19 @@ import {
   Truck,
   Store,
   User,
-  ExternalLink,
+  Eye,
+  ShoppingCart,
+  Loader2,
 } from 'lucide-react'
-import { cn, formatCurrency, truncate } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { Badge } from './Badge'
 import { Button } from './Button'
 import { OptimizedImage } from './OptimizedImage'
+import { useCart } from '@/contexts/CartContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { useRatings } from '@/contexts/RatingsContext'
+import { useToast } from './Toast'
+import { api, ratingApi } from '@/lib/api'
 
 interface ProductImage {
   id: string
@@ -45,6 +52,9 @@ interface ProductWithImages {
   isBestSeller?: boolean
   rating?: number
   reviewCount?: number
+  /** Real user-rating aggregates from the API (preferred over rating/reviewCount). */
+  ratingAgg?: number
+  ratingCount?: number
   productImages?: ProductImage[]
 }
 
@@ -107,6 +117,14 @@ const normalizeSellerType = (sellerType: string): string => {
   return map[sellerType] || sellerType
 }
 
+/** Shared classes for the small round hover-action buttons. */
+const railButtonClasses = cn(
+  'h-9 w-9 rounded-full bg-white/95 shadow-md backdrop-blur-sm',
+  'flex items-center justify-center text-foreground',
+  'transition-all duration-200 hover:scale-110 hover:bg-white hover:text-primary',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+)
+
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   className,
@@ -114,9 +132,90 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   isFavorite = false,
   compact = false,
 }) => {
-  const [hoverFav, setHoverFav] = React.useState(false)
+  const { incrementCartCount } = useCart()
+  const { toast } = useToast()
+  const { isAuthenticated } = useAuth()
+  const { getMyRating, setLocalRating } = useRatings()
+  const [isAddingToCart, setIsAddingToCart] = React.useState(false)
+  // Interactive star rating state (grid cards only).
+  const [hoverRating, setHoverRating] = React.useState(0)
+  const [isSubmittingRating, setIsSubmittingRating] = React.useState(false)
+  // Fresh aggregate from the most recent rating submission, so average/count
+  // update immediately without waiting for a page refetch.
+  const [aggOverride, setAggOverride] = React.useState<{ avg: number; count: number } | null>(null)
+
+  const realAvg = aggOverride?.avg ?? product.ratingAgg ?? product.rating ?? 0
+  const realCount = aggOverride?.count ?? product.ratingCount ?? product.reviewCount ?? 0
+  const myRating = getMyRating(product.id)
+
+  /** Submit (or change) the signed-in user's 1-5 star rating. */
+  const submitRating = async (value: number) => {
+    if (compact || isSubmittingRating) return
+    if (!isAuthenticated) {
+      toast({
+        variant: 'warning',
+        title: 'Sign in required',
+        description: 'Please sign in to rate this product.',
+      })
+      return
+    }
+    if (value === myRating) return // already rated with this value — nothing to change
+
+    setIsSubmittingRating(true)
+    try {
+      const res = await ratingApi.rate(product.id, value)
+      setLocalRating(product.id, res.rating)
+      setAggOverride({ avg: res.average, count: res.count })
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Unable to submit rating',
+        description: err?.message || 'Please try again.',
+      })
+    } finally {
+      setIsSubmittingRating(false)
+    }
+  }
   const imageUrl = getProductImageUrl(product)
   const displayCondition = normalizeCondition(product.condition)
+  const isConditionNew = displayCondition.toUpperCase() === 'NEW'
+
+  /** Real add-to-cart (same endpoint/flow as the product detail page). */
+  const handleAddToCart = async () => {
+    if (isAddingToCart) return
+    setIsAddingToCart(true)
+    incrementCartCount(1)
+
+    try {
+      await api.post('/cart/items', {
+        productId: product.id,
+        quantity: 1,
+      })
+      toast({
+        variant: 'success',
+        title: 'Added to cart',
+        description: `${product.name.slice(0, 48)} added to your cart.`,
+      })
+    } catch (err: any) {
+      incrementCartCount(-1)
+      const status = err?.status || err?.response?.status
+      if (status === 401) {
+        toast({
+          variant: 'warning',
+          title: 'Sign in required',
+          description: 'Please sign in to add items to your cart.',
+        })
+      } else {
+        toast({
+          variant: 'error',
+          title: 'Unable to add to cart',
+          description: err?.message || 'Please try again.',
+        })
+      }
+    } finally {
+      setIsAddingToCart(false)
+    }
+  }
 
   return (
     <div
@@ -141,7 +240,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         />
 
         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-          {product.isNew && (
+          {product.isNew && !isConditionNew && (
             <Badge variant="info" size="sm" dot>
               NEW
             </Badge>
@@ -177,7 +276,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </span>
           )}
         </div>
+      </Link>
 
+      {/* Hover action rail: wishlist / quick view / add to cart.
+          Always visible & tappable on touch devices; desktop reveals on card
+          hover with a subtle fade + slide. Sits outside the image link so the
+          buttons are not nested anchors. */}
+      <div
+        className={cn(
+          'absolute top-3 right-3 z-20 flex flex-col gap-2',
+          'transition-all duration-200 ease-out',
+          'opacity-100 translate-x-0',
+          'md:opacity-0 md:translate-x-2 md:pointer-events-none',
+          'md:group-hover:opacity-100 md:group-hover:translate-x-0 md:group-hover:pointer-events-auto',
+        )}
+      >
         <button
           type="button"
           onClick={(e) => {
@@ -185,25 +298,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             e.stopPropagation()
             onFavorite?.(product.id)
           }}
-          onMouseEnter={() => setHoverFav(true)}
-          onMouseLeave={() => setHoverFav(false)}
           className={cn(
-            'absolute top-3 right-3 h-9 w-9 rounded-full',
-            'flex items-center justify-center',
-            'transition-all duration-200',
-            'shadow-md',
+            railButtonClasses,
             isFavorite
-              ? 'bg-secondary text-white hover:bg-secondary-600'
-              : 'bg-white/90 text-muted-foreground hover:bg-white hover:text-secondary backdrop-blur-sm',
-            hoverFav && 'scale-110',
+              ? 'bg-secondary text-white hover:bg-secondary-600 hover:text-white'
+              : '',
           )}
           aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
-          <Heart
-            className={cn('h-4 w-4 transition-transform', isFavorite && 'fill-current')}
-          />
+          <Heart className={cn('h-4 w-4 transition-transform', isFavorite && 'fill-current')} />
         </button>
-      </Link>
+
+        <Link
+          to={`/product/${product.id}`}
+          className={railButtonClasses}
+          aria-label="Quick view product"
+        >
+          <Eye className="h-4 w-4" />
+        </Link>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            handleAddToCart()
+          }}
+          disabled={isAddingToCart}
+          className={cn(railButtonClasses, 'disabled:opacity-70')}
+          aria-label="Add to cart"
+        >
+          {isAddingToCart ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ShoppingCart className="h-4 w-4" />
+          )}
+        </button>
+      </div>
 
       <div className={cn(
         'flex flex-col flex-1',
@@ -213,83 +344,123 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <h3
             className={cn(
               'font-semibold text-foreground leading-snug line-clamp-2 group-hover/title:text-primary transition-colors',
-              compact ? 'text-sm' : 'text-sm',
+              'text-sm',
+              // Reserve exactly the title block height (2 lines for grid cards,
+              // 1 for compact list rows) so names never change the card height.
+              compact ? 'min-h-5' : 'min-h-10',
             )}
           >
             {product.name}
           </h3>
         </Link>
 
-        {!compact && product.rating !== undefined && (
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5">
-              {(() => {
-                const rating = product.rating ?? 0
-                return Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={cn(
-                      'h-3 w-3',
-                      i < Math.round(rating)
-                        ? 'text-amber-400 fill-amber-400'
-                        : 'text-muted-foreground/30',
-                    )}
-                  />
-                ))
-              })()}
-            </div>
-            <span className="text-xs font-medium text-foreground">{product.rating}</span>
-            {product.reviewCount !== undefined && (
-              <span className="text-xs text-muted-foreground">
-                ({(product.reviewCount ?? 0).toLocaleString()})
-              </span>
-            )}
-          </div>
-        )}
-
+        {/* Fixed-height metadata block so short/long content never changes the
+            card height; every card keeps the same price/action alignment. */}
         {!compact && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {normalizeSellerType(product.sellerType) === 'Shop' ? (
-              <Store className="h-3 w-3 shrink-0" />
-            ) : (
-              <User className="h-3 w-3 shrink-0" />
-            )}
-            <span className="truncate">{product.seller}</span>
-          </div>
+          <>
+            {/* Interactive star rating: shows the real average + count, or the
+                user's own rating once they've rated. Stars submit on click for
+                authenticated users; signed-out users get a sign-in prompt. */}
+            <div className="min-h-[18px] flex items-center gap-1.5">
+              <div
+                className="flex items-center gap-0.5"
+                onMouseLeave={() => setHoverRating(0)}
+                role="radiogroup"
+                aria-label={`Rate ${product.name}`}
+              >
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const starValue = i + 1
+                  const shown = hoverRating > 0 ? hoverRating : (myRating ?? Math.round(realAvg))
+                  const filled = i < shown
+                  const isMine = myRating !== undefined && i < myRating
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      role="radio"
+                      aria-checked={myRating === starValue}
+                      aria-label={`Rate ${starValue} star${starValue > 1 ? 's' : ''}`}
+                      disabled={isSubmittingRating}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        submitRating(starValue)
+                      }}
+                      onMouseEnter={() => setHoverRating(starValue)}
+                      className={cn(
+                        'p-0.5 rounded-sm transition-transform duration-150',
+                        'hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                        'disabled:cursor-wait',
+                      )}
+                    >
+                      <Star
+                        className={cn(
+                          'h-3 w-3 transition-colors duration-150',
+                          filled
+                            ? isMine
+                              ? 'text-secondary fill-secondary'
+                              : 'text-amber-400 fill-amber-400'
+                            : 'text-muted-foreground/30',
+                        )}
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+              <span className="text-xs font-medium text-foreground tabular-nums">
+                {realCount > 0 ? realAvg.toFixed(1) : 'New'}
+              </span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                ({realCount.toLocaleString()})
+              </span>
+            </div>
+
+            <div className="min-h-[16px] flex items-center gap-1.5 text-xs text-muted-foreground">
+              {normalizeSellerType(product.sellerType) === 'Shop' ? (
+                <Store className="h-3 w-3 shrink-0" />
+              ) : (
+                <User className="h-3 w-3 shrink-0" />
+              )}
+              <span className="truncate">{product.seller}</span>
+            </div>
+          </>
         )}
 
-        <div className="mt-auto pt-2 flex items-end justify-between gap-2">
-          <div className="flex flex-col gap-0.5 min-w-0">
+        {/* Footer wraps on ultra-narrow cards: price keeps its own line and
+            the button drops to a full-width row instead of being crushed, so
+            both stay usable. Cards in the same grid row share width, so heights
+            stay uniform. */}
+        <div className="mt-auto pt-2 flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
+          {/* Price never shrinks, wraps, or clips. */}
+          <div className="flex flex-col gap-0.5 shrink-0">
             <div className="flex items-baseline gap-1.5">
               <span className={cn(
-                'font-bold text-foreground leading-none',
+                'whitespace-nowrap tabular-nums font-bold text-foreground leading-none',
                 compact ? 'text-base' : 'text-lg',
               )}>
-                {formatCurrency(product.estimatedPriceUsd, 'USD')}
+                {formatCurrency(product.price, 'USD')}
               </span>
-              {!compact && (
-                <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                  est.
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span>
-                {formatCurrency(product.price, 'JPY')}
-              </span>
-              <ExternalLink className="h-2.5 w-2.5 opacity-60" />
             </div>
           </div>
 
           <Button
-            size={compact ? 'sm' : 'sm'}
+            size="sm"
             variant="outline"
-            className={cn('shrink-0', compact && 'h-8 px-2.5')}
-            asChild
+            className={cn(
+              'min-w-[44px] grow basis-auto',
+              compact && 'h-8 px-2.5',
+            )}
+            onClick={handleAddToCart}
+            disabled={isAddingToCart}
+            leftIcon={
+              isAddingToCart ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+              )
+            }
           >
-            <Link to={`/product/${product.id}`}>
-              View
-            </Link>
+            <span className="truncate">{compact ? 'Add' : 'Add to Cart'}</span>
           </Button>
         </div>
       </div>

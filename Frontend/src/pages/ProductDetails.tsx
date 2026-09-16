@@ -3,8 +3,6 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   ChevronRight,
   Home as HomeIcon,
-  Heart,
-  Share2,
   ShieldCheck,
   Truck,
   Package,
@@ -20,6 +18,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  ZoomIn,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -29,8 +28,9 @@ import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { useToast } from '@/components/ui/Toast'
 import { cn, formatCurrency } from '@/lib/utils'
 import { cachedApi, api } from '@/lib/api'
-import { getOptimizedImageUrl } from '@/lib/imageOptimization'
+import { getOptimizedImageUrlCustom } from '@/lib/imageOptimization'
 import { useCart } from '@/contexts/CartContext'
+import { useFavorites } from '@/contexts/FavoritesContext'
 
 interface ProductImage {
   id: string
@@ -93,9 +93,26 @@ const ProductDetails: React.FC = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { incrementCartCount } = useCart()
+  const { toggleFavorite, isFavorite } = useFavorites()
   const [imgIdx, setImgIdx] = React.useState(0)
   const [qty, setQty] = React.useState(1)
-  const [isFav, setIsFav] = React.useState(false)
+  // Desktop-only image magnifier (hover-capable, fine-pointer devices).
+  const [canZoom] = React.useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches
+  )
+  const [zoom, setZoom] = React.useState({ x: 50, y: 50, active: false })
+
+  const handleZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!canZoom) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100))
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100))
+    setZoom({ x, y, active: true })
+  }
+  const handleZoomLeave = () => setZoom((z) => ({ ...z, active: false }))
   const [product, setProduct] = React.useState<Product | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -238,9 +255,8 @@ const ProductDetails: React.FC = () => {
 
   const category = product.category
 
-  const subtotalJpy = product.price + product.serviceFee + product.domesticShipping
-  const subtotalUsd = product.estimatedPriceUsd
-  const totalUsd = subtotalUsd + product.internationalShippingUsd
+  const subtotalUsd = product.price
+  const totalUsd = subtotalUsd + product.serviceFee + (product.domesticShipping * 0.007) + product.internationalShippingUsd
 
   // Use productImages from API if available, filter out null URLs, fall back to placeholder
   const PLACEHOLDER_IMG = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
@@ -252,6 +268,18 @@ const ProductDetails: React.FC = () => {
   const displayImages = validImageUrls.length > 0
     ? validImageUrls
     : [PLACEHOLDER_IMG]
+
+  // High-res source for the magnifier. Square-cropped (resize: 'cover') like
+  // the displayed image so the zoom never distorts; non-Supabase URLs pass
+  // through unchanged.
+  const zoomImageSrc = displayImages[imgIdx]
+    ? getOptimizedImageUrlCustom(displayImages[imgIdx], {
+        width: 1200,
+        height: 1200,
+        quality: 90,
+        resize: 'cover',
+      })
+    : ''
 
   return (
     <div className="bg-background">
@@ -280,7 +308,14 @@ const ProductDetails: React.FC = () => {
         <div className="grid lg:grid-cols-5 gap-8 lg:gap-10">
           {/* Images */}
           <div className="lg:col-span-2 space-y-3">
-            <div className="relative rounded-2xl overflow-hidden bg-muted border border-border">
+            <div
+              className={cn(
+                'relative rounded-2xl overflow-hidden bg-muted border border-border',
+                canZoom && 'lg:cursor-zoom-in'
+              )}
+              onMouseMove={handleZoomMove}
+              onMouseLeave={handleZoomLeave}
+            >
               <OptimizedImage
                 src={displayImages[imgIdx]}
                 alt={`${product.name} - Image ${imgIdx + 1}`}
@@ -291,18 +326,48 @@ const ProductDetails: React.FC = () => {
                 aspectRatio="aspect-square"
                 className="w-full h-full object-cover"
               />
+              {/* Cursor-following magnifier (desktop only): object-cover keeps
+                  the crop identical to the base image; scaling from a
+                  transform-origin at the cursor maps the zoom to the pointer. */}
+              {canZoom && zoomImageSrc && (
+                <div
+                  aria-hidden
+                  className={cn(
+                    'pointer-events-none absolute inset-0 z-10 hidden select-none lg:block',
+                    'transition-opacity duration-200 ease-out',
+                    zoom.active ? 'opacity-100' : 'opacity-0'
+                  )}
+                >
+                  <img
+                    src={zoomImageSrc}
+                    alt=""
+                    draggable={false}
+                    className="h-full w-full object-cover"
+                    style={{
+                      transform: 'scale(2.5)',
+                      transformOrigin: `${zoom.x}% ${zoom.y}%`,
+                    }}
+                  />
+                </div>
+              )}
+              {canZoom && !zoom.active && (
+                <div className="pointer-events-none absolute bottom-3 right-3 z-20 hidden items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-md backdrop-blur lg:flex">
+                  <ZoomIn className="h-3 w-3" />
+                  Hover to zoom
+                </div>
+              )}
               {displayImages.length > 1 && (
                 <>
                   <button
                     onClick={() => setImgIdx((i) => (i - 1 + displayImages.length) % displayImages.length)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 backdrop-blur shadow-md hover:bg-white flex items-center justify-center text-foreground transition-colors"
+                    className="absolute left-3 top-1/2 z-20 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 backdrop-blur shadow-md hover:bg-white flex items-center justify-center text-foreground transition-colors"
                     aria-label="Previous image"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setImgIdx((i) => (i + 1) % displayImages.length)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 backdrop-blur shadow-md hover:bg-white flex items-center justify-center text-foreground transition-colors"
+                    className="absolute right-3 top-1/2 z-20 -translate-y-1/2 h-9 w-9 rounded-full bg-white/90 backdrop-blur shadow-md hover:bg-white flex items-center justify-center text-foreground transition-colors"
                     aria-label="Next image"
                   >
                     <ChevronRightIcon className="h-4 w-4" />
@@ -310,7 +375,6 @@ const ProductDetails: React.FC = () => {
                 </>
               )}
               <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                {product.isNew && <Badge variant="info" size="md" dot>NEW</Badge>}
                 {product.isBestSeller && <Badge variant="accent" size="md" dot>BESTSELLER</Badge>}
                 <Badge variant="success" size="md">{normalizeCondition(product.condition)}</Badge>
               </div>
@@ -395,7 +459,6 @@ const ProductDetails: React.FC = () => {
                   <span>Verified</span>
                 </div>
               </div>
-              <Button variant="ghost" size="sm">View</Button>
             </div>
 
             {/* Price Card */}
@@ -412,7 +475,7 @@ const ProductDetails: React.FC = () => {
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-muted-foreground flex items-center gap-1.5">
-                      <span>Original: {formatCurrency(product.price, 'JPY')}</span>
+                      <span>Original: {formatCurrency(product.price, 'USD')}</span>
                       <ExternalLink className="h-3 w-3 opacity-60" />
                     </div>
                   </div>
@@ -426,21 +489,21 @@ const ProductDetails: React.FC = () => {
                   {[
                     {
                       label: 'Product Price',
-                      value: formatCurrency(product.price, 'JPY'),
-                      valueUsd: `≈ ${formatCurrency(product.estimatedPriceUsd, 'USD')}`,
+                      value: formatCurrency(product.price, 'USD'),
+                      valueUsd: `≈ ${formatCurrency(product.price, 'USD')}`,
                       icon: Package,
                     },
                     {
                       label: 'Domestic Shipping',
-                      value: product.domesticShipping === 0 ? 'FREE' : formatCurrency(product.domesticShipping, 'JPY'),
-                      valueUsd: product.domesticShipping === 0 ? 'Included' : `≈ $${Math.round(product.domesticShipping * 0.007)}`,
+                      value: product.domesticShipping === 0 ? 'FREE' : formatCurrency(product.domesticShipping * 0.007, 'USD'),
+                      valueUsd: product.domesticShipping === 0 ? 'Included' : `≈ ${formatCurrency(product.domesticShipping * 0.007, 'USD')}`,
                       icon: Truck,
                       free: product.domesticShipping === 0,
                     },
                     {
                       label: 'EMART Service Fee (7%)',
-                      value: formatCurrency(product.serviceFee, 'JPY'),
-                      valueUsd: `≈ $${Math.round(product.serviceFee * 0.007)}`,
+                      value: formatCurrency(product.serviceFee, 'USD'),
+                      valueUsd: formatCurrency(product.serviceFee, 'USD'),
                       icon: ShieldCheck,
                       info: 'Includes buyer protection',
                     },
@@ -531,21 +594,6 @@ const ProductDetails: React.FC = () => {
                 >
                   {isBuyingNow ? 'Processing...' : 'Buy Now'}
                 </Button>
-                </div>
-                <div className="grid grid-cols-2 lg:grid-cols-1 gap-2 lg:w-28 shrink-0">
-                  <Button
-                    variant="outline"
-                    size="xl"
-                    className={cn('w-full whitespace-nowrap', isFav && 'text-secondary border-secondary bg-secondary/5')}
-                    onClick={() => setIsFav(!isFav)}
-                  >
-                    <Heart className={cn('h-4 w-4 mr-1.5', isFav && 'fill-current')} />
-                    Save
-                  </Button>
-                  <Button variant="outline" size="xl" className="w-full whitespace-nowrap">
-                    <Share2 className="h-4 w-4 mr-1.5" />
-                    Share
-                  </Button>
                 </div>
               </div>
             </div>
@@ -648,7 +696,12 @@ const ProductDetails: React.FC = () => {
           ) : relatedProducts.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 lg:gap-6">
               {relatedProducts.slice(0, 4).map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onFavorite={toggleFavorite}
+                  isFavorite={isFavorite(p.id)}
+                />
               ))}
             </div>
           ) : (

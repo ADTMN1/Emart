@@ -1,4 +1,4 @@
-import { SERVICE_FEE_RATE, JPY_TO_USD_RATE } from '../../middleware/validations/product-field-rules';
+import { SERVICE_FEE_RATE } from '../../middleware/validations/product-field-rules';
 
 /**
  * Canonical bulk-import column definitions for EMART (approved spec §B).
@@ -60,13 +60,14 @@ export function isRequiredColumn(col: ImportColumn): boolean {
 /** Required-with-fallback columns: empty is allowed, value auto-derived. */
 export const FALLBACK_ELIGIBLE = new Set<ImportColumn>(['estimatedPriceUsd', 'serviceFee']);
 
-/** Fallback calculations — identical to the ProductForm auto-calc rules. */
+/** Legacy compatibility fallback: in EMART the actual selling price is USD and `estimatedPriceUsd` mirrors `price`.
+ *  We do not convert JPY here. */
 export function computeServiceFeeFallback(price: number): number {
   return Math.round(price * SERVICE_FEE_RATE);
 }
 
 export function computeUsdFallback(price: number): number {
-  return Math.round(price * JPY_TO_USD_RATE * 100) / 100;
+  return price;
 }
 
 /** Template row commented into the CSV header (spec: example rows). */

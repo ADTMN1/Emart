@@ -5,6 +5,7 @@ import productImportController from '../controllers/product-import.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validator';
 import { createProductValidation, updateProductValidation, searchProductsValidation } from '../middleware/validations/product.validation';
+import { body } from 'express-validator';
 import { uploadSingle, uploadCsvSingle, uploadImportFiles } from '../middleware/upload';
 
 const router = Router();
@@ -18,6 +19,14 @@ router.get(
 );
 
 router.get('/featured', productController.getFeaturedProducts);
+
+// The signed-in user's own ratings. Registered before /:id so "my-ratings"
+// is never captured as a product id.
+router.get(
+  '/my-ratings',
+  authenticate,
+  productController.getMyRatings
+);
 
 // Bulk import — Phase 1: template download only. Static segments are
 // registered before /:id so "import" is never mistaken for a product id
@@ -76,9 +85,24 @@ router.post(
   productController.bulkDeleteProducts
 );
 
+router.get('/:id/my-rating', authenticate, productController.getMyRating);
+
 router.get('/:id', productController.getProductById);
 
 router.get('/:id/related', productController.getRelatedProducts);
+
+// Authenticated user ratings. Registered before nothing that could shadow it
+// (/:id/related above is static-suffixed), and express-validator rejects
+// non-integer or out-of-range values before the controller runs.
+router.post(
+  '/:id/rating',
+  authenticate,
+  body('rating')
+    .isInt({ min: 1, max: 5 })
+    .withMessage('Rating must be an integer between 1 and 5'),
+  validate,
+  productController.rateProduct
+);
 
 // Product images routes (public read)
 router.get('/:id/images', productImageController.getImages);

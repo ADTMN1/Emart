@@ -174,7 +174,7 @@ export const AdminOrderDetail: React.FC = () => {
                         Condition: {item.product.condition} • Qty: {item.quantity}
                       </p>
                     </div>
-                    <p className="font-semibold">{formatCurrency(item.priceAtPurchase, 'JPY')}</p>
+                    <p className="font-semibold">{formatCurrency(item.priceAtPurchase, 'USD')}</p>
                   </div>
                 ))}
               </div>

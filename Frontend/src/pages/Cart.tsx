@@ -97,11 +97,11 @@ const Cart: React.FC = () => {
     .map((i) => ({ ...i, product: i.product! }))
 
   const subtotal = cartItems.reduce(
-    (sum, i) => sum + i.product.estimatedPriceUsd * i.quantity,
+    (sum, i) => sum + i.product.price * i.quantity,
     0,
   )
   const proxyFees = cartItems.reduce(
-    (sum, i) => sum + Math.round(i.product.serviceFee * 0.007) * i.quantity,
+    (sum, i) => sum + i.product.serviceFee * i.quantity,
     0,
   )
   const domestic = cartItems.reduce(
@@ -275,10 +275,7 @@ const Cart: React.FC = () => {
                       </div>
                       <div className="text-right shrink-0">
                         <div className="font-bold text-lg">
-                          {formatCurrency(item.product.estimatedPriceUsd * item.quantity, 'USD')}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {formatCurrency(item.product.price * item.quantity, 'JPY')}
+                          {formatCurrency(item.product.price * item.quantity, 'USD')}
                         </div>
                       </div>
                     </div>

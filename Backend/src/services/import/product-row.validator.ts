@@ -133,7 +133,7 @@ export function validateRow(row: RawCsvRow, matchCategory: CategoryMatcher): Par
     if (price.ok && price.num! > 0) {
       const fallback = computeUsdFallback(price.num!);
       values.estimatedPriceUsd = fallback;
-      warnings.push(`estimatedPriceUsd empty — computed ${fallback} from price ${price.num}`);
+      warnings.push(`estimatedPriceUsd empty — defaulted to price (USD): ${fallback}`);
     }
     // If price itself is invalid, the price error already covers the row.
   } else {
@@ -257,7 +257,7 @@ export function validateRow(row: RawCsvRow, matchCategory: CategoryMatcher): Par
     const raw = (c[col] ?? '').trim();
     if (isBlank(raw)) continue;
     if (!/^[A-Za-z0-9._-]+$/.test(raw)) {
-      errors.push(`${col} must be a ZIP filename like ${'${SKU}'}-1.webp (no paths or URL characters)`);
+      errors.push(`${col} must be a ZIP filename like ${sku ?? 'SKU'}-1.webp (no paths or URL characters)`);
     }
     values[col] = raw;
   }
@@ -387,12 +387,12 @@ export function detectInFileDuplicateSkus(parsed: ParsedImportRow[]): void {
   const firstSeenAt = new Map<string, number>();
   for (const row of parsed) {
     if (!row.sku) continue;
-    const firstRow = firstSeenAt.get(row.sku);
-    if (firstRow === undefined) {
-      firstSeenAt.set(row.sku, row.rowNumber);
-    } else {
-      row.errors.push(`Duplicate SKU in file (first occurrence on row ${firstRow} wins)`);
+    const firstRowIndex = firstSeenAt.get(row.sku);
+    if (firstRowIndex !== undefined) {
+      row.errors.push(`Duplicate SKU "${row.sku}"`);
       row.status = 'ERROR';
+      continue;
     }
+    firstSeenAt.set(row.sku, row.rowNumber);
   }
 }

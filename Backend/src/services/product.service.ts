@@ -145,9 +145,9 @@ export class ProductService {
     }
 
     if (filters.minPrice || filters.maxPrice) {
-      where.estimatedPriceUsd = {};
-      if (filters.minPrice) where.estimatedPriceUsd.gte = filters.minPrice;
-      if (filters.maxPrice) where.estimatedPriceUsd.lte = filters.maxPrice;
+      where.price = {};
+      if (filters.minPrice) where.price.gte = filters.minPrice;
+      if (filters.maxPrice) where.price.lte = filters.maxPrice;
     }
 
     if (filters.search) {
@@ -163,46 +163,127 @@ export class ProductService {
       where.tags = { hasSome: filters.tags };
     }
 
+    // Shared row shape for storefront product list queries.
+    const productSelect = {
+      id: true,
+      sku: true,
+      name: true,
+      price: true,
+      estimatedPriceUsd: true,
+      condition: true,
+      isAvailable: true,
+      seller: true,
+      sellerType: true,
+      source: true,
+      domesticShipping: true,
+      internationalShippingUsd: true,
+      serviceFee: true,
+      tags: true,
+      isNew: true,
+      isBestSeller: true,
+      rating: true,
+      reviewCount: true,
+      // Real user-rating aggregates (maintained by the rating API on write).
+      ratingAgg: true,
+      ratingCount: true,
+      categoryId: true,
+      createdAt: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      productImages: {
+        where: { isPrimary: true },
+        take: 1,
+        select: {
+          id: true,
+          url: true,
+          isPrimary: true,
+        },
+      },
+    } as const;
+
+    // Default storefront browse (opt-in via ?mix=categories): interleave
+    // products across ALL categories round-robin (deterministic name order,
+    // newest-first within each category) so one recent import cannot fill the
+    // first pages. Skipped when a category filter is present — an explicit
+    // category already scopes the grid.
+    if (filters.interleave && !filters.category) {
+      const categories = await prisma.category.findMany({
+        select: { id: true },
+        orderBy: { name: 'asc' },
+      });
+
+      if (categories.length > 0) {
+        // Fetch enough newest matches for every category to contribute, then
+        // reorder in memory. Page slicing happens after reordering, so pages
+        // never repeat or skip products.
+        const [roundRows, total] = await Promise.all([
+          prisma.product.findMany({
+            where,
+            select: { id: true, categoryId: true },
+            orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+            take: limit * categories.length,
+          }),
+          prisma.product.count({ where }),
+        ]);
+
+        // Bucket product ids per category, newest-first within each bucket.
+        const buckets = new Map<string, string[]>();
+        for (const row of roundRows) {
+          const bucket = buckets.get(row.categoryId);
+          if (bucket) bucket.push(row.id);
+          else buckets.set(row.categoryId, [row.id]);
+        }
+
+        // One product per category per round, categories in stable name order,
+        // until every fetched product is placed. Categories without products
+        // simply skip their beat.
+        const orderedIds: string[] = [];
+        let emitted = true;
+        while (emitted) {
+          emitted = false;
+          for (const category of categories) {
+            const bucket = buckets.get(category.id);
+            if (bucket && bucket.length > 0) {
+              orderedIds.push(bucket.shift()!);
+              emitted = true;
+            }
+          }
+        }
+
+        const pageIds = orderedIds.slice(skip, skip + limit);
+        const rows =
+          pageIds.length > 0
+            ? await prisma.product.findMany({
+                where: { id: { in: pageIds } },
+                select: productSelect,
+              })
+            : [];
+
+        const rowsById = new Map(rows.map((row) => [row.id, row]));
+        const products = pageIds
+          .map((id) => rowsById.get(id))
+          .filter((row): row is (typeof rows)[number] => row !== undefined);
+
+        return {
+          products,
+          pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+          },
+        };
+      }
+    }
+
     const [products, total] = await Promise.all([
       prisma.product.findMany({
         where,
-        select: {
-          id: true,
-          sku: true,
-          name: true,
-          price: true,
-          estimatedPriceUsd: true,
-          condition: true,
-          isAvailable: true,
-          seller: true,
-          sellerType: true,
-          source: true,
-          domesticShipping: true,
-          internationalShippingUsd: true,
-          serviceFee: true,
-          tags: true,
-          isNew: true,
-          isBestSeller: true,
-          rating: true,
-          reviewCount: true,
-          categoryId: true,
-          createdAt: true,
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          productImages: {
-            where: { isPrimary: true },
-            take: 1,
-            select: {
-              id: true,
-              url: true,
-              isPrimary: true,
-            },
-          },
-        },
+        select: productSelect,
         skip,
         take: limit,
         orderBy: {

@@ -20,8 +20,8 @@ export const SKU_MAX_LENGTH = 64;
 export const NAME_MIN_LENGTH = 3;
 
 /** Fallback rates mirroring the frontend ProductForm auto-calculations. */
-export const SERVICE_FEE_RATE = 0.07; // 7% of price (JPY)
-export const JPY_TO_USD_RATE = 0.007;
+/** Service fees are calculated from the USD selling price. */
+export const SERVICE_FEE_RATE = 0.07;
 
 /** Presence handling: create chains enforce presence via their validators
  * (exactly as the originals did); update chains make every field optional. */
