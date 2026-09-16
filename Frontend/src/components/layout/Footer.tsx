@@ -25,7 +25,7 @@ export const Footer: React.FC = () => {
       links: [
         { label: t('footer.allProducts'), to: '/marketplace' },
         { label: t('footer.browseCategories'), to: '/categories' },
-        { label: t('footer.shopGlobal'), to: '/marketplace?source=mercari' },
+        { label: t('footer.shopGlobal'), to: '/marketplace' },
         { label: t('footer.newArrivals'), to: '/marketplace?sort=new' },
         { label: t('footer.bestSellers'), to: '/marketplace?sort=popular' },
       ],

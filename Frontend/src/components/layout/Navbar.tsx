@@ -69,17 +69,22 @@ export const Navbar: React.FC = () => {
   }
 
   const navLinks = [
-    { to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
-    { to: '/', label: t('navbar.shopGlobal'), icon: MapPin, hasDropdown: true },
-    { to: '/categories', label: t('navbar.categories'), icon: ChevronDown, hasDropdown: true },
+    { id: 'marketplace', to: '/marketplace', label: t('navbar.marketplace'), icon: Store },
+    // Clicking "Shop Global" goes to the marketplace grid; the hover
+    // dropdown lists the individual marketplaces.
+    { id: 'shopGlobal', to: '/marketplace', label: t('navbar.shopGlobal'), icon: MapPin, hasDropdown: true },
+    { id: 'categories', to: '/categories', label: t('navbar.categories'), icon: ChevronDown, hasDropdown: true },
   ]
 
+  // Every marketplace entry lands on the main marketplace grid. Source-slugs
+  // (?source=mercari etc.) filtered to zero results — catalog data doesn't
+  // use those source values yet — so the links go to the unfiltered page.
   const marketplaces = [
-    { name: t('marketplaces.mercari'), to: '/marketplace?source=mercari' },
-    { name: t('marketplaces.yahooAuctions'), to: '/marketplace?source=yahoo' },
-    { name: t('marketplaces.rakuten'), to: '/marketplace?source=rakuten' },
-    { name: t('marketplaces.amazon'), to: '/marketplace?source=amazon' },
-    { name: t('marketplaces.ebay'), to: '/marketplace?source=ebay' },
+    { name: t('marketplaces.mercari'), to: '/marketplace' },
+    { name: t('marketplaces.yahooAuctions'), to: '/marketplace' },
+    { name: t('marketplaces.rakuten'), to: '/marketplace' },
+    { name: t('marketplaces.amazon'), to: '/marketplace' },
+    { name: t('marketplaces.ebay'), to: '/marketplace' },
   ]
 
   const categoryLinks = [
@@ -132,20 +137,34 @@ export const Navbar: React.FC = () => {
                 {navLinks.map((link) => {
                   const Icon = link.icon
                   const isOpen = openDropdown === link.label
-                  const menuItems = link.label === 'Shop Global' ? marketplaces : link.label === 'Categories' ? categoryLinks : []
+                  // Key menu content on a stable id — the translated label
+                  // only matches English, which left the dropdown empty in
+                  // other locales.
+                  const menuItems = link.id === 'shopGlobal' ? marketplaces : link.id === 'categories' ? categoryLinks : []
                   
                   return (
                     <div
-                      key={link.to + link.label}
+                      key={link.id}
                       className="relative"
                       onMouseEnter={() => link.hasDropdown && handleDropdownMouseEnter(link.label)}
                       onMouseLeave={handleDropdownMouseLeave}
                     >
                       <button
-                        onClick={() => link.hasDropdown ? handleDropdownToggle(link.label) : navigate(link.to)}
+                        onClick={() => {
+                          if (link.id === 'shopGlobal') {
+                            // Always navigate on click; hover already opens
+                            // the marketplace list.
+                            setOpenDropdown(null)
+                            navigate('/marketplace')
+                          } else if (link.hasDropdown) {
+                            handleDropdownToggle(link.label)
+                          } else {
+                            navigate(link.to)
+                          }
+                        }}
                         className={cn(
                           'relative flex items-center gap-1.5 px-3.5 h-10 font-semibold text-sm transition-colors rounded-lg w-full',
-                          location.pathname === link.to
+                          !link.hasDropdown && location.pathname === link.to
                             ? 'text-primary bg-primary-50'
                             : 'text-foreground/80 hover:text-primary hover:bg-muted',
                         )}

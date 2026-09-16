@@ -106,6 +106,59 @@ export class ProductService {
     return null;
   }
 
+  /**
+   * Distinct filter facets computed from the actual catalog: sources,
+   * normalized conditions and the real price range. Powers the marketplace
+   * sidebar so filters can never reference values that match nothing.
+   */
+  async getProductFacets() {
+    const bucketDefs = [
+      { label: 'Under $50', gte: 0, lt: 50 },
+      { label: '$50 - $100', gte: 50, lt: 100 },
+      { label: '$100 - $250', gte: 100, lt: 250 },
+      { label: '$250 - $500', gte: 250, lt: 500 },
+      { label: 'Over $500', gte: 500, lt: undefined as number | undefined },
+    ];
+
+    const [sourceRows, conditionRows, priceRow, bucketCounts] = await Promise.all([
+      prisma.product.groupBy({
+        by: ['source'],
+        where: { isAvailable: true },
+        _count: { source: true },
+        orderBy: { _count: { source: 'desc' } },
+      }),
+      prisma.product.groupBy({
+        by: ['condition'],
+        where: { isAvailable: true },
+        _count: { condition: true },
+        orderBy: { _count: { condition: 'desc' } },
+      }),
+      prisma.product.aggregate({
+        where: { isAvailable: true },
+        _min: { price: true },
+        _max: { price: true },
+      }),
+      Promise.all(
+        bucketDefs.map((b) =>
+          prisma.product.count({
+            where: {
+              isAvailable: true,
+              price: { gte: b.gte, ...(b.lt !== undefined ? { lt: b.lt } : {}) },
+            },
+          })
+        )
+      ),
+    ]);
+
+    return {
+      sources: sourceRows.map((row) => ({ value: row.source, count: row._count.source })),
+      conditions: conditionRows.map((row) => ({ value: row.condition, count: row._count.condition })),
+      buckets: bucketDefs.map((b, i) => ({ label: b.label, count: bucketCounts[i] })),
+      priceMin: priceRow._min.price ?? 0,
+      priceMax: priceRow._max.price ?? 0,
+    };
+  }
+
   async getAllProducts(filters: ProductFilters, pagination: PaginationParams) {
     const page = Math.max(1, Number(pagination.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(pagination.limit) || 20));
@@ -142,6 +195,26 @@ export class ProductService {
 
     if (filters.condition) {
       where.condition = filters.condition;
+    }
+
+    // Multi-select facet filters (marketplace sidebar).
+    if (filters.conditions && filters.conditions.length > 0) {
+      where.condition = { in: filters.conditions };
+    }
+
+    if (filters.sources && filters.sources.length > 0) {
+      where.source = { in: filters.sources };
+    }
+
+    // Price buckets are OR-ed together; buckets without an upper bound only
+    // carry gte. Supplied alongside explicit min/max when present.
+    if (filters.priceBuckets && filters.priceBuckets.length > 0) {
+      const bucketOR = filters.priceBuckets.map((bucket) => {
+        const range: { gte?: number; lte?: number } = { gte: bucket.min };
+        if (bucket.max !== undefined) range.lte = bucket.max;
+        return { price: range };
+      });
+      where.OR = where.OR ? [...where.OR, ...bucketOR] : bucketOR;
     }
 
     if (filters.minPrice || filters.maxPrice) {

@@ -20,6 +20,10 @@ router.get(
 
 router.get('/featured', productController.getFeaturedProducts);
 
+// Filter facets for the marketplace sidebar (public). Registered before /:id
+// so "facets" is never captured as a product id.
+router.get('/facets', productController.getProductFacets);
+
 // The signed-in user's own ratings. Registered before /:id so "my-ratings"
 // is never captured as a product id.
 router.get(
