@@ -176,6 +176,10 @@ export const cachedApi = {
       : '/products'
     return api.get(endpoint, { useCache: true, cacheTTL: cacheConfig.products.ttl })
   },
+
+  /** Distinct sources/conditions/price buckets for the marketplace sidebar. */
+  getFacets: () =>
+    api.get('/products/facets', { useCache: true, cacheTTL: cacheConfig.categories.ttl }),
   
   getProduct: (id: string) =>
     api.get(`/products/${id}`, { useCache: true, cacheTTL: cacheConfig.productDetails.ttl }),

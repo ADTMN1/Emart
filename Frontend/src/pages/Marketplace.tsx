@@ -57,6 +57,48 @@ interface ApiProduct {
   productImages?: ProductImage[]
 }
 
+/** Price bucket definitions; keys double as priceBuckets URL tokens. */
+const PRICE_BUCKETS = [
+  { key: '0-49.99', label: 'Under $50' },
+  { key: '50-99.99', label: '$50 - $100' },
+  { key: '100-249.99', label: '$100 - $250' },
+  { key: '250-499.99', label: '$250 - $500' },
+  { key: '500+', label: 'Over $500' },
+]
+
+const CONDITION_LABELS: Record<string, string> = {
+  NEW: 'New',
+  LIKE_NEW: 'Like New',
+  VERY_GOOD: 'Very Good',
+  GOOD: 'Good',
+  ACCEPTABLE: 'Acceptable',
+}
+
+interface Facets {
+  sources: Array<{ value: string; count: number }>
+  conditions: Array<{ value: string; count: number }>
+  buckets: Array<{ label: string; count: number }>
+  priceMin: number
+  priceMax: number
+}
+
+/** Draft filter selections; only applied to the URL when Apply is pressed. */
+interface PendingFilters {
+  minPrice: string
+  maxPrice: string
+  priceBuckets: string[]
+  conditions: string[]
+  sources: string[]
+}
+
+const EMPTY_PENDING: PendingFilters = {
+  minPrice: '',
+  maxPrice: '',
+  priceBuckets: [],
+  conditions: [],
+  sources: [],
+}
+
 const Marketplace: React.FC = () => {
   const { toggleFavorite, isFavorite } = useFavorites()
   const [params, setParams] = useSearchParams()
@@ -72,6 +114,35 @@ const Marketplace: React.FC = () => {
   const [categoriesLoading, setCategoriesLoading] = React.useState(false)
   const fetchRef = React.useRef<number>(0)
   const lastRequestKeyRef = React.useRef<string | null>(null)
+  const [facets, setFacets] = React.useState<Facets | null>(null)
+  const [pending, setPending] = React.useState<PendingFilters>(EMPTY_PENDING)
+
+  // Filter facets from the real catalog (sources/conditions/buckets + counts).
+  React.useEffect(() => {
+    let cancelled = false
+    cachedApi
+      .getFacets()
+      .then((data) => {
+        if (!cancelled && data) setFacets(data)
+      })
+      .catch((error) => console.error('Failed to load filter facets:', error))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Seed the draft filters from the URL once on mount so shared/refreshed
+  // links start with Apply in sync with what's shown.
+  React.useEffect(() => {
+    setPending({
+      minPrice: params.get('minPrice') || '',
+      maxPrice: params.get('maxPrice') || '',
+      priceBuckets: params.get('priceBuckets')?.split(',').filter(Boolean) || [],
+      conditions: params.get('conditions')?.split(',').filter(Boolean) || [],
+      sources: params.get('sources')?.split(',').filter(Boolean) || [],
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Fetch categories (cached) once
   React.useEffect(() => {
@@ -97,14 +168,26 @@ const Marketplace: React.FC = () => {
     const q = params.get('q')
     const cat = params.get('cat')
     const source = params.get('source')
-    const isDefaultBrowse = !cat && !q && !source && !params.get('sub')
+    const conditions = params.get('conditions')
+    const sources = params.get('sources')
+    const priceBuckets = params.get('priceBuckets')
+    const minPrice = params.get('minPrice')
+    const maxPrice = params.get('maxPrice')
+    const hasActiveFilters = Boolean(
+      cat || q || source || conditions || sources || priceBuckets || minPrice || maxPrice || params.get('sub')
+    )
 
     if (q) searchParams.set('q', q)
     if (cat) searchParams.set('category', cat)
     if (source) searchParams.set('source', source)
-    // Default browse (no category/search/source): the backend round-robins the
+    if (conditions) searchParams.set('conditions', conditions)
+    if (sources) searchParams.set('sources', sources)
+    if (priceBuckets) searchParams.set('priceBuckets', priceBuckets)
+    if (minPrice) searchParams.set('minPrice', minPrice)
+    if (maxPrice) searchParams.set('maxPrice', maxPrice)
+    // Default browse (no filters at all): the backend round-robins the
     // grid across all available categories so one recent import can't fill it.
-    if (isDefaultBrowse) searchParams.set('mix', 'categories')
+    if (!hasActiveFilters) searchParams.set('mix', 'categories')
 
     const requestKey = searchParams.toString()
     if (lastRequestKeyRef.current === requestKey) {
@@ -181,6 +264,77 @@ const Marketplace: React.FC = () => {
       next.delete('source')
       setQuery('')
     }
+    setParams(next)
+  }
+
+  const updatePending = (key: keyof PendingFilters, value: string, checked: boolean) => {
+    setPending((prev) => {
+      const list = prev[key] as string[]
+      const nextList = checked
+        ? list.includes(value)
+          ? list
+          : [...list, value]
+        : list.filter((v) => v !== value)
+      return { ...prev, [key]: nextList }
+    })
+  }
+
+  /** Checking a price bucket replaces an explicit min/max range (and vice versa) */
+  const handleBucketToggle = (key: string, checked: boolean) => {
+    setPending((prev) => ({
+      ...prev,
+      minPrice: checked ? '' : prev.minPrice,
+      maxPrice: checked ? '' : prev.maxPrice,
+      priceBuckets: checked
+        ? prev.priceBuckets.includes(key)
+          ? prev.priceBuckets
+          : [...prev.priceBuckets, key]
+        : prev.priceBuckets.filter((k) => k !== key),
+    }))
+  }
+
+  const handlePriceInputChange = (key: 'minPrice' | 'maxPrice', value: string) => {
+    setPending((prev) => ({
+      ...prev,
+      [key]: value,
+      // Typing an explicit range switches price filtering away from buckets.
+      priceBuckets: value.trim() ? [] : prev.priceBuckets,
+    }))
+  }
+
+  /** Apply: write the draft filters into the URL (refetch happens via params). */
+  const applyFilters = () => {
+    const next = new URLSearchParams(params)
+    next.delete('minPrice')
+    next.delete('maxPrice')
+    next.delete('conditions')
+    next.delete('sources')
+    next.delete('priceBuckets')
+    next.delete('source')
+
+    const min = parseFloat(pending.minPrice)
+    const max = parseFloat(pending.maxPrice)
+    if (Number.isFinite(min)) next.set('minPrice', String(min))
+    if (Number.isFinite(max) && (!Number.isFinite(min) || max >= min)) {
+      next.set('maxPrice', String(max))
+    }
+    if (pending.priceBuckets.length > 0) {
+      next.set('priceBuckets', pending.priceBuckets.join(','))
+    }
+    if (pending.conditions.length > 0) next.set('conditions', pending.conditions.join(','))
+    if (pending.sources.length > 0) next.set('sources', pending.sources.join(','))
+
+    setParams(next)
+    setShowFilters(false)
+  }
+
+  /** Reset: clear the price/condition/source filters (search & category stay). */
+  const resetFilters = () => {
+    setPending(EMPTY_PENDING)
+    const next = new URLSearchParams(params)
+    ;['minPrice', 'maxPrice', 'conditions', 'sources', 'priceBuckets', 'source'].forEach((k) =>
+      next.delete(k)
+    )
     setParams(next)
   }
 
@@ -272,22 +426,43 @@ const Marketplace: React.FC = () => {
                 <h3 className="text-sm font-bold mb-4">Price (USD)</h3>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <Input type="number" placeholder="Min" />
-                    <Input type="number" placeholder="Max" />
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder={`Min${facets ? ` (${Math.floor(facets.priceMin)})` : ''}`}
+                      value={pending.minPrice}
+                      onChange={(e) => handlePriceInputChange('minPrice', e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder={`Max${facets ? ` (${Math.ceil(facets.priceMax)})` : ''}`}
+                      value={pending.maxPrice}
+                      onChange={(e) => handlePriceInputChange('maxPrice', e.target.value)
+                      }
+                    />
                   </div>
                   <div className="space-y-1.5">
-                    {[
-                      'Under $50',
-                      '$50 - $100',
-                      '$100 - $250',
-                      '$250 - $500',
-                      'Over $500',
-                    ].map((p) => (
-                      <label key={p} className="flex items-center gap-2.5 py-1 cursor-pointer group">
-                        <input type="checkbox" className="h-4 w-4 rounded border-input text-primary focus:ring-primary" />
-                        <span className="text-sm text-foreground/80 group-hover:text-foreground">{p}</span>
-                      </label>
-                    ))}
+                    {PRICE_BUCKETS.map((bucket) => {
+                      const count = facets?.buckets.find((b) => b.label === bucket.label)?.count
+                      const checked = pending.priceBuckets.includes(bucket.key)
+                      return (
+                        <label key={bucket.key} className="flex items-center justify-between gap-2.5 py-1 cursor-pointer group">
+                          <span className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => handleBucketToggle(bucket.key, e.target.checked)}
+                              className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                            />
+                            <span className="text-sm text-foreground/80 group-hover:text-foreground">{bucket.label}</span>
+                          </span>
+                          {facets && count !== undefined && (
+                            <span className="text-xs text-muted-foreground tabular-nums">{count.toLocaleString()}</span>
+                          )}
+                        </label>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -295,30 +470,64 @@ const Marketplace: React.FC = () => {
               <div className="p-5 rounded-2xl bg-card border border-border">
                 <h3 className="text-sm font-bold mb-4">Product Condition</h3>
                 <div className="space-y-1.5">
-                  {['New', 'Like New', 'Very Good', 'Good', 'Acceptable'].map((c) => (
-                    <label key={c} className="flex items-center gap-2.5 py-1 cursor-pointer group">
-                      <input type="checkbox" className="h-4 w-4 rounded border-input text-primary focus:ring-primary" />
-                      <span className="text-sm text-foreground/80 group-hover:text-foreground">{c}</span>
-                    </label>
-                  ))}
+                  {(facets?.conditions ?? []).map((c) => {
+                    const checked = pending.conditions.includes(c.value)
+                    return (
+                      <label key={c.value} className="flex items-center justify-between gap-2.5 py-1 cursor-pointer group">
+                        <span className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => updatePending('conditions', c.value, e.target.checked)}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground/80 group-hover:text-foreground">
+                            {CONDITION_LABELS[c.value] || c.value}
+                          </span>
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{c.count.toLocaleString()}</span>
+                      </label>
+                    )
+                  })}
+                  {facets && facets.conditions.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No conditions available</p>
+                  )}
                 </div>
               </div>
 
               <div className="p-5 rounded-2xl bg-card border border-border">
                 <h3 className="text-sm font-bold mb-4">Source Marketplace</h3>
                 <div className="space-y-1.5">
-                  {['Mercari', 'Yahoo Auctions', 'Rakuten', 'Amazon', 'eBay'].map((s) => (
-                    <label key={s} className="flex items-center gap-2.5 py-1 cursor-pointer group">
-                      <input type="checkbox" className="h-4 w-4 rounded border-input text-primary focus:ring-primary" />
-                      <span className="text-sm text-foreground/80 group-hover:text-foreground">{s}</span>
-                    </label>
-                  ))}
+                  {(facets?.sources ?? []).map((s) => {
+                    const checked = pending.sources.includes(s.value)
+                    return (
+                      <label key={s.value} className="flex items-center justify-between gap-2.5 py-1 cursor-pointer group">
+                        <span className="flex items-center gap-2.5">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => updatePending('sources', s.value, e.target.checked)}
+                            className="h-4 w-4 rounded border-input text-primary focus:ring-primary"
+                          />
+                          <span className="text-sm text-foreground/80 group-hover:text-foreground">{s.value}</span>
+                        </span>
+                        <span className="text-xs text-muted-foreground tabular-nums">{s.count.toLocaleString()}</span>
+                      </label>
+                    )
+                  })}
+                  {facets && facets.sources.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No sources available</p>
+                  )}
                 </div>
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1">Reset</Button>
-                <Button variant="primary" className="flex-1">Apply</Button>
+                <Button variant="outline" className="flex-1" onClick={resetFilters}>
+                  Reset
+                </Button>
+                <Button variant="primary" className="flex-1" onClick={applyFilters}>
+                  Apply
+                </Button>
               </div>
             </div>
           </aside>

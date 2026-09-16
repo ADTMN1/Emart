@@ -5,7 +5,50 @@ import { sendSuccess } from '../utils/response';
 import { BadRequestError } from '../utils/errors';
 import { AuthRequest } from '../types';
 
+/**
+ * Parse a comma-separated price bucket list like "0-49.99,50-99.99,500+".
+ * Invalid tokens are skipped; "N+" is an open-ended bucket.
+ */
+function parsePriceBuckets(raw: string): Array<{ min: number; max?: number }> | undefined {
+  const buckets = raw
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((token): { min: number; max?: number } | null => {
+      if (token.endsWith('+')) {
+        const min = parseFloat(token.slice(0, -1));
+        return Number.isFinite(min) && min >= 0 ? { min } : null;
+      }
+      const [minStr, maxStr] = token.split('-');
+      const min = parseFloat(minStr);
+      if (!Number.isFinite(min) || min < 0) return null;
+      const max = parseFloat(maxStr);
+        return Number.isFinite(max) && max >= min ? { min, max } : { min };
+    })
+    .filter((b): b is { min: number; max?: number } => b !== null);
+
+  return buckets.length > 0 ? buckets : undefined;
+}
+
+function parseListParam(raw: unknown): string[] | undefined {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const list = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
 export class ProductController {
+  /**
+   * GET /products/facets — distinct sources, conditions and real price range
+   * from the available catalog, for the marketplace filter sidebar.
+   */
+  async getProductFacets(req: Request, res: Response, next: NextFunction) {
+    try {
+      const facets = await productService.getProductFacets();
+      return sendSuccess(res, facets, 'Product facets retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
   async getAllProducts(req: Request, res: Response, next: NextFunction) {
     try {
       const filters = {
@@ -22,6 +65,13 @@ export class ProductController {
         // Storefront default browse sends ?mix=categories to interleave products
         // across ALL categories (round-robin) instead of pure newest-first.
         interleave: req.query.mix === 'categories',
+        // Multi-select facet filters (marketplace sidebar).
+        conditions: parseListParam(req.query.conditions),
+        sources: parseListParam(req.query.sources),
+        priceBuckets:
+          typeof req.query.priceBuckets === 'string' && req.query.priceBuckets.trim()
+            ? parsePriceBuckets(req.query.priceBuckets)
+            : undefined,
       };
 
       const pagination = {
