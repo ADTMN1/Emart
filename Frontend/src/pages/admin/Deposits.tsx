@@ -212,7 +212,7 @@ export const AdminDeposits: React.FC = () => {
 
                   <div className="flex flex-col gap-2 md:items-end">
                     <Button variant="outline" onClick={() => setSelectedDeposit(deposit)}>
-                      <Eye className="mr-2 h-4 w-4" />
+                      <Eye className="h-4 w-4" />
                       View screenshot
                     </Button>
                     {deposit.status === 'PENDING' && (
@@ -278,11 +278,11 @@ export const AdminDeposits: React.FC = () => {
                 {selectedDeposit.status === 'PENDING' && (
                   <div className="mt-5 flex gap-2">
                     <Button variant="secondary" onClick={() => updateDepositStatus(selectedDeposit.id, 'FAILED')}>
-                      <XCircle className="mr-2 h-4 w-4" />
+                      <XCircle className="h-4 w-4" />
                       Reject
                     </Button>
                     <Button onClick={() => updateDepositStatus(selectedDeposit.id, 'PAID')}>
-                      <Check className="mr-2 h-4 w-4" />
+                      <Check className="h-4 w-4" />
                       Approve
                     </Button>
                   </div>

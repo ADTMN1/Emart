@@ -395,7 +395,7 @@ const Register: React.FC = () => {
                 ) : (
                   <>
                     Create Account
-                    <ArrowRight className="h-4 w-4 ml-1.5 inline-block group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="h-4 w-4 inline-block group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </span>

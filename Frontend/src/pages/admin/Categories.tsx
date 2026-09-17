@@ -190,7 +190,7 @@ export const AdminCategories: React.FC = () => {
           </p>
         </div>
         <Button size="lg" onClick={() => handleOpenModal()}>
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4" />
           Add Category
         </Button>
       </div>
@@ -248,7 +248,7 @@ export const AdminCategories: React.FC = () => {
                 Get started by creating your first category
               </p>
               <Button className="mt-4" onClick={() => handleOpenModal()}>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4" />
                 Add Category
               </Button>
             </div>

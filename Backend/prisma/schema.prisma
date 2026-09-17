@@ -26,8 +26,15 @@ model User {
   wallet             Wallet?
   warehousePackages  WarehousePackage[]
   favorites          Favorite[]
-  importRuns         ImportRun[]
+  importRuns          ImportRun[]
   productRatings     ProductRating[]
+  /// Seller foundation (Phase 5). A user may hold at most one of each.
+  sellerApplication  SellerApplication? @relation("SellerApplication")
+  sellerProfile      SellerProfile?     @relation("SellerProfile")
+  /// Admin ↔ Seller messaging (Phase 7). Messages are sent by a user and
+  /// notifications target the recipient user.
+  sentMessages       Message[]          @relation("SenderMessages")
+  notifications      Notification[]     @relation("UserNotifications")
 
   @@index([email])
   @@map("users")
@@ -98,6 +105,9 @@ model Product {
   productImages            ProductImage[]
   favorites                Favorite[]
   productRatings           ProductRating[]
+  /// Phase 6: owning seller profile. null = admin/catalog product.
+  sellerId                 String?
+  sellerProfile            SellerProfile?  @relation("SellerProducts", fields: [sellerId], references: [id])
   /// Denormalized rating aggregate (maintained by the rating API on write).
   ratingAgg                Float            @default(0)
   /// Number of distinct user ratings backing ratingAgg.
@@ -112,6 +122,7 @@ model Product {
   @@index([isAvailable])
   @@index([isNew])
   @@index([isBestSeller])
+  @@index([sellerId, updatedAt])
   @@index([source])
   @@index([condition])
   @@index([estimatedPriceUsd])
@@ -224,6 +235,10 @@ model Order {
   paymentStatus         PaymentStatus      @default(PENDING)
   paymentMethod         String?
   paymentProofUrl       String?
+  /// UTC timestamp when an admin verified/confirmed the payment (Phase 3).
+  paidAt                DateTime?
+  /// Free-text admin note: rejection reason or other payment-management note (Phase 3).
+  paymentNote           String?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @updatedAt
   items                 OrderItem[]
@@ -232,6 +247,8 @@ model Order {
   user                  User               @relation(fields: [userId], references: [id])
   shipment              Shipment?
   warehousePackages     WarehousePackage[]
+  conversations         Conversation[]
+  notifications         Notification[]
 
   @@index([userId])
   @@index([userId, createdAt])
@@ -325,6 +342,53 @@ model Wallet {
 
   @@index([userId])
   @@map("wallets")
+}
+
+/// Seller application: one per user, reused for resubmission after rejection
+/// so a user can never accumulate duplicate application records.
+model SellerApplication {
+  id              String              @id @default(uuid())
+  /// Unique per user: an application is created once and REUSED for
+  /// resubmission, never duplicated. Backed by the DB unique constraint.
+  userId          String              @unique
+  storeName       String
+  storeDescription String
+  status          SellerStatus        @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedBy      String?
+  submittedAt     DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  user            User                @relation("SellerApplication", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, submittedAt])
+  @@map("seller_applications")
+}
+
+/// Seller identity: exactly one per user (DB-enforced), created on approval.
+model SellerProfile {
+  id               String       @id @default(uuid())
+  userId           String       @unique
+  storeName        String
+  storeDescription String
+  status           SellerStatus @default(APPROVED)
+  suspendedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  user             User         @relation("SellerProfile", fields: [userId], references: [id], onDelete: Cascade)
+  products         Product[]    @relation("SellerProducts")
+  conversations    Conversation[]
+
+  @@index([status])
+  @@map("seller_profiles")
+}
+
+enum SellerStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 }
 
 model WalletTransaction {
@@ -475,4 +539,75 @@ model ProductRating {
   @@index([productId])
   @@index([userId])
   @@map("product_ratings")
+}
+
+/// Admin ↔ Seller order-specific messaging (Phase 7).
+///
+/// An EMART order can, at the data level, contain items from several sellers
+/// (items link to Product, Product carries an optional sellerId → SellerProfile).
+/// A conversation therefore belongs to one (order, seller) pair — one
+/// conversation per order+seller, enforced by the @@unique([orderId, sellerId])
+/// constraint. The customer who placed the order has no relation to it.
+model Conversation {
+  id            String         @id @default(uuid())
+  orderId       String
+  sellerId      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  order         Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seller        SellerProfile  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  notifications Notification[]
+
+  @@unique([orderId, sellerId])
+  @@index([orderId])
+  @@index([sellerId, updatedAt])
+  @@map("conversations")
+}
+
+/// A single message inside a conversation. `readAt` records when the RECIPIENT
+/// read the message (it is set when the opposite side opens/marks the thread as
+/// read); a null `readAt` means the recipient has not read it yet.
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderUserId   String
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SenderMessages", fields: [senderUserId], references: [id], onDelete: Cascade)
+  notifications  Notification[]
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@map("messages")
+}
+
+/// User-targeted in-app notification (Phase 7). Sellers receive a notification
+/// when the admin sends a message; admins receive one when a seller replies.
+model Notification {
+  id             String       @id @default(uuid())
+  userId         String
+  type           String
+  title          String
+  body           String?
+  orderId        String?
+  conversationId String?
+  messageId      String?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  order          Order?       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([readAt])
+  @@map("notifications")
 }

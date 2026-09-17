@@ -9,6 +9,7 @@ import {
   ArrowDownRight,
   Loader2,
   Users,
+  BarChart3,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -46,6 +47,7 @@ interface RecentOrder {
   };
   total: number;
   status: string;
+  paymentStatus: string;
   createdAt: string;
 }
 
@@ -76,7 +78,8 @@ export const Dashboard: React.FC = () => {
         const [statsRes, usersRes, ordersRes, productsRes] = await Promise.all([
           api.get<{ success: boolean; data: DashboardStats }>('/admin/stats'),
           api.get<{ users: User[] }>('/admin/users'),
-          api.get<{ data: RecentOrder[] }>('/orders?limit=5'),
+          // Dedicated admin endpoint: all customers' orders, newest first.
+          api.get<{ orders: RecentOrder[] }>('/admin/orders?limit=5&page=1'),
           api.get<{ data: RecentProduct[] }>('/products?limit=5&sortBy=createdAt&order=desc'),
         ]);
 
@@ -90,8 +93,8 @@ export const Dashboard: React.FC = () => {
           setTotalUsers(usersRes.users.length);
         }
         
-        if (ordersRes.data && Array.isArray(ordersRes.data)) {
-          setRecentOrders(ordersRes.data);
+        if (ordersRes.orders && Array.isArray(ordersRes.orders)) {
+          setRecentOrders(ordersRes.orders);
         }
         
         if (productsRes.data && Array.isArray(productsRes.data)) {
@@ -225,10 +228,10 @@ export const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-lg">Recent Orders</h2>
               <Link
-                to="/admin/orders"
+                to="/admin/reports"
                 className="text-xs font-semibold text-primary hover:underline"
               >
-                View all →
+                Sales Reports →
               </Link>
             </div>
             <div className="space-y-3">

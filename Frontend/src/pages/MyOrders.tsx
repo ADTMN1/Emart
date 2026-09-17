@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import {
   Package,
   ChevronRight,
-  Home as HomeIcon,
   Search,
   Filter,
   PackageCheck,
@@ -160,41 +159,30 @@ const MyOrders: React.FC = () => {
   ]
 
   return (
-    <div className="bg-background">
-      <div className="container-page py-6 border-b border-border">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link to="/account" className="hover:text-primary">My Account</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground font-medium">My Orders</span>
+    <div className="space-y-6">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
+            <Package className="h-7 w-7 text-primary" />
+            My Orders
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Track and manage all your proxy purchases
+          </p>
         </div>
-        <div className="mt-4 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight flex items-center gap-2.5">
-              <Package className="h-7 w-7 text-primary" />
-              My Orders
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Track and manage all your proxy purchases
-            </p>
-          </div>
-          <div className="flex gap-3 flex-wrap">
-            <Input
-              placeholder="Search orders..."
-              leftIcon={<Search className="h-4 w-4" />}
-              wrapperClassName="w-56"
-            />
-            <Button variant="outline" size="md">
-              <Filter className="h-4 w-4 mr-1.5" />
-              Filter
-              <ChevronDown className="h-3.5 w-3.5 ml-1.5" />
-            </Button>
-          </div>
+        <div className="flex gap-3 flex-wrap">
+          <Input
+            placeholder="Search orders..."
+            leftIcon={<Search className="h-4 w-4" />}
+            wrapperClassName="w-56"
+          />
+          <Button variant="outline" size="md">
+            <Filter className="h-4 w-4" />
+            Filter
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
-
-      <div className="container-page py-6">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
@@ -328,7 +316,7 @@ const MyOrders: React.FC = () => {
                         <Button variant="outline" size="md" asChild>
                           <Link to={`/orders/${order.id}`}>
                             Details
-                            <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                            <ChevronRight className="h-3.5 w-3.5" />
                           </Link>
                         </Button>
                       </div>
@@ -339,7 +327,6 @@ const MyOrders: React.FC = () => {
             )
           }))}
         </div>
-      </div>
     </div>
   )
 }

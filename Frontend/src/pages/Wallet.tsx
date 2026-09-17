@@ -378,7 +378,7 @@ const Wallet: React.FC = () => {
                   Start by adding funds to your wallet
                 </p>
                 <Button onClick={() => setShowDepositModal(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="h-4 w-4" />
                   Add Funds
                 </Button>
               </CardContent>

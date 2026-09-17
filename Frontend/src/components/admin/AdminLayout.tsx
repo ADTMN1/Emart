@@ -12,6 +12,8 @@ import {
   Settings,
   WalletCards,
   ReceiptText,
+  BarChart3,
+  Store,
   Menu,
   X,
   ChevronRight,
@@ -19,6 +21,8 @@ import {
   User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { ContentLoader } from '@/components/ui/ContentLoader';
+import { AdminNotificationBell } from '@/components/admin/AdminNotificationBell';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -32,9 +36,11 @@ const navItems: NavItem[] = [
   { name: 'Products', path: '/admin/products', icon: Package },
   { name: 'Categories', path: '/admin/categories', icon: FolderKanban },
   { name: 'Orders', path: '/admin/orders', icon: ShoppingCart },
+  { name: 'Sales Reports', path: '/admin/reports', icon: BarChart3 },
   { name: 'Warehouse', path: '/admin/warehouse', icon: Warehouse },
   { name: 'Shipping', path: '/admin/shipping', icon: Truck },
   { name: 'Customers', path: '/admin/customers', icon: Users },
+  { name: 'Seller Applications', path: '/admin/sellers', icon: Store },
   { name: 'Wallets', path: '/admin/wallets', icon: WalletCards },
   { name: 'Deposits', path: '/admin/deposits', icon: ReceiptText },
   { name: 'Settings', path: '/admin/settings', icon: Settings },
@@ -231,6 +237,7 @@ export const AdminLayout: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <AdminNotificationBell />
               <Link to="/">
                 <Button variant="outline" size="sm">
                   View Store
@@ -242,7 +249,9 @@ export const AdminLayout: React.FC = () => {
 
         {/* Page Content */}
         <main className="p-4 lg:p-6">
-          <Outlet />
+          <React.Suspense fallback={<ContentLoader />}>
+            <Outlet />
+          </React.Suspense>
         </main>
       </div>
     </div>

@@ -1,8 +1,6 @@
 import * as React from 'react'
-import { Link } from 'react-router-dom'
 import {
   ChevronRight,
-  Home as HomeIcon,
   Truck,
   Plane,
   Ship,
@@ -82,19 +80,9 @@ const Shipping: React.FC = () => {
   }, [])
 
   return (
-    <div className="bg-background">
-      <div className="container-page py-6 border-b border-border">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link to="/account" className="hover:text-primary">My Account</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground font-medium">Shipping & Tracking</span>
-        </div>
-      </div>
-
+    <div className="space-y-6">
       {/* Hero + Track */}
-      <section className="container-page py-10">
+      <section className="container-page py-6">
         <div className="grid lg:grid-cols-5 gap-8 items-center">
           <div className="lg:col-span-2 space-y-5">
             <h1 className="font-display text-3xl lg:text-4xl font-extrabold tracking-tight leading-tight">
@@ -319,7 +307,7 @@ const Shipping: React.FC = () => {
               </Select>
               <Button size="xl" variant="secondary" className="col-span-2 shadow-lg shadow-secondary/25">
                 Calculate Shipping Rates
-                <ChevronDown className="h-4 w-4 ml-1.5" />
+                <ChevronDown className="h-4 w-4" />
               </Button>
             </div>
           </CardContent>

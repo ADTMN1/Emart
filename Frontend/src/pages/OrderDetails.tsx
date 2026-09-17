@@ -2,13 +2,13 @@ import * as React from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   ChevronRight,
-  Home as HomeIcon,
   Package,
   PackageCheck,
   Truck,
   MapPinCheck,
   PackageOpen,
   CheckCircle2,
+  XCircle,
   Clock,
   Copy,
   Info,
@@ -57,6 +57,40 @@ interface OrderData {
   insurance: number
   total: number
   trackingCode?: string
+  shippingMethod?: string
+  // Real payment status from the API (admin note is never included in customer responses).
+  paymentStatus?: string
+  paymentMethod?: string | null
+  shipment?: {
+    id: string
+    trackingNumber: string
+    carrier: string
+    status: string
+    estimatedDelivery?: string | null
+    deliveredAt?: string | null
+    shippedAt?: string | null
+    events: Array<{
+      status?: string
+      location?: string
+      message?: string
+      occurredAt?: string
+      createdAt?: string
+    }>
+  } | null
+}
+
+const shipmentStatusVariant = (status: string): 'warning' | 'info' | 'primary' | 'accent' | 'success' | 'destructive' | 'default' => {
+  const map: Record<string, any> = {
+    PENDING: 'warning',
+    PROCESSING: 'info',
+    SHIPPED: 'primary',
+    IN_TRANSIT: 'accent',
+    OUT_FOR_DELIVERY: 'info',
+    DELIVERED: 'success',
+    FAILED: 'destructive',
+    RETURNED: 'default',
+  }
+  return map[status] || 'default'
 }
 
 const defaultTimelineSteps = [
@@ -133,45 +167,48 @@ const OrderDetails: React.FC = () => {
   const items = order.items?.map((i) => i.product) || []
   const orderItems = order.items || []
 
+  // Real shipment data from the API (server enforces ownership). Events are
+  // sorted newest-first for display; no fake tracking info is ever shown.
+  const shipment = order.shipment || null
+  const shipmentEvents = (Array.isArray(shipment?.events) ? shipment!.events : [])
+    .slice()
+    .sort((a, b) => {
+      const at = new Date(a.occurredAt || a.createdAt || 0).getTime()
+      const bt = new Date(b.occurredAt || b.createdAt || 0).getTime()
+      return bt - at
+    })
+  const shippingCarrierLabel = shipment?.carrier || order.shippingMethod || '—'
+
   return (
-    <div className="bg-background">
-      <div className="container-page py-6 border-b border-border">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link to="/orders" className="hover:text-primary">My Orders</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground font-medium">#{order.number}</span>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight">
+              Order #{order.number}
+            </h1>
+            <Badge variant="info" size="md" className="gap-1.5">
+              <Clock className="h-3 w-3" />
+              {order.status}
+            </Badge>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Placed on {order.date} · {order.itemsCount} items · {order.packages || 1} packages
+          </p>
         </div>
-        <div className="mt-4 flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight">
-                Order #{order.number}
-              </h1>
-              <Badge variant="info" size="md" className="gap-1.5">
-                <Clock className="h-3 w-3" />
-                {order.status}
-              </Badge>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Placed on {order.date} · {order.itemsCount} items · {order.packages || 1} packages
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" size="md">
-              <MessageSquare className="h-4 w-4 mr-1.5" />
-              Contact Support
-            </Button>
-            <Button variant="primary" size="md">
-              <Download className="h-4 w-4 mr-1.5" />
-              Invoice
-            </Button>
-          </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="md">
+            <MessageSquare className="h-4 w-4" />
+            Contact Support
+          </Button>
+          <Button variant="primary" size="md">
+            <Download className="h-4 w-4" />
+            Invoice
+          </Button>
         </div>
       </div>
 
-      <div className="container-page py-6 lg:py-8 grid lg:grid-cols-3 gap-6 lg:gap-8">
+      <div className="grid lg:grid-cols-3 gap-6 lg:gap-8">
         <div className="lg:col-span-2 space-y-6">
           {/* Timeline */}
           <Card>
@@ -282,6 +319,90 @@ const OrderDetails: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Shipment & Tracking */}
+          <Card>
+            <CardContent className="p-5 lg:p-6">
+              <h2 className="font-display text-lg font-bold mb-4 flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                Shipment & Tracking
+              </h2>
+
+              {!shipment ? (
+                <div className="p-8 rounded-xl border border-dashed border-border text-center">
+                  <Truck className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-sm font-medium">Shipment information will appear here once your order has shipped.</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    You'll see the carrier, tracking number and delivery updates in this space.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Carrier</div>
+                      <div className="font-semibold mt-0.5">{shipment.carrier}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Status</div>
+                      <div className="mt-0.5">
+                        <Badge variant={shipmentStatusVariant(shipment.status)} size="sm">
+                          {shipment.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Est. Delivery</div>
+                      <div className="font-semibold mt-0.5">
+                        {shipment.estimatedDelivery ? new Date(shipment.estimatedDelivery).toLocaleDateString() : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Tracking Number</div>
+                      <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                        <span className="font-mono text-xs font-bold truncate">{shipment.trackingNumber}</span>
+                        <button
+                          className="text-primary hover:underline text-xs font-sans font-semibold shrink-0"
+                          onClick={() => navigator.clipboard.writeText(shipment.trackingNumber)}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {shipmentEvents.length > 0 && (
+                    <div className="border-t border-border/60 mt-5 pt-5">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold mb-4">Tracking Timeline</p>
+                      <ol className="relative border-l-2 border-border ml-2 space-y-5">
+                        {shipmentEvents.map((event, index) => (
+                          <li key={index} className="ml-5">
+                            <span
+                              className={`absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full border-2 border-background ${
+                                index === 0 ? 'bg-primary' : 'bg-muted-foreground/40'
+                              }`}
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={shipmentStatusVariant(String(event.status ?? ''))} size="xs">
+                                {String(event.status ?? 'UPDATE').replace(/_/g, ' ')}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(event.occurredAt || event.createdAt || Date.now()).toLocaleString()}
+                              </span>
+                            </div>
+                            {event.message && <p className="text-sm font-medium mt-1">{event.message}</p>}
+                            {event.location && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{event.location}</p>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Shipping Address */}
           <div className="grid md:grid-cols-2 gap-4">
             <Card>
@@ -315,8 +436,12 @@ const OrderDetails: React.FC = () => {
                   <button className="text-xs font-bold text-primary hover:underline">Change</button>
                 </div>
                 <div className="text-sm">
-                  <div className="font-bold mb-1">DHL Express</div>
-                  <div className="text-xs text-muted-foreground">3-5 business days · Fully tracked</div>
+                  <div className="font-bold mb-1">{shippingCarrierLabel}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {order.shipment?.estimatedDelivery
+                      ? `Estimated delivery ${new Date(order.shipment.estimatedDelivery).toLocaleDateString()}`
+                      : 'Fully tracked international delivery'}
+                  </div>
                   <div className="mt-3 p-3 rounded-lg bg-secondary/5 border border-secondary/10 flex items-start gap-2 text-xs">
                     <Info className="h-3.5 w-3.5 text-secondary mt-0.5 shrink-0" />
                     <span>
@@ -366,12 +491,43 @@ const OrderDetails: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-success/5 border border-success/15 text-xs">
+              {/* Real payment status (Phase 3) — no fabricated card/transaction data. */}
+              <div
+                className={`p-3 rounded-lg border text-xs ${
+                  order.paymentStatus === 'PAID'
+                    ? 'bg-success/5 border-success/15'
+                    : order.paymentStatus === 'FAILED'
+                    ? 'bg-destructive/5 border-destructive/15'
+                    : 'bg-muted/40 border-border'
+                }`}
+              >
                 <div className="flex items-start gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                  {order.paymentStatus === 'PAID' ? (
+                    <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
+                  ) : order.paymentStatus === 'FAILED' ? (
+                    <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  ) : (
+                    <Clock className={`h-4 w-4 shrink-0 mt-0.5 ${order.paymentStatus === 'PENDING' ? 'text-amber-500' : 'text-muted-foreground'}`} />
+                  )}
                   <div>
-                    <div className="font-bold text-foreground">Payment completed</div>
-                    <div className="text-muted-foreground mt-0.5">Visa •••• 4242 · Transaction #TXN-9A7F32B</div>
+                    <div className="font-bold text-foreground">
+                      {order.paymentStatus === 'PAID'
+                        ? 'Payment completed'
+                        : order.paymentStatus === 'FAILED'
+                        ? 'Payment could not be verified'
+                        : order.paymentStatus === 'REFUNDED'
+                        ? 'Payment refunded'
+                        : 'Payment pending review'}
+                    </div>
+                    <div className="text-muted-foreground mt-0.5">
+                      {order.paymentStatus === 'PAID'
+                        ? `Paid via ${order.paymentMethod ? order.paymentMethod.replace(/_/g, ' ') : 'crypto'}.`
+                        : order.paymentStatus === 'FAILED'
+                        ? 'Our team could not verify this payment. Please contact support.'
+                        : order.paymentStatus === 'REFUNDED'
+                        ? 'This payment has been refunded.'
+                        : 'We are reviewing your payment proof. Status will update once verified.'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -382,23 +538,38 @@ const OrderDetails: React.FC = () => {
             <CardContent className="p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Tracking</span>
-                <Badge variant="info" size="sm">Not available yet</Badge>
+                {shipment ? (
+                  <Badge variant={shipmentStatusVariant(shipment.status)} size="sm">
+                    {shipment.status.replace(/_/g, ' ')}
+                  </Badge>
+                ) : (
+                  <Badge variant="info" size="sm">Not available yet</Badge>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Tracking information will appear here once your package is shipped.
-              </p>
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 text-xs">
-                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="font-mono font-bold">{order?.number || order?.id || id}</span>
-                <button
-                  className="ml-auto text-primary font-bold hover:underline"
-                  onClick={() => {
-                    navigator.clipboard.writeText(order?.number || order?.id || id || '')
-                  }}
-                >
-                  Copy
-                </button>
-              </div>
+              {shipment ? (
+                <>
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/40 text-xs">
+                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="font-mono font-bold truncate">{shipment.trackingNumber}</span>
+                    <button
+                      className="ml-auto text-primary font-bold hover:underline shrink-0"
+                      onClick={() => navigator.clipboard.writeText(shipment.trackingNumber)}
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  {shipment.deliveredAt && (
+                    <p className="text-xs text-success font-semibold flex items-center gap-1">
+                      <MapPinCheck className="h-3.5 w-3.5" />
+                      Delivered {new Date(shipment.deliveredAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Tracking information will appear here once your package is shipped.
+                </p>
+              )}
             </CardContent>
           </Card>
         </aside>

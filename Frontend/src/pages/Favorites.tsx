@@ -59,7 +59,7 @@ const Favorites: React.FC = () => {
               </Button>
               <Button asChild variant="outline" size="lg">
                 <Link to="/marketplace">
-                  <ShoppingBag className="h-4 w-4 mr-2" />
+                  <ShoppingBag className="h-4 w-4" />
                   {t('favorites.browseMerketplace')}
                 </Link>
               </Button>
@@ -128,7 +128,7 @@ const Favorites: React.FC = () => {
             </p>
             <Button asChild size="lg">
               <Link to="/marketplace">
-                <ShoppingBag className="h-4 w-4 mr-2" />
+                <ShoppingBag className="h-4 w-4" />
                 {t('favorites.startShopping')}
               </Link>
             </Button>

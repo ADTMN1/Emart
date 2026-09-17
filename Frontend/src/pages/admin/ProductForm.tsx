@@ -61,10 +61,11 @@ interface PendingImage {
   sortOrder: number;
 }
 
-export const AdminProductForm: React.FC = () => {
+export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ scope = 'admin' }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const homePath = scope === 'seller' ? '/seller/products' : '/admin/products';
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const isEditMode = !!id;
@@ -126,7 +127,7 @@ export const AdminProductForm: React.FC = () => {
     if (!isEditMode || !id) return;
     try {
       const cacheBuster = `t=${Date.now()}-${refreshKey}`;
-      const product = await api.get(`/products/${id}?${cacheBuster}`);
+      const product = await api.get(`/${scope}/products/${id}?${cacheBuster}`);
       
       if (product.productImages && product.productImages.length > 0) {
         setImages(product.productImages);
@@ -148,7 +149,7 @@ export const AdminProductForm: React.FC = () => {
         setError(null);
 
         const cacheBuster = `t=${Date.now()}-${refreshKey}`;
-        const product = await api.get(`/products/${id}?${cacheBuster}`);
+        const product = await api.get(`/${scope}/products/${id}?${cacheBuster}`);
         
         setFormData({
           sku: product.sku || '',
@@ -311,7 +312,7 @@ export const AdminProductForm: React.FC = () => {
     if (!id) return;
 
     try {
-      await productImageApi.setPrimaryImage(id, imageId);
+      await productImageApi.setPrimaryImage(id, imageId, scope);
       setImages((prev) =>
         prev.map((img) => ({
           ...img,
@@ -364,7 +365,7 @@ export const AdminProductForm: React.FC = () => {
     if (!id) return;
 
     try {
-      await productImageApi.deleteProductImage(id, imageId);
+      await productImageApi.deleteProductImage(id, imageId, scope);
       setImages((prev) => prev.filter((img) => img.id !== imageId));
       setRefreshKey((k) => k + 1);
       await refreshProductImages();
@@ -405,7 +406,7 @@ export const AdminProductForm: React.FC = () => {
     // non-primary image into the first position makes it the primary.
     if (!reordered[0].isPrimary && reordered.some((img) => img.isPrimary)) {
       try {
-        await productImageApi.setPrimaryImage(id, reordered[0].id);
+        await productImageApi.setPrimaryImage(id, reordered[0].id, scope);
         setImages(reordered.map((img, i) => ({ ...img, isPrimary: i === 0 })));
       } catch (err: any) {
         console.error('Failed to update primary image after reorder:', err);
@@ -415,7 +416,8 @@ export const AdminProductForm: React.FC = () => {
     try {
       await productImageApi.reorderImages(
         id,
-        reordered.map((img, index) => ({ id: img.id, sortOrder: index }))
+        reordered.map((img, index) => ({ id: img.id, sortOrder: index })),
+        scope
       );
       invalidateCache.products();
       setRefreshKey((k) => k + 1);
@@ -543,7 +545,7 @@ export const AdminProductForm: React.FC = () => {
       };
 
       if (isEditMode && id) {
-        await api.put(`/products/${id}`, payload);
+        await api.put(`/${scope}/products/${id}`, payload);
 
         // Bust the storefront product cache (lists + detail) so edits show immediately
         invalidateCache.products();
@@ -553,9 +555,9 @@ export const AdminProductForm: React.FC = () => {
           title: 'Product Updated',
           description: 'Product has been updated successfully',
         });
-        navigate('/admin/products');
+        navigate(homePath);
       } else {
-        const newProduct = await api.post('/products', payload);
+        const newProduct = await api.post(`/${scope}/products`, payload);
 
         if (pendingImages.length > 0) {
           let primaryImageId: string | null = null;
@@ -564,7 +566,7 @@ export const AdminProductForm: React.FC = () => {
           for (let i = 0; i < sortedPending.length; i++) {
             const pending = sortedPending[i];
             try {
-              const uploaded = await productImageApi.uploadProductImage(newProduct.id, pending.file);
+              const uploaded = await productImageApi.uploadProductImage(newProduct.id, pending.file, scope);
               if (pending.isPrimary && uploaded?.id) {
                 primaryImageId = uploaded.id;
               }
@@ -576,7 +578,7 @@ export const AdminProductForm: React.FC = () => {
 
           if (primaryImageId) {
             try {
-              await productImageApi.setPrimaryImage(newProduct.id, primaryImageId);
+              await productImageApi.setPrimaryImage(newProduct.id, primaryImageId, scope);
             } catch (primaryErr: any) {
               console.error('Failed to set primary image:', primaryErr);
             }
@@ -594,7 +596,7 @@ export const AdminProductForm: React.FC = () => {
         // Bust the storefront product cache so the new product appears immediately
         invalidateCache.products();
 
-        navigate(`/admin/products/${newProduct.id}/edit`);
+        navigate(homePath);
       }
     } catch (err: any) {
       const errorDetails = err.data?.error || err.message || 'Failed to save product';
@@ -623,7 +625,7 @@ export const AdminProductForm: React.FC = () => {
         <AlertCircle className="h-12 w-12 text-destructive mb-4" />
         <p className="text-lg font-semibold">Failed to Load Product</p>
         <p className="text-sm text-muted-foreground mt-2">{error}</p>
-        <Button className="mt-4" onClick={() => navigate('/admin/products')}>
+        <Button className="mt-4" onClick={() => navigate(homePath)}>
           Back to Products
         </Button>
       </div>
@@ -639,7 +641,7 @@ export const AdminProductForm: React.FC = () => {
             type="button"
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/admin/products')}
+            onClick={() => navigate(homePath)}
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -653,7 +655,7 @@ export const AdminProductForm: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button type="button" variant="outline" onClick={() => navigate('/admin/products')}>
+          <Button type="button" variant="outline" onClick={() => navigate(homePath)}>
             Cancel
           </Button>
           <Button type="submit" isLoading={saving} disabled={categoriesLoading}>
@@ -873,7 +875,7 @@ export const AdminProductForm: React.FC = () => {
                   onClick={() => fileInputRef.current?.click()}
                   isLoading={uploadingImage}
                 >
-                  <Upload className="h-4 w-4 mr-2" />
+                  <Upload className="h-4 w-4" />
                   Upload Images
                 </Button>
                 <input

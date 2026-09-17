@@ -3,12 +3,23 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { TopBar } from './TopBar'
 import { Navbar } from './Navbar'
 import { Footer } from './Footer'
+import { ContentLoader } from '@/components/ui/ContentLoader'
 
 const ChatWidget = React.lazy(() => import('@/components/ai/ChatWidget'))
 
 const Layout: React.FC = () => {
   const location = useLocation()
   const [chatReady, setChatReady] = React.useState(false)
+
+  // Deterministic scroll management. Tell the browser we restore scroll
+  // ourselves so it neither jumps to the top mid-navigation nor randomly
+  // yanks the page around when the History API updates; then scroll the
+  // current page to the top only when the route actually changes.
+  React.useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+  }, [])
 
   React.useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' })
@@ -40,7 +51,11 @@ const Layout: React.FC = () => {
       {!isAuthPage && <TopBar />}
       {!isAuthPage && <Navbar />}
       <main className="flex-1">
-        <Outlet />
+        {/* Lazy page chunks load inside this boundary, so the shared
+            navbar/footer stay mounted and only the content column swaps. */}
+        <React.Suspense fallback={<ContentLoader />}>
+          <Outlet />
+        </React.Suspense>
       </main>
       {!isAuthPage && <Footer />}
       {!isAuthPage && chatReady && (

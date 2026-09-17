@@ -8,6 +8,7 @@ import {
   Calendar,
   User,
   DollarSign,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,7 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
-import { api } from '@/lib/api';
+import { api, type AdminSellerProfile } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 interface Order {
@@ -28,9 +29,18 @@ interface Order {
     lastName?: string;
   };
   status: string;
-  total: number;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  subtotal: number;
+  serviceFees: number;
+  domesticShipping: number;
+  internationalShipping: number;
+  insurance: number;
+  total: number;
+  trackingNumber?: string | null;
+  shippingMethod: string;
   createdAt: string;
+  updatedAt: string;
   items: Array<{
     id: string;
     quantity: number;
@@ -38,6 +48,15 @@ interface Order {
       name: string;
     };
   }>;
+  // Distinct APPROVED sellers whose products appear in this order (Phase 7).
+  sellers?: AdminSellerProfile[];
+}
+
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
 }
 
 const orderStatusOptions = [
@@ -55,16 +74,27 @@ const orderStatusOptions = [
   { value: 'REFUNDED', label: 'Refunded' },
 ];
 
+const paymentStatusOptions = [
+  { value: '', label: 'All Payments' },
+  { value: 'PENDING', label: 'Pending' },
+  { value: 'PAID', label: 'Paid' },
+  { value: 'FAILED', label: 'Failed' },
+  { value: 'REFUNDED', label: 'Refunded' },
+];
+
 export const AdminOrders: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
 
   const [orders, setOrders] = React.useState<Order[]>([]);
+  const [pagination, setPagination] = React.useState<Pagination | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   const searchQuery = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || '';
+  const paymentStatusFilter = searchParams.get('paymentStatus') || '';
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   const fetchOrders = React.useCallback(async () => {
     try {
@@ -73,30 +103,23 @@ export const AdminOrders: React.FC = () => {
 
       const params = new URLSearchParams();
       if (statusFilter) params.append('status', statusFilter);
-      params.append('limit', '100');
+      if (paymentStatusFilter) params.append('paymentStatus', paymentStatusFilter);
+      if (searchQuery) params.append('search', searchQuery);
+      params.append('page', String(page));
+      params.append('limit', '20');
 
-      const res = await api.get<{ orders: Order[] }>(`/orders?${params.toString()}`);
-      let filteredOrders = res.orders || [];
-
-      // Client-side search filter
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        filteredOrders = filteredOrders.filter(
-          (order) =>
-            order.orderNumber.toLowerCase().includes(query) ||
-            order.user.email.toLowerCase().includes(query) ||
-            `${order.user.firstName} ${order.user.lastName}`.toLowerCase().includes(query)
-        );
-      }
-
-      setOrders(filteredOrders);
+      const res = await api.get<{ orders: Order[]; pagination: Pagination }>(
+        `/admin/orders?${params.toString()}`
+      );
+      setOrders(res.orders || []);
+      setPagination(res.pagination || null);
     } catch (err: any) {
       console.error('Failed to fetch orders:', err);
       setError(err.message || 'Failed to load orders');
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter]);
+  }, [searchQuery, statusFilter, paymentStatusFilter, page]);
 
   React.useEffect(() => {
     fetchOrders();
@@ -109,6 +132,7 @@ export const AdminOrders: React.FC = () => {
     } else {
       params.delete('search');
     }
+    params.delete('page');
     setSearchParams(params);
   };
 
@@ -118,6 +142,28 @@ export const AdminOrders: React.FC = () => {
       params.set('status', value);
     } else {
       params.delete('status');
+    }
+    params.delete('page');
+    setSearchParams(params);
+  };
+
+  const handlePaymentStatusChange = (value: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set('paymentStatus', value);
+    } else {
+      params.delete('paymentStatus');
+    }
+    params.delete('page');
+    setSearchParams(params);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams);
+    if (newPage > 1) {
+      params.set('page', String(newPage));
+    } else {
+      params.delete('page');
     }
     setSearchParams(params);
   };
@@ -162,7 +208,8 @@ export const AdminOrders: React.FC = () => {
         <div>
           <h1 className="font-display text-2xl lg:text-3xl font-bold">Orders</h1>
           <p className="text-muted-foreground mt-1">
-            Manage customer orders ({orders.length} orders)
+            Manage customer orders
+            {pagination ? ` (${pagination.total} orders)` : ''}
           </p>
         </div>
       </div>
@@ -173,19 +220,36 @@ export const AdminOrders: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
               <Input
-                placeholder="Search by order number, customer email..."
+                placeholder="Search by order #, customer, email, or tracking #..."
                 leftIcon={<Search className="h-4 w-4" />}
                 value={searchQuery}
                 onChange={(e) => handleSearchChange(e.target.value)}
               />
             </div>
-            <Select value={statusFilter} onChange={(e) => handleStatusChange(e.target.value)}>
-              {orderStatusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </Select>
+            <div className="flex gap-3">
+              <Select
+                value={statusFilter}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="flex-1"
+              >
+                {orderStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={paymentStatusFilter}
+                onChange={(e) => handlePaymentStatusChange(e.target.value)}
+                className="flex-1"
+              >
+                {paymentStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -232,7 +296,8 @@ export const AdminOrders: React.FC = () => {
                         <div>
                           <p className="font-medium text-sm">{order.orderNumber}</p>
                           <p className="text-xs text-muted-foreground">
-                            {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
+                            {order.items.reduce((sum, item) => sum + item.quantity, 0)}{' '}
+                            {order.items.length === 1 ? 'item' : 'items'}
                           </p>
                         </div>
                       </td>
@@ -264,15 +329,25 @@ export const AdminOrders: React.FC = () => {
                           <span className="font-semibold">{formatCurrency(order.total, 'USD')}</span>
                         </div>
                       </td>
-                      <td className="p-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link to={`/admin/orders/${order.id}`}>
-                            <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                              <Eye className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </Link>
-                        </div>
-                      </td>
+<td className="p-4">
+  <div className="flex items-center justify-end gap-2">
+    {(order.sellers?.length ?? 0) >= 1 && (
+      <Link
+        to={`/admin/orders/${order.id}/messages`}
+        title={order.sellers!.length > 1 ? 'Message sellers' : `Message ${order.sellers![0].storeName}`}
+      >
+        <Button variant="destructive" size="sm" leftIcon={<MessageSquare className="h-4 w-4" />}>
+          Message Seller
+        </Button>
+      </Link>
+    )}
+    <Link to={`/admin/orders/${order.id}`}>
+      <button className="p-2 hover:bg-muted rounded-lg transition-colors">
+        <Eye className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </Link>
+  </div>
+</td>
                     </tr>
                   ))}
                 </tbody>
@@ -281,6 +356,33 @@ export const AdminOrders: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Page {pagination.page} of {pagination.totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => handlePageChange(pagination.page - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pagination.page >= pagination.totalPages || loading}
+              onClick={() => handlePageChange(pagination.page + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

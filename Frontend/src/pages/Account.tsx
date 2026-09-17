@@ -1,22 +1,18 @@
 import * as React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import type { AccountOutletContext } from '@/components/account/AccountLayout'
 import {
   ChevronRight,
-  Home as HomeIcon,
   User,
   Mail,
   MapPin,
   CreditCard,
-  Settings,
   Package,
-  Heart,
   Bell,
-  Lock,
   Globe2,
   Pencil,
   CheckCircle2,
   ShieldCheck,
-  LogOut,
   ChevronDown,
   Gift,
   Clock,
@@ -32,6 +28,14 @@ import {
   ArrowDownLeft,
   DollarSign,
   TrendingUp,
+  Store,
+  XCircle,
+  Ban,
+  Truck,
+  MessageSquare,
+  Inbox,
+  CheckCheck,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -41,39 +45,25 @@ import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { api, notificationApi, type NotificationItem } from '@/lib/api'
+import {
+  notificationsChanged,
+  formatRelativeTime,
+} from '@/components/admin/AdminNotificationBell'
 
-const navItems = [
-  { key: 'overview', label: 'Overview', icon: User },
-  { key: 'orders', label: 'My Orders', icon: Package, to: '/orders' },
-  { key: 'wallet', label: 'My Wallet', icon: WalletIcon },
-  { key: 'warehouse', label: 'Warehouse', icon: Package, to: '/warehouse' },
-  { key: 'shipping', label: 'Shipments', icon: Truck, to: '/shipping' },
-  { key: 'favorites', label: 'Favorites', icon: Heart },
-  { key: 'addresses', label: 'Addresses', icon: MapPin },
-  { key: 'payments', label: 'Payment Methods', icon: CreditCard },
-  { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'security', label: 'Security', icon: Lock },
-  { key: 'settings', label: 'Preferences', icon: Settings },
-  { key: 'support', label: 'Support & FAQ', icon: Headphones },
-]
-
-function Truck(props: any) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
-      <path d="M15 18H9" />
-      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" />
-      <circle cx="17" cy="18" r="2" />
-      <circle cx="7" cy="18" r="2" />
-    </svg>
-  )
+interface SellerApplicationState {
+  id: string
+  storeName: string
+  storeDescription: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED'
+  rejectionReason?: string | null
+  submittedAt?: string
+  reviewedAt?: string | null
 }
 
 const Account: React.FC = () => {
-  const { user, logout, updateProfile } = useAuth()
+  const { user, updateProfile } = useAuth()
   const { toast } = useToast()
-  const [tab, setTab] = React.useState('overview')
   const [isEditing, setIsEditing] = React.useState(false)
   const [firstName, setFirstName] = React.useState(user?.firstName || '')
   const [lastName, setLastName] = React.useState(user?.lastName || '')
@@ -87,6 +77,40 @@ const Account: React.FC = () => {
   const [showDepositModal, setShowDepositModal] = React.useState(false)
   const [depositAmount, setDepositAmount] = React.useState('')
   const [paymentMethod, setPaymentMethod] = React.useState('credit_card')
+
+  // Seller application/profiles are provided by the persistent AccountLayout
+  // shell (shared with the sidebar's "Store" label), so this page only keeps
+  // the application form + submit logic.
+  const { sellerApp, sellerProfile, sellerLoading, refreshSeller } = useOutletContext<AccountOutletContext>()
+  const [storeName, setStoreName] = React.useState('')
+  const [storeDescription, setStoreDescription] = React.useState('')
+  const [sellerSubmitting, setSellerSubmitting] = React.useState(false)
+
+  // Notifications tab (Phase 7)
+  const navigate = useNavigate()
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
+  const [notificationsPage, setNotificationsPage] = React.useState(1)
+  const [notifTotalPages, setNotifTotalPages] = React.useState(1)
+  const [notifTotal, setNotifTotal] = React.useState(0)
+  const [notifLoading, setNotifLoading] = React.useState(false)
+  const [notifError, setNotifError] = React.useState<string | null>(null)
+
+  const location = useLocation()
+  const accountPath = location.pathname
+  const tab =
+    accountPath.startsWith('/account/wallet')
+      ? 'wallet'
+      : accountPath.startsWith('/account/addresses')
+        ? 'addresses'
+        : accountPath.startsWith('/account/payments')
+          ? 'payments'
+          : accountPath.startsWith('/account/seller')
+            ? 'seller'
+            : accountPath.startsWith('/account/notifications')
+              ? 'notifications'
+              : accountPath.startsWith('/account/support')
+                ? 'support'
+                : 'overview'
 
   const fetchWallet = React.useCallback(async () => {
     try {
@@ -107,6 +131,92 @@ const Account: React.FC = () => {
   React.useEffect(() => {
     fetchWallet()
   }, [fetchWallet])
+
+  const handleSellerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setSellerSubmitting(true)
+      await api.post('/seller/application', {
+        storeName,
+        storeDescription,
+      })
+      toast({
+        variant: 'success',
+        title: 'Application submitted',
+        description: 'Your seller application is now under review.',
+      })
+      setStoreName('')
+      setStoreDescription('')
+      await refreshSeller()
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Submission failed',
+        description: err.message || 'Could not submit your application.',
+      })
+    } finally {
+      setSellerSubmitting(false)
+    }
+  }
+
+  // Notifications tab (Phase 7)
+  const notifUnread = notifications.filter((n) => !n.readAt).length
+
+  React.useEffect(() => {
+    let cancelled = false
+    setNotifLoading(true)
+    notificationApi
+      .list({ page: notificationsPage, limit: 10 })
+      .then((res) => {
+        if (cancelled) return
+        setNotifications(res.notifications || [])
+        setNotifTotal(res.pagination?.total ?? 0)
+        setNotifTotalPages(res.pagination?.totalPages || 1)
+        setNotifError(null)
+      })
+      .catch((err: any) => {
+        if (!cancelled) setNotifError(err.message || 'Failed to load notifications')
+      })
+      .finally(() => {
+        if (!cancelled) setNotifLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [notificationsPage, tab])
+
+  const handleOpenNotification = async (n: NotificationItem) => {
+    try {
+      if (!n.readAt) {
+        await notificationApi.markRead(n.id)
+        notificationsChanged()
+        setNotifications((prev) =>
+          prev.map((i) =>
+            i.id === n.id ? { ...i, readAt: new Date().toISOString() } : i,
+          ),
+        )
+      }
+      if (n.conversationId) {
+        navigate(`/seller/messages/${n.conversationId}`)
+      } else if (n.orderId) {
+        navigate(`/orders/${n.orderId}`)
+      }
+    } catch {
+      // Keep the tab stable on failure.
+    }
+  }
+
+  const handleMarkAllNotifications = async () => {
+    try {
+      await notificationApi.markAllRead()
+      notificationsChanged()
+      setNotifications((prev) =>
+        prev.map((i) => (i.readAt ? i : { ...i, readAt: new Date().toISOString() })),
+      )
+    } catch (err: any) {
+      setNotifError(err.message || 'Could not mark notifications as read')
+    }
+  }
 
   React.useEffect(() => {
     if (user) {
@@ -163,82 +273,8 @@ const Account: React.FC = () => {
     : 'U'
 
   return (
-    <div className="bg-background">
-      <div className="container-page py-6 border-b border-border">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Link to="/" className="hover:text-primary flex items-center gap-1"><HomeIcon className="h-3 w-3" />Home</Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-foreground font-medium">My Account</span>
-        </div>
-      </div>
-
-      <div className="container-page py-6 lg:py-8 grid lg:grid-cols-5 gap-6 lg:gap-8">
-        {/* Sidebar */}
-        <aside className="lg:col-span-1 space-y-4 lg:sticky lg:top-24 self-start">
-          <Card>
-            <CardContent className="p-5 flex items-center gap-3 border-b border-border/60">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-primary-600 text-white font-bold flex items-center justify-center text-lg">
-                {userInitials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="font-bold truncate">{userDisplayName}</div>
-                <div className="text-xs text-muted-foreground truncate">{user?.email || 'Guest'}</div>
-                <div className="mt-1 flex items-center gap-1">
-                  <Badge variant="accent" size="xs" className="gap-1">
-                    <Gift className="h-2.5 w-2.5" />
-                    {user?.role || 'Customer'}
-                  </Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-0">
-              <nav className="p-2">
-                {navItems.map((n) => {
-                  const Icon = n.icon
-                  const active = tab === n.key
-                  const Inner = (
-                    <>
-                      <Icon className="h-4.5 w-4.5" />
-                      <span className="font-medium text-sm">{n.label}</span>
-                      {active && <ChevronRight className="h-3.5 w-3.5 ml-auto text-primary" />}
-                    </>
-                  )
-                  const cls = cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg transition-colors',
-                    active
-                      ? 'bg-primary-50 text-primary font-semibold'
-                      : 'text-foreground/80 hover:bg-muted hover:text-foreground',
-                  )
-                  return n.to ? (
-                    <Link key={n.key} to={n.to} className={cls} onClick={() => setTab(n.key)}>
-                      {Inner}
-                    </Link>
-                  ) : (
-                    <button key={n.key} onClick={() => setTab(n.key)} className={cls}>
-                      {Inner}
-                    </button>
-                  )
-                })}
-              </nav>
-              <div className="p-2 border-t border-border/60">
-                <button
-                  onClick={logout}
-                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-destructive hover:bg-destructive/5 transition-colors"
-                >
-                  <LogOut className="h-4.5 w-4.5" />
-                  <span className="font-medium text-sm">Sign Out</span>
-                </button>
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
-
-        {/* Content */}
-        <div className="lg:col-span-4 space-y-6">
-          {tab === 'overview' && (
+    <div className="space-y-6">
+      {tab === 'overview' && (
             <>
               {/* Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -280,7 +316,7 @@ const Account: React.FC = () => {
                       </h2>
                       {!isEditing && (
                         <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
-                          <Pencil className="h-4 w-4 mr-1" />
+                          <Pencil className="h-4 w-4" />
                           Edit
                         </Button>
                       )}
@@ -397,7 +433,6 @@ const Account: React.FC = () => {
                     {[
                       { l: 'Browse Marketplace', i: Package, to: '/marketplace', c: 'text-primary', b: 'bg-primary/10' },
                       { l: 'View My Orders', i: Clock, to: '/orders', c: 'text-secondary', b: 'bg-secondary/10' },
-                      { l: 'Request Shipping', i: Truck, to: '/warehouse', c: 'text-info', b: 'bg-info/10' },
                       { l: 'Track Package', i: FileText, to: '/shipping', c: 'text-success', b: 'bg-success/10' },
                     ].map((q) => (
                       <Link
@@ -418,30 +453,6 @@ const Account: React.FC = () => {
             </>
           )}
 
-          {tab === 'favorites' && (
-            <Card>
-              <CardContent className="p-5 lg:p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
-                    <Heart className="h-5 w-5 text-secondary" />
-                    Saved Items (12)
-                  </h2>
-                  <Select className="w-48" wrapperClassName="w-48">
-                    <option>All categories</option>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-square rounded-xl bg-muted border-2 border-dashed border-border/80 flex flex-col items-center justify-center text-muted-foreground text-center p-4">
-                      <Heart className="h-6 w-6 mb-2 opacity-50" />
-                      <p className="text-xs font-medium">View favorites list</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {tab === 'addresses' && (
             <Card>
               <CardContent className="p-5 lg:p-6 space-y-4">
@@ -451,7 +462,7 @@ const Account: React.FC = () => {
                     Saved Addresses
                   </h2>
                   <Button variant="primary" size="md">
-                    <Pencil className="h-4 w-4 mr-1.5" />
+                    <Pencil className="h-4 w-4" />
                     Add Address
                   </Button>
                 </div>
@@ -722,14 +733,257 @@ const Account: React.FC = () => {
             </div>
           )}
 
-          {['notifications', 'security', 'settings', 'support'].includes(tab) && (
+          {tab === 'seller' && (
+            <Card>
+              <CardContent className="p-5 lg:p-6 space-y-5">
+                <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                  <Store className="h-5 w-5 text-primary" />
+                  Become a Seller
+                </h2>
+
+                {sellerLoading ? (
+                  <div className="py-10 text-center">
+                    <div className="animate-spin h-7 w-7 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+                    <p className="mt-3 text-sm text-muted-foreground">Loading application status…</p>
+                  </div>
+                ) : sellerApp?.status === 'APPROVED' ? (
+                  <div className="p-4 rounded-xl bg-success/5 border border-success/20">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="h-6 w-6 text-success shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-foreground">Seller approved</div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Your store <span className="font-semibold text-foreground">{sellerProfile?.storeName || sellerApp.storeName}</span> is active.
+                        </p>
+                        <Link
+                          to="/seller"
+                          className="inline-flex items-center gap-1.5 mt-3 text-sm font-semibold text-destructive hover:underline"
+                        >
+                          Open Store →
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ) : sellerApp?.status === 'PENDING' ? (
+                  <div className="p-4 rounded-xl bg-warning/5 border border-warning/20">
+                    <div className="flex items-start gap-3">
+                      <Clock className="h-6 w-6 text-warning shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-foreground">Application under review</div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          We are reviewing <span className="font-semibold text-foreground">{sellerApp.storeName}</span>.
+                          You will see the decision here once an admin has reviewed it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : sellerApp?.status === 'SUSPENDED' ? (
+                  <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20">
+                    <div className="flex items-start gap-3">
+                      <Ban className="h-6 w-6 text-destructive shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-bold text-foreground">Seller account suspended</div>
+                        <p className="text-sm text-muted-foreground mt-1">Contact support for more information.</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : sellerApp?.status === 'REJECTED' ? (
+                  <div className="space-y-5">
+                    <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20">
+                      <div className="flex items-start gap-3">
+                        <XCircle className="h-6 w-6 text-destructive shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold text-foreground">Application rejected</div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Reason: <span className="text-foreground">{sellerApp.rejectionReason || 'Not specified.'}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Resubmission reuses the same application record server-side. */}
+                    <form onSubmit={handleSellerSubmit} className="space-y-4">
+                      <p className="text-sm font-semibold">Submit a new application</p>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Name</label>
+                        <Input
+                          value={storeName}
+                          onChange={(e) => setStoreName(e.target.value)}
+                          placeholder="e.g. Nati's Tech Deals"
+                          required
+                          minLength={3}
+                          maxLength={80}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Description</label>
+                        <textarea
+                          value={storeDescription}
+                          onChange={(e) => setStoreDescription(e.target.value)}
+                          placeholder="Tell us what you plan to sell (10–2000 characters)"
+                          required
+                          minLength={10}
+                          maxLength={2000}
+                          rows={4}
+                          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                        />
+                      </div>
+                      <Button type="submit" disabled={sellerSubmitting}>
+                        {sellerSubmitting ? 'Submitting…' : 'Resubmit Application'}
+                      </Button>
+                    </form>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSellerSubmit} className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Apply to open a store on EMART. Our team reviews every application.
+                    </p>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Name</label>
+                      <Input
+                        value={storeName}
+                        onChange={(e) => setStoreName(e.target.value)}
+                        placeholder="e.g. Nati's Tech Deals"
+                        required
+                        minLength={3}
+                        maxLength={80}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Description</label>
+                      <textarea
+                        value={storeDescription}
+                        onChange={(e) => setStoreDescription(e.target.value)}
+                        placeholder="Tell us what you plan to sell (10–2000 characters)"
+                        required
+                        minLength={10}
+                        maxLength={2000}
+                        rows={4}
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                      />
+                    </div>
+                    <Button type="submit" disabled={sellerSubmitting}>
+                      {sellerSubmitting ? 'Submitting…' : 'Submit Application'}
+                    </Button>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'notifications' && (
+            <Card>
+              <CardContent className="p-5 lg:p-6 space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-primary" />
+                    Notifications
+                  </h2>
+                  {notifUnread > 0 && (
+                    <Button variant="outline" size="sm" onClick={handleMarkAllNotifications}>
+                      <CheckCheck className="h-4 w-4" />
+                      Mark all read
+                    </Button>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  {notifTotal} notification{notifTotal === 1 ? '' : 's'}
+                  {notifUnread > 0 ? ` · ${notifUnread} unread` : ''}
+                </p>
+
+                {notifLoading ? (
+                  <div className="py-10 flex justify-center">
+                    <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  </div>
+                ) : notifError && notifications.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-destructive">{notifError}</div>
+                ) : notifications.length === 0 ? (
+                  <div className="py-10 flex flex-col items-center text-center">
+                    <Inbox className="h-8 w-8 text-muted-foreground mb-2" />
+                    <p className="font-semibold">No notifications yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Updates about your orders and store appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border rounded-xl border border-border">
+                    {notifications.map((n) => {
+                      const Icon = n.type === 'MESSAGE' ? MessageSquare : Bell
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => handleOpenNotification(n)}
+                          className={cn(
+                            'w-full text-left flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50',
+                            !n.readAt && 'bg-primary-50/40',
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'mt-0.5 h-9 w-9 rounded-lg flex items-center justify-center shrink-0',
+                              n.type === 'MESSAGE'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-primary/10 text-primary',
+                            )}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="flex items-center gap-2">
+                              <span className="font-semibold text-sm truncate">{n.title}</span>
+                              {!n.readAt && (
+                                <span className="h-2 w-2 rounded-full bg-destructive shrink-0" />
+                              )}
+                            </span>
+                            {n.body && (
+                              <span className="block text-xs text-muted-foreground mt-0.5 truncate">
+                                {n.body}
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
+                            {formatRelativeTime(n.createdAt)}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {notifTotalPages > 1 && (
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-xs text-muted-foreground">
+                      Page {notificationsPage} of {notifTotalPages}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={notificationsPage <= 1 || notifLoading}
+                        onClick={() => setNotificationsPage((p) => Math.max(1, p - 1))}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={notificationsPage >= notifTotalPages || notifLoading}
+                        onClick={() => setNotificationsPage((p) => Math.min(notifTotalPages, p + 1))}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {tab === 'support' && (
             <Card>
               <CardContent className="p-8 min-h-[300px] flex flex-col items-center justify-center text-center">
                 <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                  {tab === 'notifications' && <Bell className="h-7 w-7 text-muted-foreground" />}
-                  {tab === 'security' && <Lock className="h-7 w-7 text-muted-foreground" />}
-                  {tab === 'settings' && <Settings className="h-7 w-7 text-muted-foreground" />}
-                  {tab === 'support' && <Headphones className="h-7 w-7 text-muted-foreground" />}
+                  <Headphones className="h-7 w-7 text-muted-foreground" />
                 </div>
                 <h3 className="font-bold text-lg mb-1 capitalize">{tab}</h3>
                 <p className="text-sm text-muted-foreground max-w-sm">
@@ -738,9 +992,6 @@ const Account: React.FC = () => {
               </CardContent>
             </Card>
           )}
-        </div>
-      </div>
-
       {/* Deposit Modal */}
       {showDepositModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -833,7 +1084,7 @@ const Account: React.FC = () => {
                 className="flex-1"
                 onClick={handleDeposit}
               >
-                <Plus className="h-4 w-4 mr-1.5" />
+                <Plus className="h-4 w-4" />
                 Add Funds
               </Button>
             </div>
