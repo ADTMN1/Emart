@@ -222,208 +222,253 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       className={cn(
         'group relative rounded-xl border border-border bg-card overflow-hidden transition-all duration-300',
         'hover:border-primary-300 hover:shadow-card-hover',
-        'flex flex-col h-full',
+        // Grid: vertical card. List (compact): Amazon-style horizontal row —
+        // fixed square image on the left, info column on the right.
+        compact ? 'flex flex-row items-stretch' : 'flex flex-col h-full',
         className,
       )}
     >
-      <Link to={`/product/${product.id}`} className="relative block overflow-hidden bg-muted">
-        <OptimizedImage
-          src={imageUrl}
-          alt={product.name}
-          size="medium"
-          context="card"
-          lazy
-          showShimmer
-          aspectRatio="aspect-square"
-          containerClassName="relative overflow-hidden"
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-        />
-
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-          {product.isNew && !isConditionNew && (
-            <Badge variant="info" size="sm" dot>
-              NEW
-            </Badge>
-          )}
-          {product.isBestSeller && (
-            <Badge variant="accent" size="sm" dot>
-              BESTSELLER
-            </Badge>
-          )}
-          <Badge
-            variant={conditionColors[product.condition] as any}
-            size="sm"
-          >
-            {displayCondition}
-          </Badge>
-        </div>
-
-        <div className="absolute bottom-3 left-3 right-3 flex items-center gap-1.5">
-          <span className={cn(
-            'px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-sm',
-            sourceColors[product.source],
-          )}>
-            {product.source}
-          </span>
-          {product.domesticShipping === 0 ? (
-            <span className="px-2 py-1 rounded-md bg-success text-white text-[10px] font-bold shadow-sm">
-              FREE SHIP
-            </span>
-          ) : (
-            <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/75 text-white text-[10px] font-semibold shadow-sm">
-              <Truck className="h-3 w-3" />
-              +${product.domesticShipping.toLocaleString()}
-            </span>
-          )}
-        </div>
-      </Link>
-
-      {/* Hover action rail: wishlist / quick view / add to cart.
-          Always visible & tappable on touch devices; desktop reveals on card
-          hover with a subtle fade + slide. Sits outside the image link so the
-          buttons are not nested anchors. */}
-      <div
-        className={cn(
-          'absolute top-3 right-3 z-20 flex flex-col gap-2',
-          'transition-all duration-200 ease-out',
-          'opacity-100 translate-x-0',
-          'md:opacity-0 md:translate-x-2 md:pointer-events-none',
-          'md:group-hover:opacity-100 md:group-hover:translate-x-0 md:group-hover:pointer-events-auto',
-        )}
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onFavorite?.(product.id)
-          }}
-          className={cn(
-            railButtonClasses,
-            isFavorite
-              ? 'bg-secondary text-white hover:bg-secondary-600 hover:text-white'
-              : '',
-          )}
-          aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-        >
-          <Heart className={cn('h-4 w-4 transition-transform', isFavorite && 'fill-current')} />
-        </button>
-
+      {/* Image cell. Grid: full-width block (unchanged). List: fixed-width
+          square column so rows stay compact no matter the screen size. */}
+      <div className={cn('relative shrink-0', compact && 'w-28 sm:w-40 md:w-48 p-3 sm:p-4')}>
         <Link
           to={`/product/${product.id}`}
-          className={railButtonClasses}
-          aria-label="Quick view product"
+          className={cn('relative block overflow-hidden bg-muted', compact && 'rounded-lg')}
         >
-          <Eye className="h-4 w-4" />
+          <OptimizedImage
+            src={imageUrl}
+            alt={product.name}
+            size="medium"
+            context="card"
+            lazy
+            showShimmer
+            aspectRatio="aspect-square"
+            containerClassName="relative overflow-hidden"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+
+          <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+            {product.isNew && !isConditionNew && (
+              <Badge variant="info" size="sm" dot>
+                NEW
+              </Badge>
+            )}
+            {product.isBestSeller && (
+              <Badge variant="accent" size="sm" dot>
+                BESTSELLER
+              </Badge>
+            )}
+            <Badge
+              variant={conditionColors[product.condition] as any}
+              size="sm"
+            >
+              {displayCondition}
+            </Badge>
+          </div>
+
+          <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center gap-1.5">
+            <span className={cn(
+              'px-2 py-1 rounded-md text-[10px] font-bold text-white shadow-sm',
+              sourceColors[product.source],
+            )}>
+              {product.source}
+            </span>
+            {product.domesticShipping === 0 ? (
+              <span className="px-2 py-1 rounded-md bg-success text-white text-[10px] font-bold shadow-sm">
+                FREE SHIP
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 px-2 py-1 rounded-md bg-foreground/75 text-white text-[10px] font-semibold shadow-sm">
+                <Truck className="h-3 w-3" />
+                +${product.domesticShipping.toLocaleString()}
+              </span>
+            )}
+          </div>
         </Link>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            handleAddToCart()
-          }}
-          disabled={isAddingToCart}
-          className={cn(railButtonClasses, 'disabled:opacity-70')}
-          aria-label="Add to cart"
-        >
-          {isAddingToCart ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ShoppingCart className="h-4 w-4" />
+        {/* Hover action rail: wishlist / quick view / add to cart. Anchored to
+            the image cell in both modes so it never covers product info.
+            Always visible & tappable on touch devices; desktop reveals on card
+            hover with a subtle fade + slide. Sits outside the image link so the
+            buttons are not nested anchors. */}
+        <div
+          className={cn(
+            'absolute z-20 flex flex-col gap-2',
+            compact ? 'top-2 right-2' : 'top-3 right-3',
+            'transition-all duration-200 ease-out',
+            'opacity-100 translate-x-0',
+            'md:opacity-0 md:translate-x-2 md:pointer-events-none',
+            'md:group-hover:opacity-100 md:group-hover:translate-x-0 md:group-hover:pointer-events-auto',
           )}
-        </button>
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onFavorite?.(product.id)
+            }}
+            className={cn(
+              railButtonClasses,
+              isFavorite
+                ? 'bg-secondary text-white hover:bg-secondary-600 hover:text-white'
+                : '',
+            )}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart className={cn('h-4 w-4 transition-transform', isFavorite && 'fill-current')} />
+          </button>
+
+          <Link
+            to={`/product/${product.id}`}
+            className={railButtonClasses}
+            aria-label="Quick view product"
+          >
+            <Eye className="h-4 w-4" />
+          </Link>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              handleAddToCart()
+            }}
+            disabled={isAddingToCart}
+            className={cn(railButtonClasses, 'disabled:opacity-70')}
+            aria-label="Add to cart"
+          >
+            {isAddingToCart ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ShoppingCart className="h-4 w-4" />
+            )}
+          </button>
+        </div>
       </div>
 
+      {/* Info column */}
       <div className={cn(
-        'flex flex-col flex-1',
-        compact ? 'p-3.5 gap-2' : 'p-4 gap-2.5',
+        'flex flex-col flex-1 min-w-0',
+        compact ? 'py-3 pr-3 pl-0 sm:py-4 sm:pr-4 gap-1.5' : 'p-4 gap-2.5',
       )}>
         <Link to={`/product/${product.id}`} className="group/title">
           <h3
             className={cn(
               'font-semibold text-foreground leading-snug line-clamp-2 group-hover/title:text-primary transition-colors',
               'text-sm',
-              // Reserve exactly the title block height (2 lines for grid cards,
-              // 1 for compact list rows) so names never change the card height.
-              compact ? 'min-h-5' : 'min-h-10',
+              // Grid cards reserve exactly the 2-line title block so names
+              // never change the card height; list rows size naturally.
+              compact ? '' : 'min-h-10',
             )}
           >
             {product.name}
           </h3>
         </Link>
 
-        {/* Fixed-height metadata block so short/long content never changes the
-            card height; every card keeps the same price/action alignment. */}
-        {!compact && (
-          <>
-            {/* Interactive star rating: shows the real average + count, or the
-                user's own rating once they've rated. Stars submit on click for
-                authenticated users; signed-out users get a sign-in prompt. */}
-            <div className="min-h-[18px] flex items-center gap-1.5">
-              <div
-                className="flex items-center gap-0.5"
-                onMouseLeave={() => setHoverRating(0)}
-                role="radiogroup"
-                aria-label={`Rate ${product.name}`}
-              >
-                {Array.from({ length: 5 }).map((_, i) => {
-                  const starValue = i + 1
-                  const shown = hoverRating > 0 ? hoverRating : (myRating ?? Math.round(realAvg))
-                  const filled = i < shown
-                  const isMine = myRating !== undefined && i < myRating
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      role="radio"
-                      aria-checked={myRating === starValue}
-                      aria-label={`Rate ${starValue} star${starValue > 1 ? 's' : ''}`}
-                      disabled={isSubmittingRating}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        submitRating(starValue)
-                      }}
-                      onMouseEnter={() => setHoverRating(starValue)}
+        {compact ? (
+          /* List rows: static real rating (average + count), no input. */
+          <div className="min-h-[16px] flex items-center gap-1.5">
+            <div className="flex items-center gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => {
+                const shown = myRating ?? Math.round(realAvg)
+                const isMine = myRating !== undefined && i < myRating
+                return (
+                  <Star
+                    key={i}
+                    className={cn(
+                      'h-3 w-3',
+                      i < shown
+                        ? isMine
+                          ? 'text-secondary fill-secondary'
+                          : 'text-amber-400 fill-amber-400'
+                        : 'text-muted-foreground/30',
+                    )}
+                  />
+                )
+              })}
+            </div>
+            <span className="text-xs font-medium text-foreground tabular-nums">
+              {realCount > 0 ? realAvg.toFixed(1) : 'New'}
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              ({realCount.toLocaleString()})
+            </span>
+          </div>
+        ) : (
+          /* Grid cards: interactive star rating — shows the real average +
+              count, or the user's own rating once they've rated. Stars submit
+              on click for authenticated users; signed-out users get a
+              sign-in prompt. */
+          <div className="min-h-[18px] flex items-center gap-1.5">
+            <div
+              className="flex items-center gap-0.5"
+              onMouseLeave={() => setHoverRating(0)}
+              role="radiogroup"
+              aria-label={`Rate ${product.name}`}
+            >
+              {Array.from({ length: 5 }).map((_, i) => {
+                const starValue = i + 1
+                const shown = hoverRating > 0 ? hoverRating : (myRating ?? Math.round(realAvg))
+                const filled = i < shown
+                const isMine = myRating !== undefined && i < myRating
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    role="radio"
+                    aria-checked={myRating === starValue}
+                    aria-label={`Rate ${starValue} star${starValue > 1 ? 's' : ''}`}
+                    disabled={isSubmittingRating}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      submitRating(starValue)
+                    }}
+                    onMouseEnter={() => setHoverRating(starValue)}
+                    className={cn(
+                      'p-0.5 rounded-sm transition-transform duration-150',
+                      'hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary',
+                      'disabled:cursor-wait',
+                    )}
+                  >
+                    <Star
                       className={cn(
-                        'p-0.5 rounded-sm transition-transform duration-150',
-                        'hover:scale-125 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary',
-                        'disabled:cursor-wait',
+                        'h-3 w-3 transition-colors duration-150',
+                        filled
+                          ? isMine
+                            ? 'text-secondary fill-secondary'
+                            : 'text-amber-400 fill-amber-400'
+                          : 'text-muted-foreground/30',
                       )}
-                    >
-                      <Star
-                        className={cn(
-                          'h-3 w-3 transition-colors duration-150',
-                          filled
-                            ? isMine
-                              ? 'text-secondary fill-secondary'
-                              : 'text-amber-400 fill-amber-400'
-                            : 'text-muted-foreground/30',
-                        )}
-                      />
-                    </button>
-                  )
-                })}
-              </div>
-              <span className="text-xs font-medium text-foreground tabular-nums">
-                {realCount > 0 ? realAvg.toFixed(1) : 'New'}
-              </span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                ({realCount.toLocaleString()})
-              </span>
+                    />
+                  </button>
+                )
+              })}
             </div>
+            <span className="text-xs font-medium text-foreground tabular-nums">
+              {realCount > 0 ? realAvg.toFixed(1) : 'New'}
+            </span>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              ({realCount.toLocaleString()})
+            </span>
+          </div>
+        )}
 
-            <div className="min-h-[16px] flex items-center gap-1.5 text-xs text-muted-foreground">
-              {normalizeSellerType(product.sellerType) === 'Shop' ? (
-                <Store className="h-3 w-3 shrink-0" />
-              ) : (
-                <User className="h-3 w-3 shrink-0" />
-              )}
-              <span className="truncate">{product.seller}</span>
-            </div>
-          </>
+        <div className="min-h-[16px] flex items-center gap-1.5 text-xs text-muted-foreground">
+          {normalizeSellerType(product.sellerType) === 'Shop' ? (
+            <Store className="h-3 w-3 shrink-0" />
+          ) : (
+            <User className="h-3 w-3 shrink-0" />
+          )}
+          <span className="truncate">{product.seller}</span>
+        </div>
+
+        {/* Short description snippet (list rows only, hidden on small phones) */}
+        {compact && product.description && (
+          <p className="hidden sm:block text-xs text-muted-foreground leading-relaxed line-clamp-2">
+            {product.description}
+          </p>
         )}
 
         {/* Footer wraps on ultra-narrow cards: price keeps its own line and
@@ -448,7 +493,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             variant="outline"
             className={cn(
               'min-w-[44px] grow basis-auto',
-              compact && 'h-8 px-2.5',
+              compact ? 'h-8 px-3 sm:grow-0' : 'grow basis-auto',
             )}
             onClick={handleAddToCart}
             disabled={isAddingToCart}
@@ -460,7 +505,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               )
             }
           >
-            <span className="truncate">{compact ? 'Add' : 'Add to Cart'}</span>
+            <span className="truncate">Add to Cart</span>
           </Button>
         </div>
       </div>

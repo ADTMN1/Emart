@@ -458,7 +458,7 @@ const Checkout: React.FC = () => {
                         onClick={continueToPayment}
                         disabled={submittingOrder}
                       >
-                        {submittingOrder ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" />Processing...</> : <>Continue to Payment<ChevronRight className="h-4 w-4 ml-1" /></>}
+                        {submittingOrder ? <><Loader2 className="h-4 w-4 animate-spin" />Processing...</> : <>Continue to Payment<ChevronRight className="h-4 w-4" /></>}
                       </Button>
                     </div>
                   ) : (
@@ -503,7 +503,7 @@ const Checkout: React.FC = () => {
                             <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Selected network</div><div className="mt-1 font-bold text-primary">{cryptoConfig.network}</div></div>
                           </div>
                           <div className="rounded-lg border border-border bg-background p-3"><div className="text-xs text-muted-foreground">Order total</div><div className="mt-1 font-bold">{formatCurrency(total)}</div><p className="mt-1 text-xs text-muted-foreground">Send {cryptoConfig.currency} only on the {cryptoConfig.network} network.</p></div>
-                          <div className="space-y-2"><div className="text-xs font-bold text-muted-foreground">EMART Receiving Address</div><div className="flex flex-col gap-2 sm:flex-row"><Input value={cryptoConfig.address} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(cryptoConfig.address); setCopied(true); setTimeout(() => setCopied(false), 1600) }}><Copy className="h-4 w-4 mr-1" />{copied ? 'Copied' : 'Copy Address'}</Button></div></div>
+                          <div className="space-y-2"><div className="text-xs font-bold text-muted-foreground">EMART Receiving Address</div><div className="flex flex-col gap-2 sm:flex-row"><Input value={cryptoConfig.address} readOnly className="font-mono text-xs" /><Button type="button" variant="outline" className="shrink-0" onClick={() => { navigator.clipboard.writeText(cryptoConfig.address); setCopied(true); setTimeout(() => setCopied(false), 1600) }}><Copy className="h-4 w-4" />{copied ? 'Copied' : 'Copy Address'}</Button></div></div>
                           {cryptoConfig.qrCodeUrl && <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-background p-4"><div className="text-xs font-bold text-muted-foreground self-start">QR Code</div><img src={cryptoConfig.qrCodeUrl} alt={`QR code for ${cryptoConfig.currency} on ${cryptoConfig.network}`} className="h-44 w-44 rounded-md" /></div>}
                           <div className="space-y-3 rounded-lg border border-dashed border-border bg-background/60 p-4">
                             <div className="flex items-center justify-between gap-3">
@@ -570,7 +570,7 @@ const Checkout: React.FC = () => {
                           disabled={!cryptoConfig?.address || cryptoLoading || !paymentScreenshot || !paymentSubmitted}
                         >
                           Review Order
-                          <ChevronRight className="h-4 w-4 ml-1" />
+                          <ChevronRight className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>

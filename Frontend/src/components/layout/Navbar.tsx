@@ -113,7 +113,7 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center gap-2 lg:gap-8 shrink-0">
               <button
                 onClick={() => setMobileOpen(true)}
-                className="lg:hidden -ml-1.5 p-2 rounded-md hover:bg-muted text-foreground"
+                className="lg:hidden p-2.5 rounded-lg hover:bg-muted text-foreground"
                 aria-label="Open menu"
               >
                 <Menu className="h-5 w-5" />
@@ -296,14 +296,6 @@ export const Navbar: React.FC = () => {
                         <Package className="h-4 w-4" />
                         My Orders
                       </Link>
-                      <Link
-                        to="/warehouse"
-                        className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-foreground hover:bg-primary-50 hover:text-primary transition-colors"
-                        onClick={() => setUserDropdownOpen(false)}
-                      >
-                        <Store className="h-4 w-4" />
-                        Warehouse Packages
-                      </Link>
                       <div className="my-1 border-t border-border" />
                       <button
                         onClick={() => {
@@ -417,12 +409,6 @@ export const Navbar: React.FC = () => {
             className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
           >
             {t('navbar.myOrders')}
-          </Link>
-          <Link
-            to="/warehouse"
-            className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
-          >
-            {t('navbar.warehouse')}
           </Link>
           <Link
             to="/account"

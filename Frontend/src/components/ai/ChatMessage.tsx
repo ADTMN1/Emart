@@ -31,7 +31,7 @@ const ChatMessage = ({ message }: ChatMessageProps) => {
             : 'bg-surface-secondary text-primary'
         )}
       >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-5 w-5" />}
+        {isUser ? <User className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
       </div>
 
       {/* Message Content */}

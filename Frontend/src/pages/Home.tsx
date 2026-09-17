@@ -376,7 +376,7 @@ const Home: React.FC = () => {
                   )}
                   <Button type="submit" size="xl" className="sm:w-auto w-full shadow-lg shadow-primary/25 min-w-[140px] px-6">
                     <span className="font-semibold">{activeTab === 'search' ? t('home.searchButton') : t('home.getQuote')}</span>
-                    <ArrowRight className="h-5 w-5 ml-2" />
+                    <ArrowRight className="h-5 w-5" />
                   </Button>
                 </div>
 
@@ -487,7 +487,7 @@ const Home: React.FC = () => {
             <Button variant="ghost" size="md" asChild className="hidden md:inline-flex">
               <Link to="/categories" className="group">
                 <span>{t('home.viewAllCategories')}</span>
-                <ArrowRight className="h-4 w-4 ml-2 transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </Link>
             </Button>
           </div>
@@ -562,7 +562,7 @@ const Home: React.FC = () => {
               <Button variant="outline" size="lg" asChild className="shadow-sm">
                 <Link to="/marketplace" className="flex items-center">
                   <span>{t('home.viewAllProducts')}</span>
-                  <ArrowRight className="h-5 w-5 ml-2" />
+                  <ArrowRight className="h-5 w-5" />
                 </Link>
               </Button>
             </div>
@@ -854,7 +854,7 @@ const Home: React.FC = () => {
                 {t('home.faqDescription')}
               </p>
               <Button variant="outline" size="lg" className="shadow-sm">
-                <Headphones className="h-5 w-5 mr-2" />
+                <Headphones className="h-5 w-5" />
                 <span>{t('home.contactSupport')}</span>
               </Button>
             </div>
@@ -922,7 +922,7 @@ const Home: React.FC = () => {
                 >
                   <Link to="/register" className="flex items-center justify-center">
                     <span className="font-semibold">Get Started Free</span>
-                    <ArrowRight className="h-5 w-5 ml-2" />
+                    <ArrowRight className="h-5 w-5" />
                   </Link>
                 </Button>
                 <Button
@@ -931,7 +931,7 @@ const Home: React.FC = () => {
                   asChild
                 >
                   <Link to="/marketplace" className="flex items-center justify-center">
-                    <Globe2 className="h-5 w-5 mr-2" />
+                    <Globe2 className="h-5 w-5" />
                     <span className="font-semibold">Start Browsing</span>
                   </Link>
                 </Button>

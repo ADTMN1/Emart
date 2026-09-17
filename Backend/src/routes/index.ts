@@ -9,6 +9,8 @@ import walletRoutes from './wallet.routes';
 import paymentRoutes from './payment.routes';
 import adminRoutes from './admin.routes';
 import favoriteRoutes from './favorite.routes';
+import sellerRoutes from './seller.routes';
+import notificationRoutes from './notification.routes';
 
 const router = Router();
 
@@ -23,6 +25,8 @@ router.use('/wallet', walletRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/favorites', favoriteRoutes);
+router.use('/seller', sellerRoutes);
+router.use('/notifications', notificationRoutes);
 
 // Health check
 router.get('/health', (req, res) => {

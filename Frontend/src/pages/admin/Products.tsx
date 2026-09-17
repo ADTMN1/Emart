@@ -374,7 +374,7 @@ export const AdminProducts: React.FC = () => {
         <div className="flex flex-wrap gap-2">
           <Link to="/admin/products/import/history"><Button variant="outline" leftIcon={<History className="h-4 w-4" />}>Import History</Button></Link>
           <Link to="/admin/products/import"><Button variant="outline" leftIcon={<Upload className="h-4 w-4" />}>Import CSV</Button></Link>
-          <Link to="/admin/products/new"><Button size="lg"><Plus className="h-4 w-4 mr-2" />Add Product</Button></Link>
+          <Link to="/admin/products/new"><Button size="lg"><Plus className="h-4 w-4" />Add Product</Button></Link>
         </div>
       </div>
 
@@ -452,7 +452,7 @@ export const AdminProducts: React.FC = () => {
                   onClick={handleClearSelection}
                   disabled={bulkDeleting}
                 >
-                  <X className="h-4 w-4 mr-1" />
+                  <X className="h-4 w-4" />
                   Clear
                 </Button>
                 <Button
@@ -495,7 +495,7 @@ export const AdminProducts: React.FC = () => {
               {!searchQuery && !categoryFilter && !statusFilter && (
                 <Link to="/admin/products/new" className="mt-4">
                   <Button>
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4" />
                     Add Product
                   </Button>
                 </Link>
@@ -638,7 +638,7 @@ export const AdminProducts: React.FC = () => {
                   disabled={pagination.page <= 1}
                   onClick={() => handlePageChange(pagination.page - 1)}
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  <ChevronLeft className="h-4 w-4" />
                   Previous
                 </Button>
                 <Button
@@ -648,7 +648,7 @@ export const AdminProducts: React.FC = () => {
                   onClick={() => handlePageChange(pagination.page + 1)}
                 >
                   Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>

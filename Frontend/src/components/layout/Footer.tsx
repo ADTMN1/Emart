@@ -35,7 +35,6 @@ export const Footer: React.FC = () => {
       links: [
         { label: t('footer.howProxyWorks'), to: '#how' },
         { label: t('footer.internationalShipping'), to: '#shipping' },
-        { label: t('footer.warehouseStorage'), to: '/warehouse' },
         { label: t('footer.buyerProtection'), to: '#trust' },
         { label: t('footer.itemConsolidation'), to: '#shipping' },
       ],

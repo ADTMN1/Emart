@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../config/database';
+import orderService from '../services/order.service';
+import { sendSuccess } from '../utils/response';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
 
 interface CryptoWalletRow {
@@ -101,6 +103,45 @@ class AdminController {
       `;
       if (result === 0) throw new NotFoundError('Crypto wallet not found.');
       res.json({ success: true });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /admin/orders — list every customer's order with filtering
+   * (status, paymentStatus, search) and pagination. ADMIN-only by route
+   * middleware; deliberately reuses the order service without any userId scope.
+   */
+  async getAdminOrders(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filters = {
+        status: req.query.status as string | undefined,
+        paymentStatus: req.query.paymentStatus as string | undefined,
+        search: req.query.search as string | undefined,
+      };
+
+      const pagination = {
+        page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
+        limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 20,
+      };
+
+      const result = await orderService.getAdminOrders(filters, pagination);
+      return sendSuccess(res, result, 'Admin orders retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /admin/orders/:id — full detail of ANY customer's order, including
+   * customer identity, payment info/proof, product snapshots and shipment
+   * events. ADMIN-only by route middleware.
+   */
+  async getAdminOrderById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const order = await orderService.getAdminOrderById(req.params.id);
+      return sendSuccess(res, order, 'Admin order retrieved successfully');
     } catch (error) {
       next(error);
     }
