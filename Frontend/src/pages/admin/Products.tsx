@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 import { useToast } from '@/components/ui/Toast';
 import { api, invalidateCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -549,10 +550,15 @@ export const AdminProducts: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <img
+                            <OptimizedImage
                               src={getPrimaryImage(product)}
                               alt={product.name}
-                              className="h-12 w-12 rounded-lg object-cover bg-muted"
+                              size="thumb"
+                              context="thumbnail"
+                              lazy
+                              aspectRatio="aspect-square"
+                              containerClassName="h-12 w-12 min-w-12 shrink-0 rounded-lg"
+                              className="rounded-lg"
                             />
                             <div className="flex-1 min-w-0">
                               <p className="font-medium text-sm truncate">{product.name}</p>

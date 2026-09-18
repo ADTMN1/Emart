@@ -12,6 +12,7 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
   footer?: React.ReactNode
   hideClose?: boolean
+  onBodyScroll?: React.UIEventHandler<HTMLDivElement>
 }
 
 const sizeClasses = {
@@ -31,6 +32,7 @@ export const Modal: React.FC<ModalProps> = ({
   size = 'md',
   footer,
   hideClose = false,
+  onBodyScroll,
 }) => {
   React.useEffect(() => {
     if (!isOpen) return
@@ -83,7 +85,7 @@ export const Modal: React.FC<ModalProps> = ({
             )}
           </div>
         )}
-        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
+        <div className="flex-1 overflow-y-auto p-6 scrollbar-thin" onScroll={onBodyScroll}>
           {children}
         </div>
         {footer && (

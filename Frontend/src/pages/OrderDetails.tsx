@@ -20,6 +20,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardContent } from '@/components/ui/Card'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { Product } from '@/lib/types'
 import { api } from '@/lib/api'
@@ -293,10 +294,14 @@ const OrderDetails: React.FC = () => {
                       </div>
                       <div className="flex gap-4">
                         <Link to={`/product/${row.product.id}`} className="h-20 w-20 shrink-0 rounded-xl overflow-hidden bg-muted border border-border">
-                          <img
+                          <OptimizedImage
                             src={row.product.image || row.product.images?.[0] || ''}
                             alt={row.product.name}
-                            className="h-full w-full object-cover"
+                            size="thumb"
+                            context="thumbnail"
+                            lazy
+                            aspectRatio="aspect-square"
+                            containerClassName="h-20 w-20 shrink-0"
                           />
                         </Link>
                         <div className="flex-1 min-w-0 flex flex-col justify-between">

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { api, ApiError } from '../lib/api';
+import { api, getAuthProfile, ApiError } from '../lib/api';
 
 export interface User {
   id: string;
@@ -23,7 +23,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: RegisterParams) => Promise<void>;
   logout: () => void;
   updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) => Promise<void>;
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
 
       try {
-        const userData = await api.get<User>('/auth/profile');
+        const userData = await getAuthProfile<User>();
         setUser(userData);
         // Cache profile
         localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
@@ -138,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }));
       setToken(res.token);
       setUser(res.user);
+      return res.user;
     } catch (error) {
       if (error instanceof ApiError) {
         throw new Error(error.message);

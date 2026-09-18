@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
-import { api } from '@/lib/api';
+import { getAuthProfile } from '@/lib/api';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -34,9 +34,11 @@ const AuthCallback = () => {
       try {
         // Store token temporarily in localStorage so api.get can use it
         localStorage.setItem('emart_token', token);
-        
-        // Fetch user profile using the token
-        const userData = await api.get('/auth/profile');
+
+        // Fetch user profile using the token. getAuthProfile shares the
+        // in-flight request with AuthProvider's own init, so this and the
+        // provider's restore never issue two /auth/profile calls.
+        const userData = await getAuthProfile();
         
         // Update auth context with token and user data
         setAuthData(token, userData);

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Select'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { useToast } from '@/components/ui/Toast'
 import { sellerProductApi } from '@/lib/api'
 import { formatCurrency } from '@/lib/utils'
@@ -216,7 +217,15 @@ export default function SellerProducts() {
                       <div className="flex gap-4">
                         <div className="h-20 w-20 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center">
                           {primary ? (
-                            <img src={primary.url} alt={product.name} className="h-full w-full object-cover" />
+                            <OptimizedImage
+                              src={primary.url}
+                              alt={product.name}
+                              size="thumb"
+                              context="thumbnail"
+                              lazy
+                              aspectRatio="aspect-square"
+                              containerClassName="h-20 w-20 shrink-0 rounded-lg"
+                            />
                           ) : (
                             <Package className="h-8 w-8 text-muted-foreground" />
                           )}

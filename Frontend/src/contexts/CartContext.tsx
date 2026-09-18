@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { api } from '../lib/api';
+import { cachedApi } from '../lib/api';
 
 interface CartContextType {
   cartCount: number;
@@ -23,9 +23,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Load cart count once on mount for authenticated users. Reads the same
+    // user-scoped cache entry as the cart page and checkout, so all three
+    // consumers share one /cart request (in-flight dedup + short TTL).
     try {
-      const cart = await api.get<{ items?: Array<{ quantity?: number }> } | null>('/cart').catch(() => null);
-      const items = Array.isArray(cart?.items) ? cart.items : [];
+      const cart = await cachedApi.getCart(user?.id);
+      const items: Array<{ quantity?: number }> = Array.isArray(cart?.items) ? cart.items : [];
       const total = items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
       setCartCount(total);
     } catch {

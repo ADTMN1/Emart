@@ -101,10 +101,11 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   }, [src, size])
 
   const srcSet = React.useMemo(() => {
-    if (!src) return undefined
-    // Generate srcset for responsive loading
+    if (!src || context === 'thumbnail') return undefined
+    // Generate srcset for responsive loading (thumbnail context uses a fixed
+    // small src so it keeps downloading the 200px variant, not the 400w one).
     return getImageSrcSet(src, ['small', 'medium', 'large'])
-  }, [src])
+  }, [src, context])
 
   const sizes = React.useMemo(() => {
     return getImageSizesAttr(context)
@@ -146,6 +147,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       link.href = optimizedSrc
       if (srcSet) {
         link.setAttribute('imagesrcset', srcSet)
+        link.setAttribute('imagesizes', sizes)
       }
       document.head.appendChild(link)
 

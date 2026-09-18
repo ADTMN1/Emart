@@ -8,6 +8,27 @@ import { sendSuccess } from '../utils/response';
  * authenticated user — no client-supplied userId/sellerId/status is read.
  */
 class SellerController {
+  /** GET /api/v1/seller/agreement — current agreement + caller's acceptance. */
+  async getAgreement(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const agreement = await sellerService.getAgreement(req.user!.id);
+      sendSuccess(res, agreement);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /** POST /api/v1/seller/agreement/accept — record acceptance of the current
+   *  server-controlled version. The version/timestamp are never client-set. */
+  async acceptAgreement(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const acceptance = await sellerService.acceptAgreement(req.user!.id);
+      sendSuccess(res, acceptance, 'Seller Agreement accepted.', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /** POST /api/v1/seller/application — submit or resubmit (rejected only). */
   async submitApplication(req: AuthRequest, res: Response, next: NextFunction) {
     try {

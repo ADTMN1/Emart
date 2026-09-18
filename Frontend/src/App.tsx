@@ -70,6 +70,7 @@ function App() {
             <Route path="payments" element={<Account />} />
             <Route path="seller" element={<Account />} />
             <Route path="notifications" element={<Account />} />
+            <Route path="usdc-policy" element={<Account />} />
             <Route path="support" element={<Account />} />
           </Route>
           <Route path="orders" element={<AccountLayout />}>

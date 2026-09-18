@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors';
 import { sendError } from '../utils/response';
+import { resetPrivateCache } from './cache';
 
 export const errorHandler = (
   err: Error,
@@ -8,6 +9,13 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): Response | void => {
+  // A route may have applied the public catalog cache policy before throwing.
+  // Errors (and any non-2xx) must never be cached, so restore the global
+  // no-store policy before the error body is written.
+  if (!res.headersSent) {
+    resetPrivateCache(res);
+  }
+
   if (err instanceof AppError) {
     return sendError(res, err.message, err.statusCode);
   }
@@ -31,7 +39,7 @@ export const errorHandler = (
       return sendError(res, 'Requested resource not found or invalid ID format', 404);
     }
 
-    if (code === 'P1001' || code === 'P1010' || code === 'P1002') {
+    if (code === 'P1001' || code === 'P1010' || code === 'P1002' || code === 'P2024') {
       return sendError(res, 'Database connection failed. Check your DATABASE_URL and Supabase project status.', 503);
     }
 
@@ -102,5 +110,8 @@ export const notFoundHandler = (
   res: Response,
   next: NextFunction
 ): Response => {
+  if (!res.headersSent) {
+    resetPrivateCache(res);
+  }
   return sendError(res, `Route ${req.originalUrl} not found`, 404);
 };

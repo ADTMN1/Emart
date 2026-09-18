@@ -12,6 +12,7 @@ import {
   Globe2,
   Pencil,
   CheckCircle2,
+  AlertCircle,
   ShieldCheck,
   ChevronDown,
   Gift,
@@ -43,9 +44,10 @@ import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
+import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
-import { api, notificationApi, type NotificationItem } from '@/lib/api'
+import { api, notificationApi, sellerAgreementApi, type NotificationItem, type SellerAgreement } from '@/lib/api'
 import {
   notificationsChanged,
   formatRelativeTime,
@@ -86,6 +88,16 @@ const Account: React.FC = () => {
   const [storeDescription, setStoreDescription] = React.useState('')
   const [sellerSubmitting, setSellerSubmitting] = React.useState(false)
 
+  // Phase 8: EMART Seller Agreement. The version/text come from the server;
+  // acceptance is recorded server-side and gates application submission.
+  const [agreement, setAgreement] = React.useState<SellerAgreement | null>(null)
+  const [agreementLoading, setAgreementLoading] = React.useState(true)
+  const [agreementError, setAgreementError] = React.useState<string | null>(null)
+  const [sellerAgreed, setSellerAgreed] = React.useState(false)
+  const [agreementOpen, setAgreementOpen] = React.useState(false)
+  const [agreementViewed, setAgreementViewed] = React.useState(false)
+  const [acceptingAgreement, setAcceptingAgreement] = React.useState(false)
+
   // Notifications tab (Phase 7)
   const navigate = useNavigate()
   const [notifications, setNotifications] = React.useState<NotificationItem[]>([])
@@ -108,9 +120,11 @@ const Account: React.FC = () => {
             ? 'seller'
             : accountPath.startsWith('/account/notifications')
               ? 'notifications'
-              : accountPath.startsWith('/account/support')
-                ? 'support'
-                : 'overview'
+              : accountPath.startsWith('/account/usdc-policy')
+                ? 'usdc-policy'
+                : accountPath.startsWith('/account/support')
+                  ? 'support'
+                  : 'overview'
 
   const fetchWallet = React.useCallback(async () => {
     try {
@@ -128,12 +142,24 @@ const Account: React.FC = () => {
     }
   }, [])
 
+  // Wallet data is only needed on the wallet tab — fetching it on every
+  // account section (profile, addresses, notifications, seller, …) was
+  // unnecessary. Prefer route-specific loading.
   React.useEffect(() => {
+    if (tab !== 'wallet') return
     fetchWallet()
-  }, [fetchWallet])
+  }, [tab, fetchWallet])
 
   const handleSellerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!sellerAgreed) {
+      toast({
+        variant: 'error',
+        title: 'Seller Agreement required',
+        description: 'Please read and accept the current EMART Seller Agreement first.',
+      })
+      return
+    }
     try {
       setSellerSubmitting(true)
       await api.post('/seller/application', {
@@ -159,10 +185,135 @@ const Account: React.FC = () => {
     }
   }
 
+  const loadAgreement = React.useCallback(async () => {
+    try {
+      setAgreementLoading(true)
+      setAgreementError(null)
+      const res = await sellerAgreementApi.get()
+      setAgreement(res)
+      setSellerAgreed(res.accepted)
+    } catch (err: any) {
+      setAgreementError(err.message || 'Could not load the Seller Agreement.')
+    } finally {
+      setAgreementLoading(false)
+    }
+  }, [])
+
+  // The Seller Agreement is only consumed by the seller tab — don't fetch it
+  // while browsing other account sections.
+  React.useEffect(() => {
+    if (tab !== 'seller') return
+    loadAgreement()
+  }, [tab, loadAgreement])
+
+  const handleAgreementScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 24) {
+      setAgreementViewed(true)
+    }
+  }
+
+  const handleAgree = async () => {
+    try {
+      setAcceptingAgreement(true)
+      const res = await sellerAgreementApi.accept()
+      setSellerAgreed(true)
+      setAgreement((prev) =>
+        prev
+          ? { ...prev, accepted: true, acceptedVersion: res.version, acceptedAt: res.acceptedAt }
+          : prev,
+      )
+      setAgreementOpen(false)
+      toast({
+        variant: 'success',
+        title: 'Agreement accepted',
+        description: `You accepted the EMART Seller Agreement (v${res.version}).`,
+      })
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Could not record acceptance',
+        description: err.message || 'Please try again.',
+      })
+    } finally {
+      setAcceptingAgreement(false)
+    }
+  }
+
+  // Seller Agreement section — reused by both the first application and the
+  // resubmission form. Reading the agreement (scrolling to the end) reveals
+  // the Agree button; acceptance is recorded server-side.
+  const sellerAgreementSection = (
+    <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sm">Seller Agreement</span>
+            {agreement && <Badge variant="outline" size="xs">v{agreement.version}</Badge>}
+            {sellerAgreed && <Badge variant="success" size="xs">Accepted</Badge>}
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {sellerAgreed
+              ? 'You have accepted the current EMART Seller Agreement.'
+              : 'Read and accept the EMART Seller Agreement to enable submission.'}
+          </p>
+        </div>
+      </div>
+
+      {agreementLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading agreement…
+        </div>
+      ) : agreementError ? (
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs text-destructive flex items-center gap-1.5">
+            <AlertCircle className="h-4 w-4" /> {agreementError}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={loadAgreement}>
+            Retry
+          </Button>
+        </div>
+      ) : sellerAgreed ? (
+        <div className="flex items-center gap-1.5 text-xs text-success">
+          <CheckCircle2 className="h-4 w-4" />
+          Accepted{agreement?.acceptedAt ? ` ${formatRelativeTime(agreement.acceptedAt)}` : ''}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            leftIcon={<FileText className="h-4 w-4" />}
+            onClick={() => setAgreementOpen(true)}
+          >
+            Read Seller Agreement
+          </Button>
+          {agreementViewed && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              isLoading={acceptingAgreement}
+              leftIcon={<ShieldCheck className="h-4 w-4" />}
+              onClick={handleAgree}
+            >
+              Agree to Seller Agreement
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
   // Notifications tab (Phase 7)
   const notifUnread = notifications.filter((n) => !n.readAt).length
 
   React.useEffect(() => {
+    // The notifications list is only rendered on the notifications tab; the
+    // effect must not fire for unrelated account sections.
+    if (tab !== 'notifications') return
     let cancelled = false
     setNotifLoading(true)
     notificationApi
@@ -827,7 +978,8 @@ const Account: React.FC = () => {
                           className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
                         />
                       </div>
-                      <Button type="submit" disabled={sellerSubmitting}>
+                      {sellerAgreementSection}
+                      <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                         {sellerSubmitting ? 'Submitting…' : 'Resubmit Application'}
                       </Button>
                     </form>
@@ -861,7 +1013,8 @@ const Account: React.FC = () => {
                         className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
                       />
                     </div>
-                    <Button type="submit" disabled={sellerSubmitting}>
+                    {sellerAgreementSection}
+                    <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                       {sellerSubmitting ? 'Submitting…' : 'Submit Application'}
                     </Button>
                   </form>
@@ -979,6 +1132,115 @@ const Account: React.FC = () => {
             </Card>
           )}
 
+          {tab === 'usdc-policy' && (
+            <Card>
+              <CardContent className="p-5 lg:p-6 space-y-5">
+                <div>
+                  <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    USDC Policy
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-1">Last updated: September 17, 2026</p>
+                </div>
+
+                <div className="space-y-5 text-sm text-muted-foreground leading-relaxed">
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">1. Overview</h3>
+                    <p>
+                      EMART supports USD Coin (USDC) as a digital-dollar payment and settlement option
+                      on the platform. This policy explains how USDC is used for crypto payments, wallet
+                      balances, and seller settlement, and the responsibilities that come with it.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">2. What USDC is</h3>
+                    <p>
+                      USDC is a dollar-denominated stablecoin designed to maintain a value of approximately
+                      1 USD per token. It is a digital asset, not a bank deposit, and is not insured by any
+                      government deposit-insurance scheme. Its value and availability depend on the issuing
+                      entity and the blockchain networks on which it operates.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">3. How EMART uses USDC</h3>
+                    <ul className="list-disc pl-5 space-y-1">
+                      <li>Buyers may fund orders and wallet balances using USDC on the networks EMART lists at checkout.</li>
+                      <li>Wallet USDC balances are credited to your EMART wallet after the required network confirmations.</li>
+                      <li>Seller earnings may be settled in USDC to the payout details associated with the seller account.</li>
+                    </ul>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">4. Payments and confirmations</h3>
+                    <p>
+                      Crypto transfers are only final after the network confirms them. Sending USDC on an
+                      unsupported network, to an incorrect address, or with insufficient network fees may
+                      result in permanent loss of funds. EMART cannot reverse a confirmed blockchain
+                      transaction. You are responsible for verifying the network and address shown at checkout.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">5. Fees</h3>
+                    <p>
+                      Blockchain network fees (gas) are set by the network and are outside EMART's control.
+                      EMART platform and service fees are disclosed in the order summary and the seller
+                      dashboard before you confirm a transaction.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">6. Refunds and reversals</h3>
+                    <p>
+                      Where a refund is approved for an order paid in USDC, EMART will return funds in USDC
+                      (or the original asset where required) to the wallet used for the payment, net of any
+                      network fees that cannot be recovered. Refund timing depends on network confirmation.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">7. Custody and security</h3>
+                    <p>
+                      Your EMART wallet is a ledger balance maintained by EMART. For external wallets, you
+                      alone control your private keys and recovery phrase; EMART never has access to them and
+                      cannot restore wallets or reverse transfers. You are responsible for securing access to
+                      your EMART account and any linked wallet.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">8. Compliance</h3>
+                    <p>
+                      USDC transactions may be subject to identity verification, sanctions screening, and
+                      anti-money-laundering controls. EMART may delay, refuse, or reverse a transaction, or
+                      request additional information, where required by law or by its payment partners.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">9. Risks and limitation of liability</h3>
+                    <p>
+                      USDC and blockchain networks carry risks including network congestion, protocol failures,
+                      issuer-related risk, and regulatory change. To the maximum extent permitted by law, EMART
+                      is not liable for losses arising from those risks or from incorrect wallet details supplied
+                      by a user.
+                    </p>
+                  </section>
+
+                  <section>
+                    <h3 className="font-semibold text-foreground mb-1">10. Changes to this policy</h3>
+                    <p>
+                      EMART may update this policy as its USDC features and applicable rules evolve. Material
+                      changes will be published on this page with a new "Last updated" date.
+                    </p>
+                  </section>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {tab === 'support' && (
             <Card>
               <CardContent className="p-8 min-h-[300px] flex flex-col items-center justify-center text-center">
@@ -992,6 +1254,43 @@ const Account: React.FC = () => {
               </CardContent>
             </Card>
           )}
+      {/* Seller Agreement Modal — the Agree button appears only after the
+          full agreement has been read (scrolled to the end). */}
+      <Modal
+        isOpen={agreementOpen}
+        onClose={() => setAgreementOpen(false)}
+        title={agreement?.title || 'EMART Seller Agreement'}
+        description={agreement ? `Version ${agreement.version}` : undefined}
+        size="lg"
+        onBodyScroll={handleAgreementScroll}
+        footer={
+          agreementViewed ? (
+            <>
+              <Button type="button" variant="outline" onClick={() => setAgreementOpen(false)}>
+                Close
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                isLoading={acceptingAgreement}
+                leftIcon={<ShieldCheck className="h-4 w-4" />}
+                onClick={handleAgree}
+              >
+                Agree to Seller Agreement
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Scroll to the end of the agreement to continue.
+            </span>
+          )
+        }
+      >
+        <div className="whitespace-pre-line text-sm text-muted-foreground leading-relaxed">
+          {agreement?.text}
+        </div>
+      </Modal>
+
       {/* Deposit Modal */}
       {showDepositModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

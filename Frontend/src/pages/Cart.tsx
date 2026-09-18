@@ -29,7 +29,8 @@ import { useToast } from '@/components/ui/Toast'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useCart } from '@/contexts/CartContext'
 import { useFavorites } from '@/contexts/FavoritesContext'
-import { api } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
+import { cachedApi, invalidateCache, api } from '@/lib/api'
 
 interface CartItem {
   id: string
@@ -44,6 +45,7 @@ const Cart: React.FC = () => {
   const { t } = useLanguage()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user, isLoading } = useAuth()
   const { incrementCartCount, decrementCartCount } = useCart()
   const { toggleFavorite, isFavorite } = useFavorites()
   const [items, setItems] = React.useState<CartItem[]>(initialCart)
@@ -54,9 +56,20 @@ const Cart: React.FC = () => {
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set())
 
   const fetchCart = React.useCallback(async () => {
+    // Wait for session restore so the user-scoped /cart key is used. Firing
+    // before auth settles would issue a redundant unkeyed GET /cart and then a
+    // second keyed one once the profile resolves.
+    if (isLoading) return
+    if (!user) {
+      setItems([])
+      setLoading(false)
+      return
+    }
     try {
       setLoading(true)
-      const data = await api.get<any>('/cart').catch(() => null)
+      // Shares the user-scoped /cart cache entry with CartContext and
+      // Checkout — no second request hits the server on this page.
+      const data = await cachedApi.getCart(user?.id)
       const rawItems = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       const items = rawItems.filter((item: any) => item && (item.product || item.productId))
       setItems(items)
@@ -65,7 +78,7 @@ const Cart: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id, isLoading])
 
   React.useEffect(() => {
     fetchCart()
@@ -126,6 +139,7 @@ const Cart: React.FC = () => {
     else decrementCartCount(-delta)
 
     try {
+      invalidateCache.cart()
       const updated = await api.put<{ quantity?: number }>(`/cart/items/${id}`, { quantity: nextQty })
       const confirmedQty = updated?.quantity ?? nextQty
       const correction = confirmedQty - nextQty
@@ -138,6 +152,7 @@ const Cart: React.FC = () => {
       else incrementCartCount(-delta)
       toast({ variant: 'error', title: 'Update failed', description: 'Could not update item quantity.' })
     } finally {
+      invalidateCache.cart()
       setUpdatingIds((prev) => {
         const next = new Set(prev)
         next.delete(id)
@@ -157,6 +172,7 @@ const Cart: React.FC = () => {
     decrementCartCount(removedItem.quantity)
 
     try {
+      invalidateCache.cart()
       await api.delete(`/cart/items/${id}`)
       toast({ variant: 'info', title: t('cart.itemRemoved'), description: t('cart.itemRemovedDesc') })
     } catch {
@@ -168,6 +184,7 @@ const Cart: React.FC = () => {
       incrementCartCount(removedItem.quantity)
       toast({ variant: 'error', title: 'Remove failed', description: 'Could not remove item from cart.' })
     } finally {
+      invalidateCache.cart()
       setDeletingIds((prev) => {
         const next = new Set(prev)
         next.delete(id)

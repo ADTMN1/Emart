@@ -21,7 +21,9 @@ import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyOrders } from '@/components/ui/States'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { cn, formatCurrency } from '@/lib/utils'
+import { getOptimizedImageUrl } from '@/lib/imageOptimization'
 import { api } from '@/lib/api'
 
 type OrderStatus =
@@ -272,7 +274,7 @@ const MyOrders: React.FC = () => {
                   <div className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <Link to={`/orders/${order.id}`} className="shrink-0 h-16 w-16 rounded-xl overflow-hidden bg-muted border border-border">
-                        <img src={order.thumbnail} alt="" className="h-full w-full object-cover" />
+                        <img src={getOptimizedImageUrl(order.thumbnail, 'thumb', true)} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                       </Link>
                       <div className="min-w-0">
                         <div className="text-sm font-bold mb-1">

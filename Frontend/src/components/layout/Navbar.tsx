@@ -20,6 +20,7 @@ import { useLanguage } from '@/contexts/LanguageContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCart } from '@/contexts/CartContext'
 import { useFavorites } from '@/contexts/FavoritesContext'
+import { NavbarNotificationBell } from '@/components/layout/NavbarNotificationBell'
 
 export const Navbar: React.FC = () => {
   const { t } = useLanguage()
@@ -255,6 +256,9 @@ export const Navbar: React.FC = () => {
                 </div>
               ) : isAuthenticated && user ? (
                 <div className="hidden sm:flex items-center gap-2 pl-2 ml-1 border-l border-border relative">
+                  {/* The admin shell has its own notification bell — don't poll
+                      unread-count twice on /admin pages. */}
+                  {!location.pathname.startsWith('/admin') && <NavbarNotificationBell />}
                   <button
                     onClick={() => setUserDropdownOpen((o) => !o)}
                     className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-muted text-foreground transition-colors"

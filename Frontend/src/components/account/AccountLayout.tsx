@@ -4,6 +4,7 @@ import {
   Bell,
   ChevronRight,
   CreditCard,
+  FileText,
   Gift,
   Headphones,
   Home as HomeIcon,
@@ -91,6 +92,13 @@ const navItems: NavItem[] = [
     path: '/account/seller',
     match: (p) => p.startsWith('/account/seller'),
   },
+  {
+    key: 'usdcPolicy',
+    label: 'USDC Policy',
+    icon: FileText,
+    path: '/account/usdc-policy',
+    match: (p) => p.startsWith('/account/usdc-policy'),
+  },
   { key: 'support', label: 'Support & FAQ', icon: Headphones, path: '/account/support', match: (p) => p.startsWith('/account/support') },
 ]
 
@@ -108,9 +116,14 @@ export const AccountLayout: React.FC = () => {
 
   // Seller application state is shared by the sidebar label and the Account
   // "seller" tab, so it lives here and is passed down via Outlet context.
+  // It is fetched ONLY on seller-area routes (/account/seller and /seller/*);
+  // unrelated account pages (profile, orders, shipping, wallet, notifications)
+  // no longer trigger seller resources they don't need.
   const [sellerApp, setSellerApp] = React.useState<SellerApplicationState | null>(null)
   const [sellerProfile, setSellerProfile] = React.useState<SellerApplicationState | null>(null)
   const [sellerLoading, setSellerLoading] = React.useState(true)
+
+  const isSellerArea = path.startsWith('/account/seller') || path.startsWith('/seller')
 
   const refreshSeller = React.useCallback(async () => {
     try {
@@ -130,19 +143,26 @@ export const AccountLayout: React.FC = () => {
   }, [])
 
   React.useEffect(() => {
+    if (!isSellerArea) {
+      setSellerLoading(false)
+      return
+    }
     refreshSeller()
-  }, [refreshSeller])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSellerArea])
 
-  // Keep the seller navigation label in sync with real backend status —
-  // e.g. approval happening in another tab updates "Become a Seller" → "Store"
-  // on the next window focus, without any re-login.
+  // Keep the seller navigation label in sync with real backend status on
+  // seller routes — e.g. approval happening in another tab updates
+  // "Become a Seller" → "Store" on the next window focus, without re-login.
+  // Non-seller account routes do not re-fetch seller data on focus.
   React.useEffect(() => {
+    if (!isSellerArea) return
     const onFocus = () => {
       refreshSeller()
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [refreshSeller])
+  }, [refreshSeller, isSellerArea])
 
   const sellerActive = sellerApp?.status === 'APPROVED' || sellerApp?.status === 'SUSPENDED'
 
@@ -154,6 +174,7 @@ export const AccountLayout: React.FC = () => {
     else if (path.startsWith('/account/addresses')) acc.push({ label: 'Addresses' })
     else if (path.startsWith('/account/payments')) acc.push({ label: 'Payment Methods' })
     else if (path.startsWith('/account/notifications')) acc.push({ label: 'Notifications' })
+    else if (path.startsWith('/account/usdc-policy')) acc.push({ label: 'USDC Policy' })
     else if (path.startsWith('/account/seller')) acc.push({ label: sellerActive ? 'Store' : 'Seller' })
     else if (path.startsWith('/account/support')) acc.push({ label: 'Support & FAQ' })
     else if (path.startsWith('/orders')) {
