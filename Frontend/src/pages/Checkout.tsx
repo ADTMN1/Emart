@@ -27,7 +27,8 @@ import type { Product } from '@/lib/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { SuccessState, EmptyCart } from '@/components/ui/States'
-import { api } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
+import { cachedApi, invalidateCache, api } from '@/lib/api'
 
 interface CartItem {
   id: string
@@ -74,6 +75,7 @@ const InlineField: React.FC<{ error?: string; children: React.ReactNode }> = ({ 
 const Checkout: React.FC = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { user, isLoading } = useAuth()
   const [step, setStep] = React.useState<1 | 2 | 3>(1)
   const [sameAddress, setSameAddress] = React.useState(true)
   const [payment] = React.useState<'crypto'>('crypto')
@@ -116,9 +118,21 @@ const Checkout: React.FC = () => {
   }
 
   const fetchCart = React.useCallback(async () => {
+    // Wait for session restore so the user-scoped /cart key is used. Firing
+    // before auth settles would issue a redundant unkeyed GET /cart and then a
+    // second keyed one once the profile resolves.
+    if (isLoading) return
+    if (!user) {
+      setCartItems([])
+      setQuantities({})
+      setLoading(false)
+      return
+    }
     try {
       setLoading(true)
-      const data = await api.get<any>('/cart').catch(() => null)
+      // Shares the user-scoped /cart cache entry with CartContext and the
+      // Cart page — one in-flight request serves all consumers.
+      const data = await cachedApi.getCart(user?.id)
       const rawItems = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
       const items = rawItems
         .map((item: any) => ({ ...item, productId: item?.productId || item?.product?.id }))
@@ -135,7 +149,7 @@ const Checkout: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.id, isLoading])
 
   React.useEffect(() => {
     fetchCart()
@@ -232,6 +246,7 @@ const Checkout: React.FC = () => {
 
     try {
       setSubmittingOrder(true)
+      invalidateCache.cart()
       const res = await api.post('/orders', {
         items: cartItems.map((item) => ({
           productId: item.productId,
@@ -246,6 +261,9 @@ const Checkout: React.FC = () => {
           billingAddress: toOrderAddress(billingAddress),
         } : {}),
       })
+      // Order placement empties the cart server-side — drop the cached cart
+      // so the badge and any later cart reads reflect the cleared cart.
+      invalidateCache.cart()
       setCreatedOrder(res)
       setSubmitted(true)
       toast({

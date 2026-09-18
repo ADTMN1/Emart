@@ -4,6 +4,11 @@
  * Leverages Supabase Storage image transformations to deliver optimally-sized images
  * for different contexts (thumbnails, cards, detail views) with WebP support.
  * 
+ * Transformation URLs use the /storage/v1/render/image/ endpoint, which the
+ * project's Supabase service verifiably serves. The raw /storage/v1/object/public/
+ * endpoint ignores width/quality/format parameters and must not be used for the
+ * normal product-image pipeline.
+ * 
  * Supabase Transform API: https://supabase.com/docs/guides/storage/image-transformations
  */
 
@@ -18,73 +23,120 @@ export interface ImageTransformOptions {
 export type ImageSize = 'thumb' | 'small' | 'medium' | 'large' | 'full'
 
 /**
- * Predefined image sizes for consistent usage across the app
+ * Predefined image sizes for consistent usage across the app.
+ *
+ * Each preset requests a square box with `resize=contain`: the service scales the
+ * source down to fit that box while preserving aspect ratio and never upscales
+ * (intrinsic dimensions are respected server-side). Display components apply their
+ * own CSS object-cover crop, so the rendered result matches the original layout
+ * exactly — no distortion, no incorrect cropping, no upscale of small sources.
  */
 export const IMAGE_SIZES: Record<ImageSize, ImageTransformOptions> = {
-  // Thumbnail: 150x150 - For tiny previews, admin lists
+  // Thumbnail: 200x200 - For tiny previews (gallery thumbs, recommendations)
   thumb: {
-    width: 150,
-    height: 150,
+    width: 200,
+    height: 200,
     quality: 75,
-    resize: 'cover',
+    resize: 'contain',
   },
-  // Small: 400x400 - For product cards on mobile
+  // Small: 400x400 - For small previews on mobile / compact cards
   small: {
     width: 400,
     height: 400,
-    quality: 80,
-    resize: 'cover',
+    quality: 75,
+    resize: 'contain',
   },
-  // Medium: 600x600 - For product cards on desktop
+  // Medium: 600x600 - For product cards
   medium: {
     width: 600,
     height: 600,
-    quality: 85,
-    resize: 'cover',
+    quality: 75,
+    resize: 'contain',
   },
-  // Large: 1000x1000 - For product detail main image
+  // Large: 900x900 - For product detail main image
   large: {
-    width: 1000,
-    height: 1000,
-    quality: 90,
-    resize: 'cover',
+    width: 900,
+    height: 900,
+    quality: 75,
+    resize: 'contain',
   },
-  // Full: 1200x1200 - Original master image, no transformation
+  // Full: 1200x1200 - High-resolution master (detail zoom, preload)
   full: {
     width: 1200,
     height: 1200,
-    quality: 95,
-    resize: 'cover',
+    quality: 80,
+    resize: 'contain',
   },
 }
 
+const OBJECT_PUBLIC = '/storage/v1/object/public/'
+const RENDER_PUBLIC = '/storage/v1/render/image/public/'
+
 /**
- * Check if a URL is a Supabase Storage URL that supports transformations
+ * Check if a URL is a Supabase Storage URL that supports transformations.
+ * Recognizes both the raw object endpoint and the render endpoint.
  */
 export function isSupabaseStorageUrl(url: string): boolean {
   if (!url) return false
   try {
     const urlObj = new URL(url)
-    // Supabase storage URLs contain 'supabase' and '/storage/v1/object/public/'
-    return urlObj.hostname.includes('supabase') && url.includes('/storage/v1/object/public/')
+    return (
+      urlObj.hostname.includes('supabase') &&
+      (url.includes(OBJECT_PUBLIC) || url.includes(RENDER_PUBLIC))
+    )
   } catch {
     return false
   }
 }
 
 /**
- * Build transformation query params for Supabase Storage
+ * Check if a URL is already a Supabase render/transformation URL.
  */
-function buildTransformParams(options: ImageTransformOptions): string {
+export function isSupabaseRenderUrl(url: string): boolean {
+  if (!url) return false
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname.includes('supabase') && url.includes(RENDER_PUBLIC)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Build transformation query params for Supabase Storage.
+ * Insertion order is fixed so that identical options always produce the exact
+ * same URL string (stable browser/CDN cache keys).
+ */
+function buildTransformParams(options: ImageTransformOptions, useWebP: boolean): string {
   const params = new URLSearchParams()
 
   if (options.width) params.set('width', options.width.toString())
   if (options.height) params.set('height', options.height.toString())
-  if (options.quality) params.set('quality', options.quality.toString())
-  if (options.format) params.set('format', options.format)
   if (options.resize) params.set('resize', options.resize)
+  if (options.quality) params.set('quality', options.quality.toString())
+
+  const wantsWebP = options.format ? options.format === 'webp' : useWebP
+  if (wantsWebP) params.set('format', 'webp')
 
   return params.toString()
+}
+
+/**
+ * Convert a raw object URL to a render URL with the requested transformations.
+ * The host/base is derived from the input URL — never hardcoded.
+ *
+ * An object URL like:
+ *   https://<project>.supabase.co/storage/v1/object/public/products/<path>
+ * becomes:
+ *   https://<project>.supabase.co/storage/v1/render/image/public/products/<path>?width=..&height=..&resize=contain&quality=..&format=webp
+ */
+function buildRenderUrl(
+  url: string,
+  options: ImageTransformOptions,
+  useWebP: boolean
+): string {
+  const base = url.split('?')[0].replace(OBJECT_PUBLIC, RENDER_PUBLIC)
+  return `${base}?${buildTransformParams(options, useWebP)}`
 }
 
 /**
@@ -97,7 +149,7 @@ function buildTransformParams(options: ImageTransformOptions): string {
  * 
  * @example
  * getOptimizedImageUrl(url, 'medium', true)
- * // Returns: https://...supabase.co/storage/v1/object/public/products/abc.jpg?width=600&height=600&quality=85&format=webp
+ * // Returns: https://...supabase.co/storage/v1/render/image/public/products/abc.jpg?width=600&height=600&resize=contain&quality=75&format=webp
  */
 export function getOptimizedImageUrl(
   url: string | undefined | null,
@@ -109,27 +161,20 @@ export function getOptimizedImageUrl(
     return getPlaceholderImage()
   }
 
-  // If not a Supabase URL, return original
+  // If not a Supabase URL, return original (local assets, external URLs,
+  // data: placeholders, invalid/empty URLs all pass through untouched).
   if (!isSupabaseStorageUrl(url)) {
     return url
   }
 
-  // Get size configuration
-  const sizeConfig = IMAGE_SIZES[size]
-  
-  // Build transform options
-  const transformOptions: ImageTransformOptions = {
-    ...sizeConfig,
-    // Use WebP if supported by browser and requested
-    format: useWebP && supportsWebP() ? 'webp' : 'origin',
+  // If the URL is already a render URL, return it unchanged — never transform
+  // an already-transformed image (avoids /render/render/ nests and conflicting
+  // query parameters).
+  if (isSupabaseRenderUrl(url)) {
+    return url
   }
 
-  // Build query string
-  const transformParams = buildTransformParams(transformOptions)
-  
-  // Append or update query params
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}${transformParams}`
+  return buildRenderUrl(url, IMAGE_SIZES[size], useWebP)
 }
 
 /**
@@ -141,15 +186,9 @@ export function getOptimizedImageUrlCustom(
 ): string {
   if (!url) return getPlaceholderImage()
   if (!isSupabaseStorageUrl(url)) return url
+  if (isSupabaseRenderUrl(url)) return url
 
-  const transformOptions: ImageTransformOptions = {
-    ...options,
-    format: options.format || (supportsWebP() ? 'webp' : 'origin'),
-  }
-
-  const transformParams = buildTransformParams(transformOptions)
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}${transformParams}`
+  return buildRenderUrl(url, options, true)
 }
 
 /**
@@ -170,7 +209,10 @@ export function getImageSrcSet(
   url: string | undefined | null,
   sizes: ImageSize[] = ['small', 'medium', 'large']
 ): string {
-  if (!url || !isSupabaseStorageUrl(url)) return ''
+  if (!url || !isSupabaseStorageUrl(url) || isSupabaseRenderUrl(url)) return ''
+
+  const first = getOptimizedImageUrl(url, sizes[0] || 'medium', true)
+  if (first === url) return ''
 
   return sizes
     .map(size => {
@@ -190,11 +232,11 @@ export function getImageSizesAttr(context: 'card' | 'detail' | 'thumbnail'): str
       // Product cards: 2-4 columns depending on screen size
       return '(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 300px'
     case 'detail':
-      // Product detail: full width on mobile, half on desktop
-      return '(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 600px'
+      // Product detail main image: full width on mobile, ~2/5 column on desktop
+      return '(max-width: 768px) 92vw, (max-width: 1280px) 45vw, 520px'
     case 'thumbnail':
-      // Thumbnails: fixed small size
-      return '150px'
+      // Thumbnails: fixed small size (w-16 on mobile, w-20 on desktop)
+      return '(min-width: 1024px) 80px, 64px'
     default:
       return '100vw'
   }
@@ -262,12 +304,13 @@ export function preloadImage(url: string, size: ImageSize = 'large'): void {
 }
 
 /**
- * Get image dimensions from size preset
+ * Get image dimensions from size preset (square fallback for layout reserve)
  */
 export function getImageDimensions(size: ImageSize): { width: number; height: number } {
   const config = IMAGE_SIZES[size]
+  const width = config.width || 600
   return {
-    width: config.width || 600,
-    height: config.height || 600,
+    width,
+    height: config.height || width,
   }
 }

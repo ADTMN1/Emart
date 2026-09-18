@@ -4,6 +4,7 @@ import productImageController from '../controllers/product-image.controller';
 import productImportController from '../controllers/product-import.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validator';
+import { setPublicCache } from '../middleware/cache';
 import { createProductValidation, updateProductValidation, searchProductsValidation } from '../middleware/validations/product.validation';
 import { body } from 'express-validator';
 import { uploadSingle, uploadCsvSingle, uploadImportFiles } from '../middleware/upload';
@@ -15,14 +16,15 @@ router.get(
   '/',
   searchProductsValidation,
   validate,
+  setPublicCache,
   productController.getAllProducts
 );
 
-router.get('/featured', productController.getFeaturedProducts);
+router.get('/featured', setPublicCache, productController.getFeaturedProducts);
 
 // Filter facets for the marketplace sidebar (public). Registered before /:id
 // so "facets" is never captured as a product id.
-router.get('/facets', productController.getProductFacets);
+router.get('/facets', setPublicCache, productController.getProductFacets);
 
 // The signed-in user's own ratings. Registered before /:id so "my-ratings"
 // is never captured as a product id.
@@ -91,9 +93,11 @@ router.post(
 
 router.get('/:id/my-rating', authenticate, productController.getMyRating);
 
-router.get('/:id', productController.getProductById);
+// Public detail routes registered after the auth/admin/:id-static ones so the
+// cache policy is only ever applied to authenticated-independent reads.
+router.get('/:id', setPublicCache, productController.getProductById);
 
-router.get('/:id/related', productController.getRelatedProducts);
+router.get('/:id/related', setPublicCache, productController.getRelatedProducts);
 
 // Authenticated user ratings. Registered before nothing that could shadow it
 // (/:id/related above is static-suffixed), and express-validator rejects
@@ -109,7 +113,7 @@ router.post(
 );
 
 // Product images routes (public read)
-router.get('/:id/images', productImageController.getImages);
+router.get('/:id/images', setPublicCache, productImageController.getImages);
 
 // Admin-only routes
 router.post(

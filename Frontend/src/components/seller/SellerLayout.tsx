@@ -1,7 +1,7 @@
 import * as React from 'react';
-import { Link, NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, Navigate, useNavigate, useOutletContext } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { api } from '@/lib/api';
+import { type AccountOutletContext } from '@/components/account/AccountLayout';
 import { ExternalLink, LayoutDashboard, Package, Store, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -12,20 +12,14 @@ import { cn } from '@/lib/utils';
  * only (1) gates /seller pages on a real SellerProfile and (2) shows a compact
  * horizontal sub-navigation in the main content area. Authorization remains
  * backend-side (the API rejects non-approved sellers with 403).
+ *
+ * The seller profile + loading state + refresh function are read from the
+ * AccountLayout outlet context so no separate /seller/profile request is
+ * made by this component.
  */
 
-interface SellerProfileState {
-  id: string;
-  storeName: string;
-  storeDescription: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
-  suspendedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface SellerLayoutChildProps {
-  profile: SellerProfileState;
+  profile: AccountOutletContext['sellerProfile'];
   refreshProfile: () => Promise<void>;
 }
 
@@ -39,25 +33,10 @@ const sellerNav = [
 export const SellerLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = React.useState<SellerProfileState | null>(null);
-  const [profileLoading, setProfileLoading] = React.useState(true);
+  const { sellerProfile, sellerLoading, refreshSeller } = useOutletContext<AccountOutletContext>();
+  const profile = sellerProfile;
 
-  const fetchProfile = React.useCallback(async () => {
-    try {
-      const res = await api.get<SellerProfileState | null>('/seller/profile');
-      setProfile(res ?? null);
-    } catch {
-      setProfile(null);
-    } finally {
-      setProfileLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
-
-  if (isLoading || profileLoading) {
+  if (isLoading || sellerLoading) {
     return (
       <div className="py-16 flex items-center justify-center">
         <div className="text-center">
@@ -141,7 +120,7 @@ export const SellerLayout: React.FC = () => {
         </div>
       )}
 
-      <Outlet context={{ profile, refreshProfile: fetchProfile } satisfies SellerLayoutChildProps} />
+      <Outlet context={{ profile, refreshProfile: refreshSeller } satisfies SellerLayoutChildProps} />
     </div>
   );
 };

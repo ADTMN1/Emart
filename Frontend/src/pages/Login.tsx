@@ -43,42 +43,20 @@ const Login: React.FC = () => {
       setIsSubmitting(true)
       setErrorMsg('')
       
-      // Login user
-      await login(email, password)
-      
-      // Get user profile to check role
-      const token = localStorage.getItem('emart_token')
-      if (token) {
-        try {
-          const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
-          const response = await fetch(`${backendUrl}/api/v1/auth/profile`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          })
-          
-          if (response.ok) {
-            const data = await response.json()
-            const userData = data.data || data
-            
-            // Redirect based on role
-            if (userData.role === 'ADMIN') {
-              toast({ 
-                variant: 'success', 
-                title: 'Admin Login Successful', 
-                description: 'Redirecting to admin dashboard...' 
-              })
-              navigate('/admin')
-              return
-            }
-          }
-        } catch (profileError) {
-          console.error('Failed to fetch profile:', profileError)
-        }
+      // Login user — login() resolves with the authenticated user profile,
+      // so no second /auth/profile request is needed to check the role.
+      const userData = await login(email, password)
+
+      // Redirect based on role
+      if (userData.role === 'ADMIN') {
+        toast({
+          variant: 'success',
+          title: 'Admin Login Successful',
+          description: 'Redirecting to admin dashboard...'
+        })
+        navigate('/admin')
+        return
       }
-      
-      // Default redirect for regular users
       toast({ 
         variant: 'success', 
         title: 'Signed in successfully', 

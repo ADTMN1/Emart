@@ -21,6 +21,7 @@ import { useFavorites } from '@/contexts/FavoritesContext'
 import type { Category } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { cachedApi, api, invalidateCache } from '@/lib/api'
+import { cacheConfig } from '@/lib/apiCache'
 
 interface ProductImage {
   id: string
@@ -113,7 +114,6 @@ const Marketplace: React.FC = () => {
   const [categories, setCategories] = React.useState<Category[]>([])
   const [categoriesLoading, setCategoriesLoading] = React.useState(false)
   const fetchRef = React.useRef<number>(0)
-  const lastRequestKeyRef = React.useRef<string | null>(null)
   const [facets, setFacets] = React.useState<Facets | null>(null)
   const [pending, setPending] = React.useState<PendingFilters>(EMPTY_PENDING)
 
@@ -190,19 +190,21 @@ const Marketplace: React.FC = () => {
     if (!hasActiveFilters) searchParams.set('mix', 'categories')
 
     const requestKey = searchParams.toString()
-    if (lastRequestKeyRef.current === requestKey) {
-      return
-    }
-    lastRequestKeyRef.current = requestKey
 
     const reqId = ++fetchRef.current
 
     try {
       setIsLoading(true)
       const endpoint = requestKey ? `/products?${requestKey}` : '/products'
-      
+
+      // Route through the existing apiCache: the full query string is part of
+      // the cache key, so every filter/search/sort view is a separate entry
+      // (no collisions) and revisits within the TTL reuse cached data instead
+      // of re-hitting the server. On expiry (or cache miss) a fresh fetch
+      // happens, and concurrent identical calls share one in-flight request.
       const data = await api.get<{ products: ApiProduct[]; pagination: { total: number } }>(
         endpoint,
+        { useCache: true, cacheTTL: cacheConfig.products.ttl },
       )
       
       if (reqId === fetchRef.current) {
@@ -226,7 +228,10 @@ const Marketplace: React.FC = () => {
     fetchProducts()
   }, [fetchProducts])
 
-  // Auto-refresh when tab becomes visible again (catches stale data after admin edits)
+  // Refresh when the tab becomes visible again (catches data changed while
+  // hidden, e.g. admin edits). The fetch is wired through apiCache, so a
+  // still-fresh cached view short-circuits to the cache (no network) and
+  // only an expired/missing entry triggers a real refetch.
   React.useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {

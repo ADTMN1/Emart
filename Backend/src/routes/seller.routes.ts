@@ -29,6 +29,9 @@ router.use(authenticate);
 router.post('/application', createSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
 router.post('/application/resubmit', resubmitSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
 router.get('/application', sellerController.getMyApplication.bind(sellerController));
+// Phase 8: EMART Seller Agreement — server-controlled version + acceptance.
+router.get('/agreement', sellerController.getAgreement.bind(sellerController));
+router.post('/agreement/accept', sellerController.acceptAgreement.bind(sellerController));
 router.get('/profile', sellerController.getMyProfile.bind(sellerController));
 router.put(
   '/profile',

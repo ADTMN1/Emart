@@ -189,13 +189,39 @@ export const cachedApi = {
   
   getProduct: (id: string) =>
     api.get(`/products/${id}`, { useCache: true, cacheTTL: cacheConfig.productDetails.ttl }),
+
+  /**
+   * The authenticated user's cart. User-scoped cache key so one user can
+   * never read another user's cart, and the key stays stable across all
+   * consumers (cart context, cart page, checkout) so concurrent mounts
+   * share a single in-flight request. Fail-open to null like the callers
+   * it replaces.
+   */
+  getCart: (userId?: string) => {
+    const key = userId ? `/cart?userId=${encodeURIComponent(userId)}` : '/cart'
+    return apiCache.get<any>(
+      key,
+      () => api.get<any>('/cart').catch(() => null),
+      { ttl: cacheConfig.cart.ttl },
+    )
+  },
 }
+
+/**
+ * Fetch the current authenticated user's profile. Routed through apiCache
+ * with TTL 0 so concurrent callers (AuthProvider init + OAuth AuthCallback)
+ * share ONE in-flight request while a fresh profile is always returned —
+ * the result is never served stale from the cache.
+ */
+export const getAuthProfile = <T = any>(): Promise<T> =>
+  apiCache.get('/auth/profile', () => api.get<T>('/auth/profile'), { ttl: 0 })
 
 // Cache invalidation helpers
 export const invalidateCache = {
   products: () => apiCache.invalidatePattern(/^\/products/),
   categories: () => apiCache.invalidate('/categories'),
   product: (id: string) => apiCache.invalidate(`/products/${id}`),
+  cart: () => apiCache.invalidatePattern(/^\/cart/),
   all: () => apiCache.clear(),
 }
 
@@ -337,6 +363,32 @@ export const sellerProductApi = {
     api.put<any>(`/seller/products/${productId}`, payload),
 
   delete: (productId: string) => api.delete(`/seller/products/${productId}`),
+};
+
+// -------------------------------------------------------------------
+// Phase 8: EMART Seller Agreement — server-controlled version + text.
+// -------------------------------------------------------------------
+
+export interface SellerAgreement {
+  title: string;
+  version: string;
+  text: string;
+  acceptedVersion: string | null;
+  acceptedAt: string | null;
+  accepted: boolean;
+}
+
+export interface SellerAgreementAcceptance {
+  accepted: boolean;
+  version: string;
+  acceptedAt: string;
+}
+
+export const sellerAgreementApi = {
+  get: () => api.get<SellerAgreement>('/seller/agreement'),
+
+  accept: (): Promise<SellerAgreementAcceptance> =>
+    api.post<SellerAgreementAcceptance>('/seller/agreement/accept', {}),
 };
 
 // Favorites API

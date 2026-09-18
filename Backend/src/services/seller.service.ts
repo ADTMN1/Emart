@@ -1,6 +1,7 @@
 import prisma from '../config/database';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 import { Prisma, SellerStatus } from '@prisma/client';
+import { SELLER_AGREEMENT_VERSION, SELLER_AGREEMENT_TEXT, SELLER_AGREEMENT_TITLE } from '../config/sellerAgreement';
 
 /**
  * Seller foundation (Phase 5).
@@ -45,6 +46,65 @@ export interface ApplicationReviewContext {
 }
 
 export class SellerService {
+  private prisma: typeof prisma;
+
+  constructor(prismaClient: typeof prisma = prisma) {
+    this.prisma = prismaClient;
+  }
+
+  /**
+   * GET the current EMART Seller Agreement plus the caller's acceptance
+   * state. The version and text are server-controlled constants — the client
+   * only reads them. `accepted` is true when the stored acceptance matches
+   * the current server version.
+   */
+  async getAgreement(userId: string) {
+    const acceptance = await this.prisma.sellerAgreementAcceptance.findUnique({
+      where: { userId },
+    });
+    return {
+      title: SELLER_AGREEMENT_TITLE,
+      version: SELLER_AGREEMENT_VERSION,
+      text: SELLER_AGREEMENT_TEXT,
+      acceptedVersion: acceptance?.version ?? null,
+      acceptedAt: acceptance?.acceptedAt ?? null,
+      accepted: acceptance?.version === SELLER_AGREEMENT_VERSION,
+    };
+  }
+
+  /**
+   * POST — record acceptance of the CURRENT agreement version. The version
+   * and timestamp are assigned server-side; the client body is ignored.
+   */
+  async acceptAgreement(userId: string) {
+    const acceptance = await this.prisma.sellerAgreementAcceptance.upsert({
+      where: { userId },
+      update: { version: SELLER_AGREEMENT_VERSION, acceptedAt: new Date() },
+      create: { userId, version: SELLER_AGREEMENT_VERSION },
+      select: { id: true, userId: true, version: true, acceptedAt: true },
+    });
+    return {
+      accepted: true,
+      version: acceptance.version,
+      acceptedAt: acceptance.acceptedAt,
+    };
+  }
+
+  /**
+   * Application submission/resubmission requires acceptance of the current
+   * agreement version — an older (or missing) acceptance forces re-acceptance.
+   */
+  private async assertAgreementAccepted(userId: string) {
+    const acceptance = await this.prisma.sellerAgreementAcceptance.findUnique({
+      where: { userId },
+    });
+    if (!acceptance || acceptance.version !== SELLER_AGREEMENT_VERSION) {
+      throw new ValidationError(
+        'You must read and accept the current EMART Seller Agreement before submitting your application.',
+      );
+    }
+  }
+
   /** Normalized, validated store fields shared by submit/resubmit. */
   private storeInput(data: { storeName: string; storeDescription: string }) {
     const storeName = String(data.storeName ?? '').replace(/\s+/g, ' ').trim();
@@ -66,9 +126,13 @@ export class SellerService {
     userId: string,
     data: { storeName: string; storeDescription: string }
   ) {
+    // Submitting (or resubmitting) requires accepting the CURRENT agreement
+    // version first — enforced server-side, never from the client.
+    await this.assertAgreementAccepted(userId);
+
     const input = this.storeInput(data);
 
-    const existing = await prisma.sellerApplication.findUnique({ where: { userId } });
+    const existing = await this.prisma.sellerApplication.findUnique({ where: { userId } });
     if (existing) {
       if (existing.status === 'PENDING') {
         throw new ConflictError('You already have an application under review.');
@@ -80,7 +144,7 @@ export class SellerService {
         throw new ConflictError('Your seller account is suspended. Contact support.');
       }
       // REJECTED → resubmission reuses the same row (documented behavior).
-      return prisma.sellerApplication.update({
+      return this.prisma.sellerApplication.update({
         where: { userId },
         data: {
           ...input,
@@ -104,7 +168,7 @@ export class SellerService {
       });
     }
 
-    return prisma.sellerApplication.create({
+    return this.prisma.sellerApplication.create({
       data: { userId, ...input, status: 'PENDING' },
       select: {
         id: true,
@@ -125,7 +189,7 @@ export class SellerService {
    * from the token). Returns null when none exists; never another user's.
    */
   async getMyApplication(userId: string) {
-    return prisma.sellerApplication.findUnique({
+    return this.prisma.sellerApplication.findUnique({
       where: { userId },
       select: {
         id: true,
@@ -147,7 +211,7 @@ export class SellerService {
    * strictly through the authenticated userId.
    */
   async getMyProfile(userId: string) {
-    return prisma.sellerProfile.findUnique({
+    return this.prisma.sellerProfile.findUnique({
       where: { userId },
       select: {
         id: true,
@@ -173,11 +237,11 @@ export class SellerService {
     data: { storeName: string; storeDescription: string },
   ) {
     const input = this.storeInput(data);
-    const existing = await prisma.sellerProfile.findUnique({ where: { userId } });
+    const existing = await this.prisma.sellerProfile.findUnique({ where: { userId } });
     if (!existing) {
       throw new NotFoundError('Seller profile not found.');
     }
-    return prisma.sellerProfile.update({
+    return this.prisma.sellerProfile.update({
       where: { userId },
       data: input,
       select: {
@@ -198,7 +262,7 @@ export class SellerService {
    * Throws NotFoundError (no profile) / ForbiddenError (not approved).
    */
   async requireApprovedSeller(userId: string) {
-    const profile = await prisma.sellerProfile.findUnique({ where: { userId } });
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
     if (!profile) {
       throw new NotFoundError('Seller profile not found.');
     }
@@ -220,7 +284,7 @@ export class SellerService {
     }
 
     const [items, total] = await Promise.all([
-      prisma.sellerApplication.findMany({
+      this.prisma.sellerApplication.findMany({
         where,
         orderBy: { submittedAt: 'desc' },
         skip,
@@ -247,7 +311,7 @@ export class SellerService {
           },
         },
       }),
-      prisma.sellerApplication.count({ where }),
+      this.prisma.sellerApplication.count({ where }),
     ]);
 
     return {
@@ -258,7 +322,7 @@ export class SellerService {
 
   /** ADMIN — full application detail incl. applicant identity. */
   async getApplicationById(applicationId: string) {
-    const application = await prisma.sellerApplication.findUnique({
+    const application = await this.prisma.sellerApplication.findUnique({
       where: { id: applicationId },
       select: {
         id: true,
@@ -304,7 +368,7 @@ export class SellerService {
 
   /** ADMIN — PENDING → APPROVED; also creates the one-per-user profile. */
   async approveApplication(applicationId: string, adminId: string) {
-    const application = await prisma.sellerApplication.findUnique({ where: { id: applicationId } });
+    const application = await this.prisma.sellerApplication.findUnique({ where: { id: applicationId } });
     if (!application) {
       throw new NotFoundError('Seller application not found.');
     }
@@ -312,14 +376,14 @@ export class SellerService {
 
     const review: ApplicationReviewContext = { reviewedBy: adminId, reviewedAt: new Date() };
 
-    const [updated] = await prisma.$transaction([
-      prisma.sellerApplication.update({
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.sellerApplication.update({
         where: { id: application.id },
         data: { status: 'APPROVED', rejectionReason: null, ...review },
       }),
       // One identity per user — upsert keeps approval idempotent and the DB
       // unique constraint guarantees no second profile can ever appear.
-      prisma.sellerProfile.upsert({
+      this.prisma.sellerProfile.upsert({
         where: { userId: application.userId },
         create: {
           userId: application.userId,
@@ -336,7 +400,7 @@ export class SellerService {
 
   /** ADMIN — PENDING → REJECTED with a required, validated reason. */
   async rejectApplication(applicationId: string, adminId: string, reason: string) {
-    const application = await prisma.sellerApplication.findUnique({ where: { id: applicationId } });
+    const application = await this.prisma.sellerApplication.findUnique({ where: { id: applicationId } });
     if (!application) {
       throw new NotFoundError('Seller application not found.');
     }
@@ -347,7 +411,7 @@ export class SellerService {
       throw new ValidationError('Rejection reason must be between 3 and 1000 characters.');
     }
 
-    return prisma.sellerApplication.update({
+    return this.prisma.sellerApplication.update({
       where: { id: application.id },
       data: { status: 'REJECTED', rejectionReason: trimmed, reviewedBy: adminId, reviewedAt: new Date() },
     });
@@ -355,13 +419,13 @@ export class SellerService {
 
   /** ADMIN — APPROVED → SUSPENDED on the seller profile (identity preserved). */
   async suspendSeller(sellerId: string, adminId: string) {
-    const profile = await prisma.sellerProfile.findUnique({ where: { id: sellerId } });
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { id: sellerId } });
     if (!profile) {
       throw new NotFoundError('Seller profile not found.');
     }
     this.assertApplicationTransition(profile.status as SellerStatus, 'SUSPENDED');
 
-    return prisma.sellerProfile.update({
+    return this.prisma.sellerProfile.update({
       where: { id: profile.id },
       data: { status: 'SUSPENDED', suspendedAt: new Date() },
     });
@@ -369,14 +433,14 @@ export class SellerService {
 
   /** ADMIN — SUSPENDED → APPROVED on the seller profile. */
   async activateSeller(sellerId: string, adminId: string) {
-    const profile = await prisma.sellerProfile.findUnique({ where: { id: sellerId } });
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { id: sellerId } });
     if (!profile) {
       throw new NotFoundError('Seller profile not found.');
     }
     void adminId;
     this.assertApplicationTransition(profile.status as SellerStatus, 'APPROVED');
 
-    return prisma.sellerProfile.update({
+    return this.prisma.sellerProfile.update({
       where: { id: profile.id },
       data: { status: 'APPROVED', suspendedAt: null },
     });

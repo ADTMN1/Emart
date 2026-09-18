@@ -27,7 +27,7 @@ import { ProductCard } from '@/components/ui/ProductCard'
 import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import { useToast } from '@/components/ui/Toast'
 import { cn, formatCurrency } from '@/lib/utils'
-import { cachedApi, api } from '@/lib/api'
+import { cachedApi, api, invalidateCache } from '@/lib/api'
 import { getOptimizedImageUrlCustom } from '@/lib/imageOptimization'
 import { useCart } from '@/contexts/CartContext'
 import { useFavorites } from '@/contexts/FavoritesContext'
@@ -69,6 +69,8 @@ interface Product {
   productImages: ProductImage[]
 }
 
+const PLACEHOLDER_IMG = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
+
 const normalizeCondition = (condition: string): string => {
   const map: Record<string, string> = {
     NEW: 'New',
@@ -103,6 +105,10 @@ const ProductDetails: React.FC = () => {
       window.matchMedia('(hover: hover) and (pointer: fine)').matches
   )
   const [zoom, setZoom] = React.useState({ x: 50, y: 50, active: false })
+  // The zoom lens is mounted only while the user is hovering, so the
+  // full-resolution source is fetched on interaction, not on page mount.
+  // zoomLoaded drives a short fade-in so the lens doesn't flash blank.
+  const [zoomLoaded, setZoomLoaded] = React.useState(false)
 
   const handleZoomMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canZoom) return
@@ -121,6 +127,29 @@ const ProductDetails: React.FC = () => {
   const [relatedLoading, setRelatedLoading] = React.useState(false)
   const [isAddingToCart, setIsAddingToCart] = React.useState(false)
   const [isBuyingNow, setIsBuyingNow] = React.useState(false)
+
+  // High-res source for the magnifier (square-cropped like the display image).
+  // Computed before any early returns so hook order stays stable.
+  const zoomImageSrc: string = React.useMemo(() => {
+    if (!product) return ''
+    const imgs = (product.productImages || [])
+      .filter((img) => img && img.url)
+      .map((img) => img.url as string)
+    const display = imgs.length > 0 ? imgs : [PLACEHOLDER_IMG]
+    const src = display[imgIdx]
+    if (!src) return ''
+    return getOptimizedImageUrlCustom(src, {
+      width: 1200,
+      height: 1200,
+      quality: 90,
+      resize: 'cover',
+    })
+  }, [product, imgIdx])
+
+  // Reset the zoom fade whenever the high-res source changes (image switch).
+  React.useEffect(() => {
+    setZoomLoaded(false)
+  }, [zoomImageSrc])
 
   // Fetch product from API with caching
   React.useEffect(() => {
@@ -164,10 +193,12 @@ const ProductDetails: React.FC = () => {
     incrementCartCount(qty)
 
     try {
+      invalidateCache.cart()
       await api.post('/cart/items', {
         productId: product.id,
         quantity: qty,
       })
+      invalidateCache.cart()
 
       toast({
         variant: 'success',
@@ -259,8 +290,6 @@ const ProductDetails: React.FC = () => {
   const totalUsd = subtotalUsd + product.serviceFee + (product.domesticShipping * 0.007) + product.internationalShippingUsd
 
   // Use productImages from API if available, filter out null URLs, fall back to placeholder
-  const PLACEHOLDER_IMG = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
-
   const validImageUrls = (product.productImages || [])
     .filter(img => img && img.url)
     .map(img => img.url as string)
@@ -268,18 +297,6 @@ const ProductDetails: React.FC = () => {
   const displayImages = validImageUrls.length > 0
     ? validImageUrls
     : [PLACEHOLDER_IMG]
-
-  // High-res source for the magnifier. Square-cropped (resize: 'cover') like
-  // the displayed image so the zoom never distorts; non-Supabase URLs pass
-  // through unchanged.
-  const zoomImageSrc = displayImages[imgIdx]
-    ? getOptimizedImageUrlCustom(displayImages[imgIdx], {
-        width: 1200,
-        height: 1200,
-        quality: 90,
-        resize: 'cover',
-      })
-    : ''
 
   return (
     <div className="bg-background">
@@ -328,20 +345,25 @@ const ProductDetails: React.FC = () => {
               />
               {/* Cursor-following magnifier (desktop only): object-cover keeps
                   the crop identical to the base image; scaling from a
-                  transform-origin at the cursor maps the zoom to the pointer. */}
-              {canZoom && zoomImageSrc && (
+                  transform-origin at the cursor maps the zoom to the pointer.
+                  Mounted only while hovering so the 1200x1200 source is never
+                  downloaded just because ProductDetails was opened. */}
+              {canZoom && zoom.active && zoomImageSrc && (
                 <div
                   aria-hidden
                   className={cn(
                     'pointer-events-none absolute inset-0 z-10 hidden select-none lg:block',
                     'transition-opacity duration-200 ease-out',
-                    zoom.active ? 'opacity-100' : 'opacity-0'
+                    zoomLoaded ? 'opacity-100' : 'opacity-0'
                   )}
                 >
                   <img
                     src={zoomImageSrc}
                     alt=""
                     draggable={false}
+                    loading="eager"
+                    decoding="async"
+                    onLoad={() => setZoomLoaded(true)}
                     className="h-full w-full object-cover"
                     style={{
                       transform: 'scale(2.5)',

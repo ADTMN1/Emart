@@ -15,10 +15,12 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { OptimizedImage } from '@/components/ui/OptimizedImage'
 import type { Category } from '@/lib/types'
 import { cn, formatNumber } from '@/lib/utils'
 import { cachedApi, api } from '@/lib/api'
 import { ProductCardSkeleton } from '@/components/ui/States'
+import { useInView } from '@/hooks/useInView'
 
 const iconMap: Record<string, React.FC<{ className?: string }>> = {
   smartphone: Smartphone,
@@ -55,13 +57,149 @@ const getProductImg = (p: CategoryProduct): string => {
   return PLACEHOLDER_IMG
 }
 
+interface CategorySectionProps {
+  cat: Category
+  products: CategoryProduct[]
+  pending: boolean
+  onNeedProducts: (catId: string) => void
+}
+
+// Loads its product grid only once the section scrolls near the viewport, so
+// below-the-fold categories don't trigger product API calls (or image work) on
+// initial page load.
+const CategorySection: React.FC<CategorySectionProps> = ({ cat, products, pending, onNeedProducts }) => {
+  const [ref, inView] = useInView<HTMLElement>({ rootMargin: '300px' })
+  const Icon = iconMap[cat.icon] || Star
+
+  React.useEffect(() => {
+    if (inView && products.length === 0 && !pending) {
+      onNeedProducts(cat.id)
+    }
+  }, [inView, products.length, pending, onNeedProducts, cat.id])
+
+  return (
+    <section ref={ref} className="scroll-mt-24" id={cat.id}>
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 md:p-6 shadow-card">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4 min-w-0">
+            <div
+              className={cn(
+                'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground shadow-sm',
+                cat.color,
+              )}
+            >
+              <Icon className="h-5 w-5" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="truncate text-xl font-bold text-foreground sm:text-2xl">
+                  {cat.name}
+                </h2>
+                <Badge variant="outline" size="sm" className="border-border bg-background text-muted-foreground">
+                  {formatNumber(cat.count || 0)} items
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          <Link
+            to={`/marketplace?cat=${cat.id}`}
+            className="inline-flex items-center gap-2 self-start rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary-300 hover:text-primary md:self-center"
+          >
+            <span>View all</span>
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        {products.length === 0 && pending ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))
+        ) : products.length === 0 ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
+              <div className="aspect-square overflow-hidden bg-muted">
+                <img
+                  src={PLACEHOLDER_IMG}
+                  alt="No products yet"
+                  className="h-full w-full object-cover opacity-60"
+                />
+              </div>
+              <div className="p-3.5">
+                <h3 className="text-sm font-semibold text-muted-foreground">
+                  No products in {cat.name} yet
+                </h3>
+                <div className="mt-2 text-[11px] font-medium text-muted-foreground/80">
+                  Add some via Admin
+                </div>
+              </div>
+            </div>
+          ))
+        ) : (
+          products.slice(0, 4).map((p) => (
+            <div key={p.id} className="group">
+              <Link
+                to={`/product/${p.id}`}
+                className="block h-full overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:border-primary-300 hover:shadow-card-hover"
+              >
+                <div className="aspect-square overflow-hidden bg-muted">
+                  <OptimizedImage
+                    src={getProductImg(p)}
+                    alt={p.name}
+                    size="medium"
+                    context="card"
+                    lazy
+                    showShimmer
+                    aspectRatio="aspect-square"
+                    containerClassName="relative overflow-hidden"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2 p-3.5">
+                  <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
+                    {p.name}
+                  </h3>
+
+                  <div className="mt-auto flex items-center justify-between gap-2">
+                    <span className="text-sm font-bold text-foreground">
+                      ${p.price}
+                    </span>
+                    <Badge variant="outline" size="sm" className="border-border bg-background text-muted-foreground">
+                      {p.source}
+                    </Badge>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="mt-5 md:hidden">
+        <Button variant="outline" size="md" className="w-full" asChild>
+          <Link to={`/marketplace?cat=${cat.id}`}>
+            View all {cat.name}
+            <ArrowRight className="h-4 w-4 ml-1" />
+          </Link>
+        </Button>
+      </div>
+    </section>
+  )
+}
+
 const Categories: React.FC = () => {
   const [params] = useSearchParams()
   const selectedCategoryId = params.get('id')
   const [categoryProducts, setCategoryProducts] = React.useState<Record<string, CategoryProduct[]>>({})
+  const [pendingCategories, setPendingCategories] = React.useState<Record<string, boolean>>({})
   const [loading, setLoading] = React.useState(false)
   const [reloadKey, setReloadKey] = React.useState(0)
   const [categories, setCategories] = React.useState<Category[]>([])
+  const startedCatRef = React.useRef<Set<string>>(new Set())
 
   const visibleCategories = React.useMemo(() => {
     if (!selectedCategoryId) return categories
@@ -79,46 +217,48 @@ const Categories: React.FC = () => {
     }
   }, [selectedCategoryId, visibleCategories.length])
 
+  const loadCategoryProducts = React.useCallback(async (catId: string) => {
+    if (startedCatRef.current.has(catId)) return
+    startedCatRef.current.add(catId)
+    setPendingCategories((prev) => ({ ...prev, [catId]: true }))
+    try {
+      const data = await cachedApi.getProducts({
+        category: catId,
+        limit: '4'
+      })
+      setCategoryProducts((prev) => ({ ...prev, [catId]: data?.products || [] }))
+    } catch {
+      setCategoryProducts((prev) => ({ ...prev, [catId]: [] }))
+    } finally {
+      setPendingCategories((prev) => {
+        const next = { ...prev }
+        delete next[catId]
+        return next
+      })
+    }
+  }, [])
+
   React.useEffect(() => {
-    const loadAll = async () => {
+    startedCatRef.current.clear()
+    setCategoryProducts({})
+    setPendingCategories({})
+    const loadCategories = async () => {
       try {
         setLoading(true)
-        let loadedCategories: Category[] = []
         try {
           // Use cached categories
           const catData = await cachedApi.getCategories()
           if (Array.isArray(catData) && catData.length > 0) {
-            loadedCategories = catData
-            setCategories(loadedCategories)
+            setCategories(catData)
           }
         } catch (error) {
           console.error('Failed to load categories:', error)
         }
-
-        // Load products for each category in parallel
-        const productPromises = loadedCategories.map(async (cat) => {
-          try {
-            const data = await cachedApi.getProducts({
-              category: cat.id,
-              limit: '4'
-            })
-            return { catId: cat.id, products: data?.products || [] }
-          } catch {
-            return { catId: cat.id, products: [] }
-          }
-        })
-
-        const productResults = await Promise.all(productPromises)
-        const results: Record<string, CategoryProduct[]> = {}
-        productResults.forEach(({ catId, products }) => {
-          results[catId] = products
-        })
-        setCategoryProducts(results)
       } finally {
         setLoading(false)
       }
     }
-    loadAll()
+    loadCategories()
   }, [reloadKey])
 
   // Refresh when tab becomes visible
@@ -163,117 +303,15 @@ const Categories: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-8 md:space-y-10">
-            {visibleCategories.map((cat) => {
-              const Icon = iconMap[cat.icon] || Star
-              const catProducts = categoryProducts[cat.id] || []
-
-              return (
-                <section key={cat.id} className="scroll-mt-24" id={cat.id}>
-                  <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 md:p-6 shadow-card">
-                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div
-                          className={cn(
-                            'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-foreground shadow-sm',
-                            cat.color,
-                          )}
-                        >
-                          <Icon className="h-5 w-5" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="truncate text-xl font-bold text-foreground sm:text-2xl">
-                              {cat.name}
-                            </h2>
-                            <Badge variant="outline" size="sm" className="border-border bg-background text-muted-foreground">
-                              {formatNumber(cat.count || 0)} items
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-
-                      <Link
-                        to={`/marketplace?cat=${cat.id}`}
-                        className="inline-flex items-center gap-2 self-start rounded-lg border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary-300 hover:text-primary md:self-center"
-                      >
-                        <span>View all</span>
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                    {loading ? (
-                      Array.from({ length: 4 }).map((_, i) => (
-                        <ProductCardSkeleton key={i} />
-                      ))
-                    ) : catProducts.length === 0 ? (
-                      Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="overflow-hidden rounded-xl border border-border bg-card">
-                          <div className="aspect-square overflow-hidden bg-muted">
-                            <img
-                              src={PLACEHOLDER_IMG}
-                              alt="No products yet"
-                              className="h-full w-full object-cover opacity-60"
-                            />
-                          </div>
-                          <div className="p-3.5">
-                            <h3 className="text-sm font-semibold text-muted-foreground">
-                              No products in {cat.name} yet
-                            </h3>
-                            <div className="mt-2 text-[11px] font-medium text-muted-foreground/80">
-                              Add some via Admin
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      catProducts.slice(0, 4).map((p) => (
-                        <div key={p.id} className="group">
-                          <Link
-                            to={`/product/${p.id}`}
-                            className="block h-full overflow-hidden rounded-xl border border-border bg-card transition-all duration-300 hover:border-primary-300 hover:shadow-card-hover"
-                          >
-                            <div className="aspect-square overflow-hidden bg-muted">
-                              <img
-                                src={getProductImg(p)}
-                                alt={p.name}
-                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                              />
-                            </div>
-
-                            <div className="flex flex-col gap-2 p-3.5">
-                              <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition-colors group-hover:text-primary">
-                                {p.name}
-                              </h3>
-
-                              <div className="mt-auto flex items-center justify-between gap-2">
-                                <span className="text-sm font-bold text-foreground">
-                                  ${p.price}
-                                </span>
-                                <Badge variant="outline" size="sm" className="border-border bg-background text-muted-foreground">
-                                  {p.source}
-                                </Badge>
-                              </div>
-                            </div>
-                          </Link>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="mt-5 md:hidden">
-                    <Button variant="outline" size="md" className="w-full" asChild>
-                      <Link to={`/marketplace?cat=${cat.id}`}>
-                        View all {cat.name}
-                        <ArrowRight className="h-4 w-4 ml-1" />
-                      </Link>
-                    </Button>
-                  </div>
-                </section>
-              )
-            })}
+            {visibleCategories.map((cat) => (
+              <CategorySection
+                key={cat.id}
+                cat={cat}
+                products={categoryProducts[cat.id] || []}
+                pending={!!pendingCategories[cat.id]}
+                onNeedProducts={loadCategoryProducts}
+              />
+            ))}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Canvas, ThreeEvent, useFrame, useLoader } from '@react-three/fiber'
 import { Float } from '@react-three/drei/core/Float'
 import * as THREE from 'three'
+import { getOptimizedImageUrl } from '@/lib/imageOptimization'
 
 type Side = 'left' | 'right'
 
@@ -50,7 +51,14 @@ function getSafeProductImage(product: Product) {
 
 function ProductCard({ product, position, tilt }: { product: Product; position: [number, number, number]; tilt: number }) {
   const safeImage = React.useMemo(() => getSafeProductImage(product), [product])
-  const texture = useLoader(THREE.TextureLoader, safeImage)
+  // Use a transformed (600x600 webp) source so the decorative textures don't
+  // fetch the full-resolution product originals. Data-URL placeholders pass
+  // through getOptimizedImageUrl unchanged.
+  const textureSrc = React.useMemo(
+    () => getOptimizedImageUrl(safeImage, 'medium', true),
+    [safeImage]
+  )
+  const texture = useLoader(THREE.TextureLoader, textureSrc)
   const [hovered, setHovered] = React.useState(false)
 
   React.useEffect(() => {

@@ -278,6 +278,9 @@ const Home: React.FC = () => {
             )}
             loading="eager"
             decoding="async"
+            width={1920}
+            height={1280}
+            {...{ fetchpriority: 'high' as string }}
           />
           {/* Light overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40" />
