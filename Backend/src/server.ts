@@ -93,7 +93,7 @@ async function startServer() {
 ║   Environment: ${config.env.padEnd(24)}║
 ║   Port: ${PORT.toString().padEnd(31)}║
 ║   API Version: ${config.apiVersion.padEnd(24)}║
-║   CORS Origin: ${config.cors.origin.padEnd(24)}║
+║   CORS Origin: ${config.cors.origin.join(', ').padEnd(24)}║
 ║                                        ║
 ║   API Base: http://localhost:${PORT}/api/${config.apiVersion}  ║
 ║   Health:   http://localhost:${PORT}/health          ║
