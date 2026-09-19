@@ -90,7 +90,7 @@ export class AuthController {
       const result = await authService.googleCallback(code);
       
       // Redirect to frontend with token
-      const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:5173';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       res.redirect(`${frontendUrl}/auth/callback?token=${result.token}`);
     } catch (error) {
       next(error);
