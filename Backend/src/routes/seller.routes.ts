@@ -4,7 +4,7 @@ import sellerProductController from '../controllers/seller-product.controller';
 import messageController from '../controllers/message.controller';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validator';
-import { uploadSingle } from '../middleware/upload';
+import { uploadSingle, uploadSellerDocument } from '../middleware/upload';
 import {
   createSellerApplicationValidation,
   resubmitSellerApplicationValidation,
@@ -26,8 +26,10 @@ router.use(authenticate);
 
 // Submit a first application; resubmitting a rejected one reuses the same
 // record (same URL, same validation).
-router.post('/application', createSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
-router.post('/application/resubmit', resubmitSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
+// Multipart: the identity document is parsed into memory by multer before the
+// body validators run, then uploaded to private storage by the controller.
+router.post('/application', uploadSellerDocument, createSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
+router.post('/application/resubmit', uploadSellerDocument, resubmitSellerApplicationValidation, sellerController.submitApplication.bind(sellerController));
 router.get('/application', sellerController.getMyApplication.bind(sellerController));
 // Phase 8: EMART Seller Agreement — server-controlled version + acceptance.
 router.get('/agreement', sellerController.getAgreement.bind(sellerController));

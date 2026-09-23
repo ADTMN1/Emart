@@ -70,3 +70,26 @@ export const uploadImportFiles = importUpload.fields([
   { name: 'file', maxCount: 1 },
   { name: 'imagesZip', maxCount: 1 },
 ]);
+
+// Seller identity-document upload for the "Become a Seller" application.
+// Images and PDF only; the file is held in memory and handed to the private
+// seller-document storage service — never written to disk or made public.
+const MAX_DOCUMENT_FILE_SIZE = 8 * 1024 * 1024; // 8 MB
+const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+const sellerDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    if (DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new BadRequestError('Invalid identity document type. Allowed types: JPG, PNG, WEBP, PDF.'));
+    }
+  },
+  limits: {
+    fileSize: MAX_DOCUMENT_FILE_SIZE,
+    files: 1,
+  },
+});
+
+export const uploadSellerDocument = sellerDocumentUpload.single('idDocument');

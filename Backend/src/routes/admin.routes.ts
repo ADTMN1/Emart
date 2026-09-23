@@ -144,6 +144,11 @@ router.get(
   getSellerApplicationValidation,
   adminSellerController.getApplication.bind(adminSellerController)
 );
+router.get(
+  '/sellers/applications/:id/document',
+  getSellerApplicationValidation,
+  adminSellerController.getApplicationDocument.bind(adminSellerController)
+);
 router.post(
   '/sellers/applications/:id/approve',
   approveSellerApplicationValidation,

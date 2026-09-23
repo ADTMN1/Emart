@@ -24,6 +24,7 @@
   "author": "EMART",
   "license": "MIT",
   "dependencies": {
+    "@getbrevo/brevo": "^6.0.3",
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^5.7.1",
     "@supabase/supabase-js": "^2.116.0",

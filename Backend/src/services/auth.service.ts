@@ -219,6 +219,7 @@ export class AuthService {
 
   async getGoogleAuthUrl() {
     const scopes = [
+      'openid',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
     ];

@@ -37,6 +37,8 @@ import {
   Inbox,
   CheckCheck,
   Loader2,
+  Upload,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -47,7 +49,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
-import { api, notificationApi, sellerAgreementApi, type NotificationItem, type SellerAgreement } from '@/lib/api'
+import { api, notificationApi, sellerAgreementApi, sellerApplicationApi, type NotificationItem, type SellerAgreement } from '@/lib/api'
 import {
   notificationsChanged,
   formatRelativeTime,
@@ -57,10 +59,33 @@ interface SellerApplicationState {
   id: string
   storeName: string
   storeDescription: string
+  email?: string
+  emergencyContact?: string | null
+  address?: string
+  hasIdDocument?: boolean
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED'
   rejectionReason?: string | null
   submittedAt?: string
   reviewedAt?: string | null
+}
+
+// Identity-document constraints — mirrored from the backend (Multer + the
+// private storage service) so invalid files are rejected before any request.
+const ID_DOCUMENT_ACCEPT = 'image/jpeg,image/png,image/webp,application/pdf'
+const ID_DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+const ID_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024 // 8 MB
+
+const ID_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  'image/jpeg': 'JPG',
+  'image/png': 'PNG',
+  'image/webp': 'WEBP',
+  'application/pdf': 'PDF',
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const Account: React.FC = () => {
@@ -84,8 +109,13 @@ const Account: React.FC = () => {
   // shell (shared with the sidebar's "Store" label), so this page only keeps
   // the application form + submit logic.
   const { sellerApp, sellerProfile, sellerLoading, refreshSeller } = useOutletContext<AccountOutletContext>()
-  const [storeName, setStoreName] = React.useState('')
-  const [storeDescription, setStoreDescription] = React.useState('')
+  const [shopName, setShopName] = React.useState('')
+  const [applicantEmail, setApplicantEmail] = React.useState(user?.email || '')
+  const [emergencyContact, setEmergencyContact] = React.useState('')
+  const [address, setAddress] = React.useState('')
+  const [idDocument, setIdDocument] = React.useState<File | null>(null)
+  const [idDocumentError, setIdDocumentError] = React.useState<string | null>(null)
+  const idDocumentInputRef = React.useRef<HTMLInputElement>(null)
   const [sellerSubmitting, setSellerSubmitting] = React.useState(false)
 
   // Phase 8: EMART Seller Agreement. The version/text come from the server;
@@ -150,6 +180,49 @@ const Account: React.FC = () => {
     fetchWallet()
   }, [tab, fetchWallet])
 
+  // Open the hidden native file input from a type="button" trigger. File inputs
+  // cannot be programmatically re-filled, so selection is validated into React
+  // state immediately and the native input's value is only used for opening.
+  const openIdDocumentPicker = () => {
+    idDocumentInputRef.current?.click()
+  }
+
+  const clearIdDocument = () => {
+    setIdDocument(null)
+    setIdDocumentError(null)
+    if (idDocumentInputRef.current) idDocumentInputRef.current.value = ''
+  }
+
+  const handleIdDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null
+
+    if (!file) {
+      setIdDocument(null)
+      return
+    }
+
+    if (!ID_DOCUMENT_MIME_TYPES.includes(file.type)) {
+      const message = 'Unsupported file type. Upload a JPG, PNG, WEBP or PDF.'
+      setIdDocument(null)
+      setIdDocumentError(message)
+      toast({ variant: 'error', title: 'Invalid ID document', description: message })
+      if (idDocumentInputRef.current) idDocumentInputRef.current.value = ''
+      return
+    }
+
+    if (file.size > ID_DOCUMENT_MAX_BYTES) {
+      const message = 'File is too large. The maximum size is 8 MB.'
+      setIdDocument(null)
+      setIdDocumentError(message)
+      toast({ variant: 'error', title: 'Invalid ID document', description: message })
+      if (idDocumentInputRef.current) idDocumentInputRef.current.value = ''
+      return
+    }
+
+    setIdDocument(file)
+    setIdDocumentError(null)
+  }
+
   const handleSellerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!sellerAgreed) {
@@ -160,19 +233,45 @@ const Account: React.FC = () => {
       })
       return
     }
+    if (!shopName.trim() || !applicantEmail.trim() || !address.trim()) {
+      toast({
+        variant: 'error',
+        title: 'Missing details',
+        description: 'Shop name, email address and address are required.',
+      })
+      return
+    }
+    if (!idDocument) {
+      toast({
+        variant: 'error',
+        title: 'ID document required',
+        description: 'Upload a photo or scan of your ID, passport, or driver\'s license.',
+      })
+      return
+    }
     try {
       setSellerSubmitting(true)
-      await api.post('/seller/application', {
-        storeName,
-        storeDescription,
-      })
+      const payload = {
+        shopName: shopName.trim(),
+        email: applicantEmail.trim(),
+        emergencyContact: emergencyContact.trim() || undefined,
+        address: address.trim(),
+        idDocument,
+      }
+      if (sellerApp?.status === 'REJECTED') {
+        await sellerApplicationApi.resubmit(payload)
+      } else {
+        await sellerApplicationApi.submit(payload)
+      }
       toast({
         variant: 'success',
         title: 'Application submitted',
         description: 'Your seller application is now under review.',
       })
-      setStoreName('')
-      setStoreDescription('')
+      setShopName('')
+      setEmergencyContact('')
+      setAddress('')
+      clearIdDocument()
       await refreshSeller()
     } catch (err: any) {
       toast({
@@ -304,6 +403,162 @@ const Account: React.FC = () => {
           )}
         </div>
       )}
+    </div>
+  )
+
+  // "Become a Seller" application fields — reused by the first application
+  // and the rejected-resubmission form. The identity document is uploaded as
+  // multipart/form-data and stored privately by the backend.
+  const sellerApplicationFields = (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Shop Name <span className="text-destructive">*</span>
+        </label>
+        <Input
+          value={shopName}
+          onChange={(e) => setShopName(e.target.value)}
+          placeholder="e.g. Nati's Tech Deals"
+          required
+          minLength={3}
+          maxLength={80}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Email Address <span className="text-destructive">*</span>
+        </label>
+        <Input
+          type="email"
+          value={applicantEmail}
+          onChange={(e) => setApplicantEmail(e.target.value)}
+          placeholder="you@example.com"
+          required
+          maxLength={254}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Emergency Contact
+        </label>
+        <Input
+          value={emergencyContact}
+          onChange={(e) => setEmergencyContact(e.target.value)}
+          placeholder="Name and phone number (optional)"
+          maxLength={120}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          Address <span className="text-destructive">*</span>
+        </label>
+        <textarea
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          placeholder="Street, city, country"
+          required
+          minLength={5}
+          maxLength={300}
+          rows={3}
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          ID Document <span className="text-destructive">*</span>
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Upload your government ID, passport, or driver&apos;s license.
+        </p>
+
+        {/* Hidden native input, opened only by a type="button" trigger. It has no
+            `required` so it can never block the JS-validated application submit,
+            and it is never unmounted while the picker is open. `sr-only` keeps
+            the input visually hidden; the inline style guarantees it stays
+            invisible even if the stylesheet has not loaded. */}
+        <input
+          ref={idDocumentInputRef}
+          type="file"
+          accept={ID_DOCUMENT_ACCEPT}
+          onChange={handleIdDocumentChange}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            padding: 0,
+            margin: '-1px',
+            overflow: 'hidden',
+            clip: 'rect(0, 0, 0, 0)',
+            whiteSpace: 'nowrap',
+            borderWidth: 0,
+          }}
+        />
+
+        {idDocument ? (
+          <div className="flex items-center gap-3 rounded-xl border border-success/30 bg-success/5 p-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-success/10 text-success">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-sm font-semibold">{idDocument.name}</p>
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {ID_DOCUMENT_TYPE_LABELS[idDocument.type] || 'FILE'} · {formatFileSize(idDocument.size)}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={openIdDocumentPicker}
+              >
+                Replace
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/5"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={clearIdDocument}
+              >
+                Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={openIdDocumentPicker}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-xl border border-dashed p-4 text-left transition-colors',
+              idDocumentError
+                ? 'border-destructive/40 bg-destructive/5 hover:bg-destructive/10'
+                : 'border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40',
+            )}
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Upload className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Upload ID document</p>
+              <p className="text-xs text-muted-foreground">JPG, PNG, WEBP or PDF · Max 8 MB</p>
+            </div>
+          </button>
+        )}
+
+        {idDocumentError && (
+          <p className="flex items-center gap-1.5 text-xs text-destructive">
+            <AlertCircle className="h-3.5 w-3.5" /> {idDocumentError}
+          </p>
+        )}
+      </div>
     </div>
   )
 
@@ -952,32 +1207,9 @@ const Account: React.FC = () => {
                       </div>
                     </div>
                     {/* Resubmission reuses the same application record server-side. */}
-                    <form onSubmit={handleSellerSubmit} className="space-y-4">
+                    <form onSubmit={handleSellerSubmit} className="space-y-4" noValidate>
                       <p className="text-sm font-semibold">Submit a new application</p>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Name</label>
-                        <Input
-                          value={storeName}
-                          onChange={(e) => setStoreName(e.target.value)}
-                          placeholder="e.g. Nati's Tech Deals"
-                          required
-                          minLength={3}
-                          maxLength={80}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Description</label>
-                        <textarea
-                          value={storeDescription}
-                          onChange={(e) => setStoreDescription(e.target.value)}
-                          placeholder="Tell us what you plan to sell (10–2000 characters)"
-                          required
-                          minLength={10}
-                          maxLength={2000}
-                          rows={4}
-                          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-                        />
-                      </div>
+                      {sellerApplicationFields}
                       {sellerAgreementSection}
                       <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                         {sellerSubmitting ? 'Submitting…' : 'Resubmit Application'}
@@ -985,34 +1217,11 @@ const Account: React.FC = () => {
                     </form>
                   </div>
                 ) : (
-                  <form onSubmit={handleSellerSubmit} className="space-y-4">
+                  <form onSubmit={handleSellerSubmit} className="space-y-4" noValidate>
                     <p className="text-sm text-muted-foreground">
                       Apply to open a store on EMART. Our team reviews every application.
                     </p>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Name</label>
-                      <Input
-                        value={storeName}
-                        onChange={(e) => setStoreName(e.target.value)}
-                        placeholder="e.g. Nati's Tech Deals"
-                        required
-                        minLength={3}
-                        maxLength={80}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Store Description</label>
-                      <textarea
-                        value={storeDescription}
-                        onChange={(e) => setStoreDescription(e.target.value)}
-                        placeholder="Tell us what you plan to sell (10–2000 characters)"
-                        required
-                        minLength={10}
-                        maxLength={2000}
-                        rows={4}
-                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-                      />
-                    </div>
+                    {sellerApplicationFields}
                     {sellerAgreementSection}
                     <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                       {sellerSubmitting ? 'Submitting…' : 'Submit Application'}

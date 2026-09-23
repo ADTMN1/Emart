@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import sellerService from '../services/seller.service';
+import sellerDocumentStorageService from '../services/seller-document-storage.service';
 import { sendSuccess } from '../utils/response';
 import { ValidationError } from '../utils/errors';
 
@@ -31,6 +32,22 @@ class AdminSellerController {
     try {
       const data = await sellerService.getApplicationById(req.params.id);
       sendSuccess(res, data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/admin/sellers/applications/:id/document
+   *
+   * Returns a short-lived signed URL for the applicant's identity document.
+   * ADMIN-only (router gate); the storage path is never returned to clients.
+   */
+  async getApplicationDocument(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const storagePath = await sellerService.getApplicationDocumentPath(req.params.id);
+      const url = await sellerDocumentStorageService.createSignedDocumentUrl(storagePath);
+      sendSuccess(res, { url, expiresIn: 300 });
     } catch (error) {
       next(error);
     }

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Plus, Search, Package, Pencil, Trash2, ChevronLeft, ChevronRight, Store } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -39,6 +39,7 @@ interface Pagination {
  */
 export default function SellerProducts() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { toast } = useToast()
 
   const [products, setProducts] = React.useState<SellerProduct[]>([])
@@ -61,7 +62,7 @@ export default function SellerProducts() {
       setNotApproved(false)
     } catch (err: any) {
       if (err?.status === 401) {
-        navigate('/login')
+        navigate('/login', { state: { from: location } })
         return
       }
       if (err?.status === 403 || err?.status === 404) {
@@ -72,7 +73,7 @@ export default function SellerProducts() {
     } finally {
       setLoading(false)
     }
-  }, [search, status])
+  }, [location, search, status])
 
   React.useEffect(() => {
     const t = window.setTimeout(() => load(1), search ? 300 : 0)

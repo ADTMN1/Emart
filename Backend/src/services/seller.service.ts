@@ -1,7 +1,27 @@
 import prisma from '../config/database';
+import emailService, { EmailService as EmailServiceClass, SendEmailResult } from './email.service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 import { Prisma, SellerStatus } from '@prisma/client';
 import { SELLER_AGREEMENT_VERSION, SELLER_AGREEMENT_TEXT, SELLER_AGREEMENT_TITLE } from '../config/sellerAgreement';
+import sellerDocumentStorageService from './seller-document-storage.service';
+
+/** Pragmatic email shape check — the authoritative validation is the API layer. */
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Shape of the customer-supplied application payload. `idDocumentPath` is
+ * produced server-side by the storage service from the uploaded file — it is
+ * never read from the client.
+ */
+export interface SellerApplicationInput {
+  storeName: string;
+  storeDescription?: string;
+  email: string;
+  emergencyContact?: string;
+  address: string;
+  idDocumentPath?: string;
+  idDocumentMimeType?: string;
+}
 
 /**
  * Seller foundation (Phase 5).
@@ -47,9 +67,11 @@ export interface ApplicationReviewContext {
 
 export class SellerService {
   private prisma: typeof prisma;
+  private email: EmailServiceClass;
 
-  constructor(prismaClient: typeof prisma = prisma) {
+  constructor(prismaClient: typeof prisma = prisma, emailClient: EmailServiceClass = emailService) {
     this.prisma = prismaClient;
+    this.email = emailClient;
   }
 
   /**
@@ -119,69 +141,132 @@ export class SellerService {
   }
 
   /**
+   * Normalized, validated "Become a Seller" application fields. All protected
+   * values (userId, status, reviewedBy, reviewedAt, idDocumentPath) are derived
+   * server-side and never come from this payload.
+   */
+  private applicationInput(data: SellerApplicationInput) {
+    const storeName = String(data.storeName ?? '').replace(/\s+/g, ' ').trim();
+    const storeDescription = String(data.storeDescription ?? '').replace(/\s+/g, ' ').trim();
+    const email = String(data.email ?? '').trim().toLowerCase();
+    const emergencyContact = String(data.emergencyContact ?? '').replace(/\s+/g, ' ').trim();
+    const address = String(data.address ?? '').replace(/\s+/g, ' ').trim();
+
+    if (storeName.length < 3 || storeName.length > 80) {
+      throw new ValidationError('Shop name must be between 3 and 80 characters.');
+    }
+    if (storeDescription && (storeDescription.length < 10 || storeDescription.length > 2000)) {
+      throw new ValidationError('Store description must be between 10 and 2000 characters.');
+    }
+    if (!EMAIL_REGEX.test(email) || email.length > 254) {
+      throw new ValidationError('Please provide a valid email address.');
+    }
+    if (address.length < 5 || address.length > 300) {
+      throw new ValidationError('Address must be between 5 and 300 characters.');
+    }
+    if (emergencyContact && (emergencyContact.length < 3 || emergencyContact.length > 120)) {
+      throw new ValidationError('Emergency contact must be between 3 and 120 characters.');
+    }
+
+    return { storeName, storeDescription, email, emergencyContact, address };
+  }
+
+  /**
+   * A user owns exactly one application row (DB-unique userId), so a second
+   * pending application is impossible by construction. This guard produces the
+   * user-facing 409 for the state transitions that are not a resubmission.
+   */
+  private assertNotDuplicatePending(existing: { status: SellerStatus } | null) {
+    if (!existing) return;
+    if (existing.status === 'PENDING') {
+      throw new ConflictError('You already have an application under review.');
+    }
+    if (existing.status === 'APPROVED') {
+      throw new ConflictError('Your seller application has already been approved.');
+    }
+    if (existing.status === 'SUSPENDED') {
+      throw new ConflictError('Your seller account is suspended. Contact support.');
+    }
+  }
+
+  /**
    * POST /seller/application — submit a first application or resubmit a
    * rejected one (same row). Everything else is a 409 conflict.
    */
-  async submitApplication(
-    userId: string,
-    data: { storeName: string; storeDescription: string }
-  ) {
+  async submitApplication(userId: string, data: SellerApplicationInput) {
     // Submitting (or resubmitting) requires accepting the CURRENT agreement
     // version first — enforced server-side, never from the client.
     await this.assertAgreementAccepted(userId);
 
-    const input = this.storeInput(data);
+    const input = this.applicationInput(data);
 
     const existing = await this.prisma.sellerApplication.findUnique({ where: { userId } });
+    this.assertNotDuplicatePending(existing);
+
+    // An identity document is mandatory for a new application. A rejected
+    // applicant may keep their previously uploaded document on resubmission.
+    const hasNewDocument = Boolean(data.idDocumentPath);
+    if (!hasNewDocument && !existing?.idDocumentPath) {
+      throw new ValidationError(
+        'Please upload a clear photo or scan of your ID, passport, or driver\'s license.',
+      );
+    }
+
+    const documentFields = hasNewDocument
+      ? { idDocumentPath: data.idDocumentPath!, idDocumentMimeType: data.idDocumentMimeType ?? null }
+      : {};
+
+    const applicationSelect = {
+      id: true,
+      storeName: true,
+      storeDescription: true,
+      email: true,
+      emergencyContact: true,
+      address: true,
+      status: true,
+      rejectionReason: true,
+      submittedAt: true,
+      reviewedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    } as const;
+
     if (existing) {
-      if (existing.status === 'PENDING') {
-        throw new ConflictError('You already have an application under review.');
-      }
-      if (existing.status === 'APPROVED') {
-        throw new ConflictError('Your seller application has already been approved.');
-      }
-      if (existing.status === 'SUSPENDED') {
-        throw new ConflictError('Your seller account is suspended. Contact support.');
-      }
       // REJECTED → resubmission reuses the same row (documented behavior).
-      return this.prisma.sellerApplication.update({
+      const updated = await this.prisma.sellerApplication.update({
         where: { userId },
         data: {
           ...input,
+          ...documentFields,
           status: 'PENDING',
           rejectionReason: null,
           reviewedAt: null,
           reviewedBy: null,
           submittedAt: new Date(),
         },
-        select: {
-          id: true,
-          storeName: true,
-          storeDescription: true,
-          status: true,
-          rejectionReason: true,
-          submittedAt: true,
-          reviewedAt: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+        select: { ...applicationSelect, idDocumentPath: true },
       });
+      // Superseded document removed only after the row is safely updated.
+      if (hasNewDocument && existing.idDocumentPath && existing.idDocumentPath !== data.idDocumentPath) {
+        await sellerDocumentStorageService.deleteSellerDocument(existing.idDocumentPath);
+      }
+      return this.withoutDocumentPath(updated);
     }
 
-    return this.prisma.sellerApplication.create({
-      data: { userId, ...input, status: 'PENDING' },
-      select: {
-        id: true,
-        storeName: true,
-        storeDescription: true,
-        status: true,
-        rejectionReason: true,
-        submittedAt: true,
-        reviewedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const created = await this.prisma.sellerApplication.create({
+      data: { userId, ...input, ...documentFields, status: 'PENDING' },
+      select: { ...applicationSelect, idDocumentPath: true },
     });
+    return this.withoutDocumentPath(created);
+  }
+
+  /**
+   * Strip the private storage path from any customer-facing payload and expose
+   * only a boolean so the UI can show whether a document is on file.
+   */
+  private withoutDocumentPath<T extends { idDocumentPath?: string | null }>(row: T) {
+    const { idDocumentPath, ...rest } = row;
+    return { ...rest, hasIdDocument: Boolean(idDocumentPath) };
   }
 
   /**
@@ -189,20 +274,25 @@ export class SellerService {
    * from the token). Returns null when none exists; never another user's.
    */
   async getMyApplication(userId: string) {
-    return this.prisma.sellerApplication.findUnique({
+    const application = await this.prisma.sellerApplication.findUnique({
       where: { userId },
       select: {
         id: true,
         storeName: true,
         storeDescription: true,
+        email: true,
+        emergencyContact: true,
+        address: true,
         status: true,
         rejectionReason: true,
         submittedAt: true,
         reviewedAt: true,
         createdAt: true,
         updatedAt: true,
+        idDocumentPath: true,
       },
     });
+    return application ? this.withoutDocumentPath(application) : null;
   }
 
   /**
@@ -293,12 +383,16 @@ export class SellerService {
           id: true,
           storeName: true,
           storeDescription: true,
+          email: true,
+          emergencyContact: true,
+          address: true,
           status: true,
           rejectionReason: true,
           submittedAt: true,
           reviewedAt: true,
           createdAt: true,
           updatedAt: true,
+          idDocumentPath: true,
           user: {
             select: {
               id: true,
@@ -314,8 +408,10 @@ export class SellerService {
       this.prisma.sellerApplication.count({ where }),
     ]);
 
+    const applications = items.map((item) => this.withoutDocumentPath(item));
+
     return {
-      applications: items,
+      applications,
       pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) },
     };
   }
@@ -328,6 +424,9 @@ export class SellerService {
         id: true,
         storeName: true,
         storeDescription: true,
+        email: true,
+        emergencyContact: true,
+        address: true,
         status: true,
         rejectionReason: true,
         submittedAt: true,
@@ -335,6 +434,7 @@ export class SellerService {
         reviewedBy: true,
         createdAt: true,
         updatedAt: true,
+        idDocumentPath: true,
         user: {
           select: {
             id: true,
@@ -350,7 +450,26 @@ export class SellerService {
     if (!application) {
       throw new NotFoundError('Seller application not found.');
     }
-    return application;
+    return this.withoutDocumentPath(application);
+  }
+
+  /**
+   * ADMIN — resolve the private storage path for an application's identity
+   * document so the controller can mint a short-lived signed URL. The path is
+   * never returned to the client.
+   */
+  async getApplicationDocumentPath(applicationId: string): Promise<string> {
+    const application = await this.prisma.sellerApplication.findUnique({
+      where: { id: applicationId },
+      select: { idDocumentPath: true },
+    });
+    if (!application) {
+      throw new NotFoundError('Seller application not found.');
+    }
+    if (!application.idDocumentPath) {
+      throw new NotFoundError('This application has no identity document on file.');
+    }
+    return application.idDocumentPath;
   }
 
   /** Shared transition validation. */
@@ -368,7 +487,13 @@ export class SellerService {
 
   /** ADMIN — PENDING → APPROVED; also creates the one-per-user profile. */
   async approveApplication(applicationId: string, adminId: string) {
-    const application = await this.prisma.sellerApplication.findUnique({ where: { id: applicationId } });
+    const application = await this.prisma.sellerApplication.findUnique({
+      where: { id: applicationId },
+      // Recipient preference: the application email supplied during the
+      // "Become a Seller" form, falling back to the applying account's email
+      // (minimal select: email + display name only).
+      include: { user: { select: { email: true, firstName: true, lastName: true } } },
+    });
     if (!application) {
       throw new NotFoundError('Seller application not found.');
     }
@@ -376,6 +501,10 @@ export class SellerService {
 
     const review: ApplicationReviewContext = { reviewedBy: adminId, reviewedAt: new Date() };
 
+    // Approval is committed to the DB FIRST — the confirmation email is sent
+    // strictly AFTER the transaction succeeds, so an email failure can never
+    // roll back an approved seller. The notification outcome is surfaced on
+    // the response but never drives the approval result.
     const [updated] = await this.prisma.$transaction([
       this.prisma.sellerApplication.update({
         where: { id: application.id },
@@ -395,7 +524,34 @@ export class SellerService {
       }),
     ]);
 
-    return updated;
+    let email: SendEmailResult;
+    try {
+      const { user } = application;
+      const applicantName =
+        user?.firstName || user?.lastName
+          ? [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() || undefined
+          : undefined;
+      email = await this.email.sendSellerApprovalEmail({
+        to: application.email || user?.email || '',
+        applicantName,
+        storeName: updated.storeName,
+      });
+    } catch (err) {
+      // Defensive window: a throwing sender must never propagate past a
+      // successful approval.
+      email = { sent: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    if (!email.sent) {
+      const detail = email.error ? email.error : email.reason ? email.reason : 'unknown';
+      console.error(
+        `[SellerService] Seller application ${application.id} approved but the approval email was not sent (${detail}).`,
+      );
+    }
+
+    // Preserves the pre-existing response shape (the approved application,
+    // with the private document path stripped) while exposing the notification
+    // outcome to the API caller.
+    return { ...this.withoutDocumentPath(updated), email };
   }
 
   /** ADMIN — PENDING → REJECTED with a required, validated reason. */
@@ -411,10 +567,13 @@ export class SellerService {
       throw new ValidationError('Rejection reason must be between 3 and 1000 characters.');
     }
 
-    return this.prisma.sellerApplication.update({
+    const updated = await this.prisma.sellerApplication.update({
       where: { id: application.id },
       data: { status: 'REJECTED', rejectionReason: trimmed, reviewedBy: adminId, reviewedAt: new Date() },
     });
+
+    // The private document path never leaves the server on this response either.
+    return this.withoutDocumentPath(updated);
   }
 
   /** ADMIN — APPROVED → SUSPENDED on the seller profile (identity preserved). */

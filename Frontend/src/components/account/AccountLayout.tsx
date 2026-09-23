@@ -26,6 +26,10 @@ interface SellerApplicationState {
   id: string
   storeName: string
   storeDescription: string
+  email?: string
+  emergencyContact?: string | null
+  address?: string
+  hasIdDocument?: boolean
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED'
   rejectionReason?: string | null
   submittedAt?: string
@@ -36,7 +40,8 @@ export interface AccountOutletContext {
   sellerApp: SellerApplicationState | null
   sellerProfile: SellerApplicationState | null
   sellerLoading: boolean
-  refreshSeller: () => Promise<void>
+  sellerError: string | null
+  refreshSeller: (opts?: { silent?: boolean }) => Promise<void>
 }
 
 interface NavItem {
@@ -122,23 +127,55 @@ export const AccountLayout: React.FC = () => {
   const [sellerApp, setSellerApp] = React.useState<SellerApplicationState | null>(null)
   const [sellerProfile, setSellerProfile] = React.useState<SellerApplicationState | null>(null)
   const [sellerLoading, setSellerLoading] = React.useState(true)
+  const [sellerError, setSellerError] = React.useState<string | null>(null)
 
   const isSellerArea = path.startsWith('/account/seller') || path.startsWith('/seller')
 
-  const refreshSeller = React.useCallback(async () => {
+  const refreshSeller = React.useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      setSellerLoading(true)
-      const [app, profile] = await Promise.all([
+      // A silent refresh (e.g. from the window-focus listener) must NOT toggle
+      // the full-page sellerLoading state, otherwise it unmounts the current
+      // seller application form and tears down the native file input mid-pick.
+      if (!opts?.silent) setSellerLoading(true)
+
+      // Fetch the application and profile independently. A failure on either
+      // request must never erase the other's successful result, and a failed
+      // request must NEVER be mistaken for "this user has no seller account" —
+      // that state only originates from a successful 200 response with
+      // data: null. Last-known-good values are preserved on failure.
+      const [appResult, profileResult] = await Promise.allSettled([
         api.get<SellerApplicationState | null>('/seller/application'),
-        api.get<SellerApplicationState | null>('/seller/profile').catch(() => null),
+        api.get<SellerApplicationState | null>('/seller/profile'),
       ])
-      setSellerApp(app ?? null)
-      setSellerProfile(profile ?? null)
-    } catch {
-      setSellerApp(null)
-      setSellerProfile(null)
+
+      if (import.meta.env.DEV) {
+        const summarize = (r: PromiseSettledResult<SellerApplicationState | null>) =>
+          r.status === 'fulfilled'
+            ? { httpStatus: 200, data: r.value ? { id: r.value.id, status: r.value.status } : null }
+            : { httpStatus: (r.reason as { status?: number })?.status ?? 'network', error: (r.reason as Error)?.message }
+        console.info('[seller-debug] refreshSeller', {
+          user: user ? { id: user.id, email: user.email, role: user.role } : null,
+          baseUrl: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+          application: summarize(appResult),
+          profile: summarize(profileResult),
+        })
+      }
+
+      if (appResult.status === 'fulfilled') {
+        setSellerApp(appResult.value ?? null)
+      }
+      // On application failure, preserve the last known good sellerApp so the
+      // sidebar/tab label and the seller form don't flip to "no application".
+
+      if (profileResult.status === 'fulfilled') {
+        setSellerProfile(profileResult.value ?? null)
+        setSellerError(null) // definitive answer: a seller account exists or not
+      } else {
+        const reason = profileResult.reason
+        setSellerError(reason instanceof Error ? reason.message : 'Unable to load seller status.')
+      }
     } finally {
-      setSellerLoading(false)
+      if (!opts?.silent) setSellerLoading(false)
     }
   }, [])
 
@@ -158,7 +195,7 @@ export const AccountLayout: React.FC = () => {
   React.useEffect(() => {
     if (!isSellerArea) return
     const onFocus = () => {
-      refreshSeller()
+      refreshSeller({ silent: true })
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -190,8 +227,8 @@ export const AccountLayout: React.FC = () => {
   }, [path, sellerActive])
 
   const context = React.useMemo<AccountOutletContext>(
-    () => ({ sellerApp, sellerProfile, sellerLoading, refreshSeller }),
-    [sellerApp, sellerProfile, sellerLoading, refreshSeller],
+    () => ({ sellerApp, sellerProfile, sellerLoading, sellerError, refreshSeller }),
+    [sellerApp, sellerProfile, sellerLoading, sellerError, refreshSeller],
   )
 
   const userDisplayName = user

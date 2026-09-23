@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { getAuthProfile } from '@/lib/api';
+import { OAUTH_RETURN_PATH_KEY, resolvePostLoginDestination } from '@/pages/Login';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -18,6 +19,13 @@ const AuthCallback = () => {
     hasProcessed.current = true;
 
     const handleCallback = async () => {
+      // Consume any pre-OAuth return path saved by the Login page's Google
+      // handler. It is removed immediately so a stale destination can never
+      // redirect a later, unrelated login, and it is re-validated below with
+      // the same rules as the email/password flow (bare internal paths only).
+      const oauthReturnPath = window.sessionStorage.getItem(OAUTH_RETURN_PATH_KEY);
+      window.sessionStorage.removeItem(OAUTH_RETURN_PATH_KEY);
+
       const token = searchParams.get('token');
 
       if (!token) {
@@ -49,11 +57,24 @@ const AuthCallback = () => {
           description: 'You have successfully signed in with Google.',
         });
         
-        // Redirect based on user role
+        // Redirect based on user role. ADMIN always lands on /admin; other
+        // users restore the validated pre-OAuth destination (e.g. /seller) or
+        // fall back to "/". A stored path can never override authorization —
+        // the seller/profile gates still run against the incoming session.
+        // Split the stored candidate back into pathname + search so the shared
+        // validator applies its route blocklist to the path alone (query
+        // strings can never be used to smuggle a blocked route through).
+        const qIndex = oauthReturnPath?.indexOf('?') ?? -1;
+        const returnFrom =
+          oauthReturnPath && qIndex !== -1
+            ? { pathname: oauthReturnPath.slice(0, qIndex), search: oauthReturnPath.slice(qIndex) }
+            : oauthReturnPath
+              ? { pathname: oauthReturnPath }
+              : null;
         if (userData.role === 'ADMIN') {
           navigate('/admin', { replace: true });
         } else {
-          navigate('/', { replace: true });
+          navigate(resolvePostLoginDestination(returnFrom), { replace: true });
         }
       } catch (err: any) {
         console.error('OAuth callback error:', err);

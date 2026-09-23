@@ -5,9 +5,11 @@ import { validate } from '../validator';
  * Seller foundation validation (Phase 5).
  *
  * Client-supplied userId / sellerId / status / reviewedBy / reviewedAt are
- * never accepted anywhere: the customer payload whitelist is exactly
- * { storeName, storeDescription } and protected values are derived
- * server-side from the authenticated user / admin session.
+ * never accepted anywhere: the customer application payload whitelist is
+ * exactly { storeName, storeDescription?, email, emergencyContact?, address }
+ * (the identity document is validated by multer + the storage service) and
+ * protected values are derived server-side from the authenticated user /
+ * admin session.
  */
 
 export const SELLER_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'] as const;
@@ -37,17 +39,67 @@ const storeDescriptionRule = body('storeDescription')
   .isLength({ min: 10, max: 2000 })
   .withMessage('Store description must be between 10 and 2000 characters.');
 
+/** Store description is optional on the "Become a Seller" application. */
+const storeDescriptionOptionalRule = body('storeDescription')
+  .optional({ checkFalsy: true })
+  .isString()
+  .withMessage('Store description must be a string.')
+  .bail()
+  .customSanitizer(normalizeWhitespace)
+  .isLength({ min: 10, max: 2000 })
+  .withMessage('Store description must be between 10 and 2000 characters.');
+
+const emailRule = body('email')
+  .exists({ checkFalsy: true })
+  .withMessage('Email address is required.')
+  .bail()
+  .isString()
+  .withMessage('Email address must be a string.')
+  .bail()
+  .trim()
+  .isEmail()
+  .withMessage('Please provide a valid email address.')
+  .bail()
+  .isLength({ max: 254 })
+  .withMessage('Email address is too long.');
+
+const addressRule = body('address')
+  .exists({ checkFalsy: true })
+  .withMessage('Address is required.')
+  .bail()
+  .isString()
+  .withMessage('Address must be a string.')
+  .bail()
+  .customSanitizer(normalizeWhitespace)
+  .isLength({ min: 5, max: 300 })
+  .withMessage('Address must be between 5 and 300 characters.');
+
+const emergencyContactRule = body('emergencyContact')
+  .optional({ checkFalsy: true })
+  .isString()
+  .withMessage('Emergency contact must be a string.')
+  .bail()
+  .customSanitizer(normalizeWhitespace)
+  .isLength({ min: 3, max: 120 })
+  .withMessage('Emergency contact must be between 3 and 120 characters.');
+
 /** POST /api/v1/seller/application */
 export const createSellerApplicationValidation = [
   storeNameRule,
-  storeDescriptionRule,
+  storeDescriptionOptionalRule,
+  emailRule,
+  emergencyContactRule,
+  addressRule,
   validate,
 ];
 
 /** POST /api/v1/seller/application (resubmission reuses the same shape). */
 export const resubmitSellerApplicationValidation = [
   storeNameRule,
-  storeDescriptionRule,
+  storeDescriptionOptionalRule,
+  emailRule,
+  emergencyContactRule,
+  addressRule,
   validate,
 ];
 

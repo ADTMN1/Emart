@@ -350,20 +350,30 @@ model Wallet {
 /// Seller application: one per user, reused for resubmission after rejection
 /// so a user can never accumulate duplicate application records.
 model SellerApplication {
-  id              String              @id @default(uuid())
+  id                String        @id @default(uuid())
   /// Unique per user: an application is created once and REUSED for
   /// resubmission, never duplicated. Backed by the DB unique constraint.
-  userId          String              @unique
-  storeName       String
-  storeDescription String
-  status          SellerStatus        @default(PENDING)
-  rejectionReason String?
-  reviewedAt      DateTime?
-  reviewedBy      String?
-  submittedAt     DateTime            @default(now())
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  user            User                @relation("SellerApplication", fields: [userId], references: [id], onDelete: Cascade)
+  userId            String        @unique
+  storeName         String
+  /// Not part of the application form; kept on the model/profile editor.
+  storeDescription  String        @default("")
+  /// Applicant contact used for review + approval notifications. Defaults to
+  /// the account email when the applicant does not supply one.
+  email             String        @default("")
+  /// Private path of the uploaded identity document (never exposed). Only a
+  /// signed URL minted by the admin-only endpoint can read it.
+  idDocumentPath    String        @default("")
+  idDocumentMimeType String?
+  emergencyContact  String?
+  address           String        @default("")
+  status            SellerStatus  @default(PENDING)
+  rejectionReason   String?
+  reviewedAt        DateTime?
+  reviewedBy        String?
+  submittedAt       DateTime      @default(now())
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  user              User          @relation("SellerApplication", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, submittedAt])
   @@map("seller_applications")

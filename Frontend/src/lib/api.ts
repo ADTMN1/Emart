@@ -391,6 +391,81 @@ export const sellerAgreementApi = {
     api.post<SellerAgreementAcceptance>('/seller/agreement/accept', {}),
 };
 
+// -------------------------------------------------------------------
+// "Become a Seller" application — multipart submit + admin document access.
+// The identity document is uploaded as multipart/form-data; the backend
+// stores it privately and only ever returns a short-lived signed URL to admins.
+// -------------------------------------------------------------------
+
+export interface SellerApplicationSubmitInput {
+  shopName: string;
+  email: string;
+  emergencyContact?: string;
+  address: string;
+  idDocument: File;
+}
+
+export interface SellerApplicationRecord {
+  id: string;
+  storeName: string;
+  storeDescription: string;
+  email: string;
+  emergencyContact?: string | null;
+  address: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+  rejectionReason?: string | null;
+  submittedAt?: string;
+  reviewedAt?: string | null;
+  hasIdDocument?: boolean;
+}
+
+async function submitSellerApplication(
+  endpoint: string,
+  input: SellerApplicationSubmitInput,
+): Promise<SellerApplicationRecord> {
+  const token = localStorage.getItem('emart_token');
+  const formData = new FormData();
+  formData.append('storeName', input.shopName);
+  formData.append('email', input.email);
+  if (input.emergencyContact) formData.append('emergencyContact', input.emergencyContact);
+  formData.append('address', input.address);
+  formData.append('idDocument', input.idDocument);
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message =
+      data.message ||
+      data.error ||
+      (Array.isArray(data.errors) ? data.errors.map((e: any) => e.msg || e.message).join(', ') : 'Submission failed');
+    throw new ApiError(message, response.status, data);
+  }
+  return data.data !== undefined ? data.data : data;
+}
+
+export const sellerApplicationApi = {
+  submit: (input: SellerApplicationSubmitInput) =>
+    submitSellerApplication('/seller/application', input),
+
+  resubmit: (input: SellerApplicationSubmitInput) =>
+    submitSellerApplication('/seller/application/resubmit', input),
+
+  get: () => api.get<SellerApplicationRecord | null>('/seller/application'),
+
+  /** Admin-only: fetch a short-lived signed URL for the identity document. */
+  getDocumentUrl: (applicationId: string) =>
+    api.get<{ url: string; expiresIn: number }>(
+      `/admin/sellers/applications/${applicationId}/document`,
+    ),
+};
+
 // Favorites API
 export const favoritesApi = {
   /**

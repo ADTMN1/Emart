@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import sellerService from '../services/seller.service';
+import sellerDocumentStorageService from '../services/seller-document-storage.service';
 import { sendSuccess } from '../utils/response';
 
 /**
@@ -29,19 +30,47 @@ class SellerController {
     }
   }
 
-  /** POST /api/v1/seller/application — submit or resubmit (rejected only). */
+  /** POST /api/v1/seller/application — submit or resubmit (rejected only).
+   *  Multipart form: the identity document is uploaded to private storage and
+   *  only its storage path (never a URL) is persisted on the application. */
   async submitApplication(req: AuthRequest, res: Response, next: NextFunction) {
+    const { storeName, storeDescription, email, emergencyContact, address } = req.body as {
+      storeName?: string;
+      storeDescription?: string;
+      email?: string;
+      emergencyContact?: string;
+      address?: string;
+    };
+
+    let uploadedPath: string | undefined;
     try {
-      const { storeName, storeDescription } = req.body as {
-        storeName?: string;
-        storeDescription?: string;
-      };
+      let idDocumentMimeType: string | undefined;
+      if (req.file) {
+        const uploaded = await sellerDocumentStorageService.uploadSellerDocument(
+          req.user!.id,
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+        );
+        uploadedPath = uploaded.path;
+        idDocumentMimeType = uploaded.mimetype;
+      }
+
       const application = await sellerService.submitApplication(req.user!.id, {
         storeName: String(storeName ?? ''),
         storeDescription: String(storeDescription ?? ''),
+        email: String(email ?? ''),
+        emergencyContact: String(emergencyContact ?? ''),
+        address: String(address ?? ''),
+        idDocumentPath: uploadedPath,
+        idDocumentMimeType,
       });
       sendSuccess(res, application, 'Seller application submitted.', 201);
     } catch (error) {
+      // Never leave an orphaned private document behind on a failed submit.
+      if (uploadedPath) {
+        await sellerDocumentStorageService.deleteSellerDocument(uploadedPath);
+      }
       next(error);
     }
   }

@@ -31,6 +31,10 @@ interface SellerApplication {
   id: string;
   storeName: string;
   storeDescription: string;
+  email?: string;
+  emergencyContact?: string | null;
+  address?: string;
+  hasIdDocument?: boolean;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
   rejectionReason?: string | null;
   submittedAt: string;
@@ -79,6 +83,30 @@ export const AdminSellerApplications: React.FC = () => {
   const [actionModal, setActionModal] = React.useState<'approve' | 'reject' | 'suspend' | 'activate' | null>(null);
   const [rejectReason, setRejectReason] = React.useState('');
   const [acting, setActing] = React.useState(false);
+  const [documentLoading, setDocumentLoading] = React.useState(false);
+
+  /**
+   * Fetch a short-lived signed URL for the applicant's identity document.
+   * The raw storage path is never sent to the browser; only admins can mint
+   * the URL and it expires after a few minutes.
+   */
+  const viewDocument = async (app: SellerApplication) => {
+    try {
+      setDocumentLoading(true);
+      const { url } = await api.get<{ url: string; expiresIn: number }>(
+        `/admin/sellers/applications/${app.id}/document`,
+      );
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) {
+      toast({
+        variant: 'error',
+        title: 'Could not open document',
+        description: err.message || 'The identity document is unavailable.',
+      });
+    } finally {
+      setDocumentLoading(false);
+    }
+  };
 
   const fetchApplications = React.useCallback(async () => {
     try {
@@ -126,6 +154,7 @@ export const AdminSellerApplications: React.FC = () => {
       }
       toast({ variant: 'success', title: 'Seller application updated' });
       setActionModal(null);
+      setSelected(null);
       await fetchApplications();
     } catch (err: any) {
       toast({ variant: 'error', title: 'Action failed', description: err.message || 'Please try again.' });
@@ -298,8 +327,16 @@ export const AdminSellerApplications: React.FC = () => {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase font-semibold">Email</p>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Account Email</p>
                 <p className="truncate">{selected.user.email}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Application Email</p>
+                <p className="truncate">{selected.email || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Emergency Contact</p>
+                <p className="truncate">{selected.emergencyContact || '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold">Submitted</p>
@@ -311,8 +348,34 @@ export const AdminSellerApplications: React.FC = () => {
               </div>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase font-semibold">Store Description</p>
-              <p className="whitespace-pre-wrap">{selected.storeDescription}</p>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Address</p>
+              <p className="whitespace-pre-wrap">{selected.address || '—'}</p>
+            </div>
+            {selected.storeDescription && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Store Description</p>
+                <p className="whitespace-pre-wrap">{selected.storeDescription}</p>
+              </div>
+            )}
+            <div className="p-3 rounded-lg bg-muted/30 border border-border">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase font-semibold">Identity Document</p>
+                  <p className="text-sm">
+                    {selected.hasIdDocument ? 'Uploaded — admin-only secure view.' : 'Not provided.'}
+                  </p>
+                </div>
+                {selected.hasIdDocument && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    isLoading={documentLoading}
+                    onClick={() => viewDocument(selected)}
+                  >
+                    View ID Document
+                  </Button>
+                )}
+              </div>
             </div>
             {selected.rejectionReason && (
               <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20">

@@ -6,22 +6,46 @@ import { ValidationError } from '../utils/errors';
 import { SELLER_AGREEMENT_VERSION } from '../config/sellerAgreement';
 
 /**
- * Unit tests for the EMART Seller Agreement (Phase 8). The service takes an
- * injectable Prisma client, so every test runs fully in memory — no database.
- * Coverage:
+ * Unit tests for the EMART Seller foundation & Agreement (Phases 5 + 8). The
+ * service takes an injectable Prisma client, so every test runs fully in
+ * memory — no database. Coverage:
  *  - agreement is served from the server-controlled version/text
  *  - acceptAgreement records the CURRENT version + a server timestamp
  *  - an application cannot be submitted/resubmitted without accepting the
  *    current agreement version (older/missing acceptance is rejected)
+ *  - application fields (shop name, email, address, emergency contact,
+ *    identity document) are validated and normalized server-side
+ *  - a submitted application never exposes the private document path — only
+ *    the `hasIdDocument` boolean — and resubmission may reuse an uploaded doc
+ *  - approval commits first, then emails the applicant (application email
+ *    preferred over the account email); email failure never rolls back the
+ *    approval
  */
 
-function makeApp() {
+function makeEmail(behavior?: { fail?: boolean; throw?: boolean }) {
+  const calls: Array<Record<string, unknown>> = [];
+  const email = {
+    calls,
+    async sendSellerApprovalEmail(params: any) {
+      calls.push(params);
+      if (behavior?.throw) throw new Error('email boom');
+      if (behavior?.fail) return { sent: false, error: 'brevo rejected' };
+      if (!String(params?.to ?? '').trim()) return { sent: false, reason: 'missing-recipient' };
+      return { sent: true, messageId: 'em_test_id_1' };
+    },
+  };
+  return email;
+}
+
+function makeApp(emailBehavior?: { fail?: boolean; throw?: boolean }) {
   const applications: any[] = [];
   const acceptances: any[] = [];
+  const profiles: any[] = [];
+  const users: any[] = [];
   let nextId = 1;
 
   const byUserId = (rows: any[], userId: string) => rows.find((r) => r.userId === userId) || null;
-
+  const byId = (rows: any[], id: string) => rows.find((r) => r.id === id) || null;
   const cloneSelect = (row: any) => ({ ...row });
 
   const prisma = {
@@ -47,9 +71,14 @@ function makeApp() {
       },
     },
     sellerApplication: {
-      findUnique: async ({ where }: any) => {
-        const row = byUserId(applications, where.userId) || byUserId(applications, where.id);
-        return row ? { ...row } : null;
+      findUnique: async ({ where, include }: any) => {
+        const row = byUserId(applications, where.userId) || byId(applications, where.id);
+        if (!row) return null;
+        const result: any = { ...row };
+        if (include?.user) {
+          result.user = byId(users, row.userId) ? { ...byId(users, row.userId) } : null;
+        }
+        return result;
       },
       create: async ({ data }: any) => {
         const row = { id: `app-${nextId++}`, ...data };
@@ -57,48 +86,94 @@ function makeApp() {
         return { ...row };
       },
       update: async ({ where, data }: any) => {
-        const row = byUserId(applications, where.userId) || byUserId(applications, where.id);
+        const row = byUserId(applications, where.userId) || byId(applications, where.id);
         if (!row) throw new Error('application not found');
         Object.assign(row, data);
         applications[applications.indexOf(row)] = { ...row };
         return { ...row };
       },
     },
+    sellerProfile: {
+      upsert: async ({ where, create, update }: any) => {
+        const existing = byUserId(profiles, where.userId);
+        if (existing) {
+          Object.assign(existing, { ...update, id: existing.id, userId: existing.userId });
+          profiles[profiles.indexOf(existing)] = { ...existing };
+          return cloneSelect(existing);
+        }
+        const row = { id: `profile-${nextId++}`, ...create };
+        profiles.push(row);
+        return cloneSelect(row);
+      },
+    },
+    user: {
+      findUnique: async ({ where, select }: any) => {
+        const row = byId(users, where.id);
+        if (!row) return null;
+        if (select) {
+          const out: any = {};
+          for (const key of Object.keys(select)) out[key] = row[key];
+          return out;
+        }
+        return cloneSelect(row);
+      },
+    },
+    $transaction: async (operations: any[]) => Promise.all(operations),
   };
 
-  const service = new SellerService(prisma as any);
+  const email = makeEmail(emailBehavior);
+  const service = new SellerService(prisma as any, email as any);
 
   return {
     service,
+    email,
     seed: {
       acceptance(userId: string, version: string, acceptedAt: Date) {
         const row = { id: `acc-${nextId++}`, userId, version, acceptedAt };
         acceptances.push(row);
         return row;
       },
-      application(userId: string, status: string) {
+      application(userId: string, status: string, overrides: Record<string, any> = {}) {
         const row = {
           id: `app-${nextId++}`,
           userId,
           storeName: 'Seed Store',
           storeDescription: 'Seed description here',
+          email: '',
+          address: '',
+          emergencyContact: null,
+          idDocumentPath: null,
+          idDocumentMimeType: null,
           status,
           rejectionReason: null,
-          reviewAt: null,
+          reviewedAt: null,
           reviewedBy: null,
+          ...overrides,
         };
         applications.push(row);
+        return row;
+      },
+      user(userId: string, email: string, firstName?: string, lastName?: string) {
+        const row = { id: userId, email, firstName, lastName };
+        users.push(row);
         return row;
       },
     },
     _applications: applications,
     _acceptances: acceptances,
+    _profiles: profiles,
+    _users: users,
   };
 }
 
 const VALID = {
   storeName: 'Nati Tech Deals',
   storeDescription: 'Curated electronics and collectibles from global markets.',
+  email: 'nati@example.com',
+  address: 'Addis Ababa, Bole, Ethiopia',
+  emergencyContact: 'Leila +251911111111',
+  idDocumentPath: 'user-1/1-id.jpg',
+  idDocumentMimeType: 'image/jpeg',
 };
 
 test('getAgreement: serves the server-controlled version and text', async () => {
@@ -164,11 +239,18 @@ test('submitApplication: stale acceptance blocks submission (re-acceptance requi
 });
 
 test('submitApplication: current-version acceptance allows first application', async () => {
-  const { service, seed } = makeApp();
+  const { service, seed, _applications } = makeApp();
   seed.acceptance('user-1', SELLER_AGREEMENT_VERSION, new Date());
   const application = await service.submitApplication('user-1', VALID);
   assert.equal(application.storeName, VALID.storeName);
+  assert.equal(application.email, VALID.email);
+  assert.equal(application.address, VALID.address);
+  assert.equal(application.emergencyContact, VALID.emergencyContact);
   assert.equal(application.status, 'PENDING');
+  assert.equal(application.hasIdDocument, true);
+  assert.equal((application as any).idDocumentPath, undefined);
+  const stored = _applications.find((a) => a.userId === 'user-1');
+  assert.equal(stored.idDocumentPath, VALID.idDocumentPath);
 });
 
 test('submitApplication: resubmission also requires current-version acceptance', async () => {
@@ -182,4 +264,135 @@ test('submitApplication: resubmission also requires current-version acceptance',
   const resubmitted = await service.submitApplication('user-1', VALID);
   assert.equal(resubmitted.status, 'PENDING');
   assert.equal(resubmitted.storeName, VALID.storeName);
+  assert.equal(resubmitted.email, VALID.email);
+});
+
+test('submitApplication: a rejected applicant may resubmit without a new document', async () => {
+  const { service, seed } = makeApp();
+  seed.acceptance('user-1', SELLER_AGREEMENT_VERSION, new Date());
+  seed.application('user-1', 'REJECTED', {
+    idDocumentPath: 'user-1/existing-id.pdf',
+    idDocumentMimeType: 'application/pdf',
+    email: VALID.email,
+    address: VALID.address,
+  });
+  const resubmitted = await service.submitApplication('user-1', {
+    storeName: VALID.storeName,
+    storeDescription: VALID.storeDescription,
+    email: VALID.email,
+    address: VALID.address,
+    emergencyContact: '',
+  });
+  assert.equal(resubmitted.status, 'PENDING');
+  assert.equal(resubmitted.hasIdDocument, true);
+  assert.equal((resubmitted as any).idDocumentPath, undefined);
+});
+
+test('submitApplication: an identity document is mandatory for a first application', async () => {
+  const { service, seed } = makeApp();
+  seed.acceptance('user-1', SELLER_AGREEMENT_VERSION, new Date());
+  await assert.rejects(
+    () =>
+      service.submitApplication('user-1', {
+        storeName: VALID.storeName,
+        email: VALID.email,
+        address: VALID.address,
+      }),
+    ValidationError,
+  );
+});
+
+test('submitApplication: rejects an invalid email and a too-short address', async () => {
+  const { service, seed } = makeApp();
+  seed.acceptance('user-1', SELLER_AGREEMENT_VERSION, new Date());
+  await assert.rejects(
+    () =>
+      service.submitApplication('user-1', {
+        ...VALID,
+        email: 'not-an-email',
+      }),
+    ValidationError,
+  );
+  await assert.rejects(
+    () =>
+      service.submitApplication('user-1', {
+        ...VALID,
+        address: 'No',
+      }),
+    ValidationError,
+  );
+});
+
+test('getMyApplication: strips the private document path and exposes hasIdDocument', async () => {
+  const { service, seed } = makeApp();
+  seed.application('user-1', 'PENDING', {
+    email: VALID.email,
+    address: VALID.address,
+    idDocumentPath: 'user-1/id.jpg',
+  });
+  const application = await service.getMyApplication('user-1');
+  assert.equal(application.hasIdDocument, true);
+  assert.equal((application as any).idDocumentPath, undefined);
+});
+
+test('approveApplication: commits approval then emails the applicant account email', async () => {
+  const { service, seed, email } = makeApp();
+  seed.user('user-1', 'seller@example.com', 'Nati', 'Tekle');
+  const app = seed.application('user-1', 'PENDING');
+  const result = await service.approveApplication(app.id, 'admin-1');
+  assert.equal(result.status, 'APPROVED');
+  assert.equal((result as any).email.sent, true);
+  assert.equal(email.calls.length, 1);
+  assert.equal(email.calls[0].to, 'seller@example.com');
+  assert.equal(email.calls[0].storeName, app.storeName);
+  assert.equal(email.calls[0].applicantName, 'Nati Tekle');
+  assert.equal((app as any).status, 'APPROVED');
+  assert.equal((app as any).reviewedBy, 'admin-1');
+});
+
+test('approveApplication: prefers the application email over the account email', async () => {
+  const { service, seed, email, _applications } = makeApp();
+  seed.user('user-1', 'account@example.com');
+  seed.application('user-1', 'PENDING', { email: 'application@example.com' });
+  const app = _applications.find((a) => a.userId === 'user-1');
+  const result = await service.approveApplication(app.id, 'admin-1');
+  assert.equal(result.status, 'APPROVED');
+  assert.equal((result as any).email.sent, true);
+  assert.equal(email.calls[0].to, 'application@example.com');
+});
+
+test('approveApplication: an email failure does not roll back the approval', async () => {
+  const { service, seed, email, _profiles } = makeApp({ fail: true });
+  seed.user('user-1', 'seller@example.com');
+  const app = seed.application('user-1', 'PENDING');
+  const result = await service.approveApplication(app.id, 'admin-1');
+  assert.equal(result.status, 'APPROVED');
+  assert.equal((result as any).email.sent, false);
+  assert.equal((result as any).email.error, 'brevo rejected');
+  assert.equal(email.calls.length, 1);
+  const profile = _profiles.find((p) => p.userId === 'user-1');
+  assert.ok(profile, 'seller profile must still be created');
+  assert.equal(profile.status, 'APPROVED');
+});
+
+test('approveApplication: a throwing email sender still leaves the approval intact', async () => {
+  const { service, seed, email, _profiles } = makeApp({ throw: true });
+  seed.user('user-1', 'seller@example.com');
+  const app = seed.application('user-1', 'PENDING');
+  const result = await service.approveApplication(app.id, 'admin-1');
+  assert.equal(result.status, 'APPROVED');
+  assert.equal((result as any).email.sent, false);
+  assert.equal((result as any).email.error, 'email boom');
+  assert.equal(email.calls.length, 1);
+  assert.equal(_profiles.find((p) => p.userId === 'user-1').status, 'APPROVED');
+});
+
+test('approveApplication: no account email still approves with a skipped email result', async () => {
+  const { service, seed, email } = makeApp();
+  const app = seed.application('user-1', 'PENDING');
+  const result = await service.approveApplication(app.id, 'admin-1');
+  assert.equal(result.status, 'APPROVED');
+  assert.equal(email.calls.length, 1);
+  assert.equal((result as any).email.sent, false);
+  assert.equal((result as any).email.reason, 'missing-recipient');
 });

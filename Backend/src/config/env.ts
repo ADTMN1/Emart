@@ -38,6 +38,17 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY || '',
   },
 
+  // Base URL of the EMART web app, used to build clickable links in
+  // transactional emails. Must be an absolute http(s) origin — email
+  // templates append a fixed path to it.
+  frontendUrl: (process.env.FRONTEND_URL || 'http://localhost:5173').trim().replace(/\/+$/, ''),
+
+  email: {
+    apiKey: process.env.BREVO_API_KEY || '',
+    from: process.env.EMAIL_FROM || '',
+    fromName: (process.env.EMAIL_FROM_NAME || 'EMART').trim(),
+  },
+
   supabase: {
     url: process.env.SUPABASE_URL || '',
     secretKey: process.env.SUPABASE_SECRET_KEY || '',
