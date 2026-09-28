@@ -9,15 +9,38 @@ import {
   Phone,
   MapPin,
   MessageCircle,
+  Loader2,
 } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useToast } from '@/components/ui/Toast'
 
 export const Footer: React.FC = () => {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [email, setEmail] = React.useState('')
+  const [subscribing, setSubscribing] = React.useState(false)
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!email || !email.includes('@')) {
+      toast({ variant: 'error', title: 'Invalid email', description: 'Please enter a valid email address.' })
+      return
+    }
+    setSubscribing(true)
+    try {
+      // Simulate API call for demo - replace with real endpoint when available
+      await new Promise(resolve => setTimeout(resolve, 800))
+      toast({ variant: 'success', title: 'Subscribed!', description: 'Thanks for subscribing to our newsletter.' })
+      setEmail('')
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Subscription failed', description: err.message || 'Please try again later.' })
+    } finally {
+      setSubscribing(false)
+    }
+  }
 
   const footerSections = [
     {
@@ -74,17 +97,20 @@ export const Footer: React.FC = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 max-w-lg lg:ml-auto w-full">
-            <Input
-              type="email"
-              placeholder={t('footer.enterEmail')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="!h-12 !bg-[#F5F8FC]/95 !text-primary-900 !placeholder:text-primary-700/50 !border-white/10 focus:!ring-white/20 flex-1"
-              wrapperClassName="flex-1"
-            />
-            <Button size="lg" variant="secondary" className="shrink-0">
-              {t('footer.subscribe')}
-            </Button>
+            <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-3 w-full">
+              <Input
+                type="email"
+                placeholder={t('footer.enterEmail')}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="!h-12 !bg-[#F5F8FC]/95 !text-primary-900 !placeholder:text-primary-700/50 !border-white/10 focus:!ring-white/20 flex-1"
+                wrapperClassName="flex-1"
+                required
+              />
+              <Button type="submit" size="lg" variant="secondary" className="shrink-0" disabled={subscribing}>
+                {subscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : t('footer.subscribe')}
+              </Button>
+            </form>
           </div>
         </div>
       </div>

@@ -31,6 +31,8 @@ import { cachedApi, api, invalidateCache } from '@/lib/api'
 import { getOptimizedImageUrlCustom } from '@/lib/imageOptimization'
 import { useCart } from '@/contexts/CartContext'
 import { useFavorites } from '@/contexts/FavoritesContext'
+import { useAuth } from '@/contexts/AuthContext'
+import { isSellerRole, SELLER_CANNOT_PURCHASE } from '@/types/role'
 
 interface ProductImage {
   id: string
@@ -90,12 +92,31 @@ const normalizeSellerType = (sellerType: string): string => {
   return map[sellerType] || sellerType
 }
 
+const getProductImage = (product: any): string => {
+  if (product?.productImages && Array.isArray(product.productImages)) {
+    const validImages = product.productImages.filter((img: any) => img && img.url)
+    if (validImages.length > 0) {
+      return validImages[0].url
+    }
+  }
+  if (product?.image) {
+    return product.image
+  }
+  if (product?.images && Array.isArray(product.images) && product.images.length > 0) {
+    return product.images[0]
+  }
+  return 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22800%22%20height%3D%22800%22%20viewBox%3D%220%200%20800%20800%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22800%22%20height%3D%22800%22%2F%3E%3Ctext%20fill%3D%22%239ca3af%22%20font-family%3D%22sans-serif%22%20font-size%3D%2232%22%20x%3D%2250%25%22%20y%3D%2250%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3ENo%20Image%3C%2Ftext%3E%3C%2Fsvg%3E'
+}
+
 const ProductDetails: React.FC = () => {
   const { id } = useParams()
   const navigate = useNavigate()
   const { toast } = useToast()
   const { incrementCartCount } = useCart()
   const { toggleFavorite, isFavorite } = useFavorites()
+  // ROLE SEPARATION — a seller may browse this page but never buy from it.
+  const { user } = useAuth()
+  const isSeller = isSellerRole(user?.role)
   const [imgIdx, setImgIdx] = React.useState(0)
   const [qty, setQty] = React.useState(1)
   // Desktop-only image magnifier (hover-capable, fine-pointer devices).
@@ -187,8 +208,37 @@ const ProductDetails: React.FC = () => {
   const addToCart = async (buyNow = false) => {
     if (!product || (buyNow ? isBuyingNow : isAddingToCart)) return
 
+    // ROLE SEPARATION — a seller account is browsing, not buying. The buttons
+    // are hidden for SELLER too, but a stale render or a keyboard-triggered
+    // click must not slip a purchase through either.
+    if (isSellerRole(user?.role)) {
+      toast({
+        variant: 'error',
+        title: 'Purchasing unavailable',
+        description: SELLER_CANNOT_PURCHASE,
+      })
+      return
+    }
+
     if (buyNow) setIsBuyingNow(true)
     else setIsAddingToCart(true)
+
+    if (buyNow) {
+      // Store product for Buy Now checkout (doesn't touch cart)
+      const buyNowItem = {
+        productId: product.id,
+        quantity: qty,
+        name: product.name,
+        price: product.price,
+        estimatedPriceUsd: product.estimatedPriceUsd,
+        condition: product.condition,
+        image: getProductImage(product),
+      }
+      sessionStorage.setItem('buyNowItem', JSON.stringify(buyNowItem))
+      navigate('/checkout?buyNow=true', { replace: true })
+      setIsBuyingNow(false)
+      return
+    }
 
     incrementCartCount(qty)
 
@@ -202,15 +252,9 @@ const ProductDetails: React.FC = () => {
 
       toast({
         variant: 'success',
-        title: buyNow ? 'Proceeding to checkout' : 'Added to cart',
-        description: buyNow
-          ? `${product.name} is ready for purchase.`
-          : `${qty} × ${product.name.slice(0, 40)} added to your cart.`,
+        title: 'Added to cart',
+        description: `${qty} × ${product.name.slice(0, 40)} added to your cart.`,
       })
-
-      if (buyNow) {
-        navigate('/checkout', { replace: true })
-      }
     } catch (err: any) {
       incrementCartCount(-qty)
       const status = err?.status || err?.response?.status
@@ -221,6 +265,16 @@ const ProductDetails: React.FC = () => {
           description: 'Please sign in to add items to your cart.',
         })
         navigate('/login')
+        return
+      }
+      // ROLE SEPARATION — the backend refuses cart writes for SELLER, so map
+      // the 403 to the reason instead of a generic failure.
+      if (status === 403) {
+        toast({
+          variant: 'error',
+          title: 'Purchasing unavailable',
+          description: SELLER_CANNOT_PURCHASE,
+        })
         return
       }
 
@@ -594,6 +648,21 @@ const ProductDetails: React.FC = () => {
               </div>
 
               <div className="flex flex-col lg:flex-row gap-3">
+                {/* ROLE SEPARATION — the purchasing controls are removed for a
+                    seller-only account, with the reason stated in place of a
+                    silently disappearing button. The rest of the page (photos,
+                    description, seller, related items) stays browsable. */}
+                {isSeller ? (
+                  <div className="flex-1 min-w-0 flex items-center gap-3 rounded-xl border border-dashed border-border bg-muted/40 px-4 py-4">
+                    <Store className="h-5 w-5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{SELLER_CANNOT_PURCHASE}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        You are browsing as a seller. Selling happens in the Seller Center.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 min-w-0">
                 <Button
                   size="xl"
@@ -617,6 +686,7 @@ const ProductDetails: React.FC = () => {
                   {isBuyingNow ? 'Processing...' : 'Buy Now'}
                 </Button>
                 </div>
+                )}
               </div>
             </div>
 

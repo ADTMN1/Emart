@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
+import { SellerPageHeader } from '@/components/seller/SellerPageHeader';
 import { useToast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 
@@ -24,9 +25,10 @@ interface SellerOutlet {
 }
 
 /**
- * Seller Store page (/seller/store) — real profile view + edit backed by
- * PUT /seller/profile. Suspended sellers see the same form but the API
- * rejects writes server-side (403) — the error is surfaced honestly.
+ * Shop Profile page (/seller/shop, alias /seller/store) — real profile view
+ * backed by PUT /seller/profile. Identity (name + status) lives in the Seller
+ * Center sidebar, so this page stays focused on editing. Suspended sellers see
+ * the same form but the API rejects writes server-side (403) — surfaced here.
  */
 export default function SellerStore() {
   const { profile, refreshProfile } = useOutletContext<SellerOutlet>();
@@ -69,42 +71,22 @@ export default function SellerStore() {
 
   const active = profile.status === 'APPROVED';
   const suspended = profile.status === 'SUSPENDED';
+  const statusBadge = (
+    <Badge variant={active ? 'success' : suspended ? 'destructive' : 'warning'}>
+      {active ? 'Active' : suspended ? 'Suspended' : 'Pending'}
+    </Badge>
+  );
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="font-display text-2xl lg:text-3xl font-bold text-foreground">Store Profile</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          This is the store identity customers see on your products and store page.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <SellerPageHeader
+        title="Shop Profile"
+        description="The store identity customers see on your products and store page."
+        action={statusBadge}
+      />
 
       <Card>
-        <CardContent className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
-              <StoreIcon className="h-6 w-6 text-destructive" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-bold text-foreground truncate">{profile.storeName}</p>
-                <Badge variant={active ? 'success' : suspended ? 'destructive' : 'warning'}>
-                  {active ? 'Active' : suspended ? 'Suspended' : 'Pending'}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Seller since {new Date(profile.createdAt).toLocaleDateString()}
-                {suspended && profile.suspendedAt
-                  ? ` · Suspended ${new Date(profile.suspendedAt).toLocaleDateString()}`
-                  : ''}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-5">
+        <CardContent className="p-5 lg:p-6">
           <form onSubmit={handleSave} className="space-y-4">
             <div>
               <label className="text-sm font-medium text-foreground" htmlFor="storeName">
@@ -118,7 +100,7 @@ export default function SellerStore() {
                 className="mt-1.5"
                 required
               />
-              <p className="text-xs text-muted-foreground mt-1">3–80 characters. Trimmed automatically.</p>
+              <p className="mt-1 text-xs text-muted-foreground">3–80 characters. Trimmed automatically.</p>
             </div>
 
             <div>
@@ -134,12 +116,12 @@ export default function SellerStore() {
                 className="mt-1.5 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-destructive/30 focus:border-destructive/50"
                 placeholder="Tell customers what your store sells..."
               />
-              <p className="text-xs text-muted-foreground mt-1">10–2000 characters.</p>
+              <p className="mt-1 text-xs text-muted-foreground">10–2000 characters.</p>
             </div>
 
             {loadError && <p className="text-sm text-destructive">{loadError}</p>}
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 border-t border-border/60 pt-4">
               <Button type="submit" disabled={saving || !dirty}>
                 {saving ? 'Saving…' : 'Save Changes'}
               </Button>
@@ -159,6 +141,11 @@ export default function SellerStore() {
           </form>
         </CardContent>
       </Card>
+
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <StoreIcon className="h-3.5 w-3.5" />
+        Upload your logo and banner from the Shop menu — Shop → Logo / Shop → Banner.
+      </p>
     </div>
   );
 }

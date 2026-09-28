@@ -117,6 +117,21 @@ function makeApp(emailBehavior?: { fail?: boolean; throw?: boolean }) {
         }
         return cloneSelect(row);
       },
+      // Role promotion/demotion is written in the same transaction as the
+      // profile, so approval and suspension both touch the user row.
+      update: async ({ where, data }: any) => {
+        const row = byId(users, where.id);
+        if (!row) throw new Error(`user ${where.id} not found`);
+        Object.assign(row, data);
+        return cloneSelect(row);
+      },
+      // Used to fan out seller-application notifications to admins.
+      findMany: async ({ where }: any = {}) => {
+        const rows = where?.role
+          ? users.filter((u: any) => u.role === where.role)
+          : users;
+        return rows.map((u: any) => ({ id: u.id }));
+      },
     },
     $transaction: async (operations: any[]) => Promise.all(operations),
   };
@@ -389,6 +404,9 @@ test('approveApplication: a throwing email sender still leaves the approval inta
 
 test('approveApplication: no account email still approves with a skipped email result', async () => {
   const { service, seed, email } = makeApp();
+  // The account exists (approval promotes it to SELLER) but carries no email
+  // address, which is what makes the notification skip.
+  seed.user('user-1', '');
   const app = seed.application('user-1', 'PENDING');
   const result = await service.approveApplication(app.id, 'admin-1');
   assert.equal(result.status, 'APPROVED');

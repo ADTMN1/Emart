@@ -19,6 +19,7 @@ import {
   ChevronRight,
   LogOut,
   User,
+  Headphones,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ContentLoader } from '@/components/ui/ContentLoader';
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { name: 'Warehouse', path: '/admin/warehouse', icon: Warehouse },
   { name: 'Shipping', path: '/admin/shipping', icon: Truck },
   { name: 'Customers', path: '/admin/customers', icon: Users },
+  { name: 'Support', path: '/admin/support', icon: Headphones },
   { name: 'Seller Applications', path: '/admin/sellers', icon: Store },
   { name: 'Wallets', path: '/admin/wallets', icon: WalletCards },
   { name: 'Deposits', path: '/admin/deposits', icon: ReceiptText },
@@ -105,13 +107,13 @@ export const AdminLayout: React.FC = () => {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 left-0 h-full bg-card border-r border-border z-50 transition-all duration-300',
+          'fixed top-0 left-0 h-full bg-card border-r border-border z-50 transition-all duration-300 overflow-y-auto',
           sidebarCollapsed ? 'w-20' : 'w-64',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
         {/* Logo */}
-        <div className="h-16 border-b border-border flex items-center justify-between px-4">
+        <div className="h-16 border-b border-border flex items-center justify-between px-4 flex-shrink-0">
           {!sidebarCollapsed && (
             <Link to="/admin" className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
@@ -130,7 +132,7 @@ export const AdminLayout: React.FC = () => {
         </div>
 
         {/* Navigation */}
-        <nav className="p-3 space-y-1">
+        <nav className="p-3 space-y-1 flex-1 min-h-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
@@ -155,7 +157,7 @@ export const AdminLayout: React.FC = () => {
         </nav>
 
         {/* User Section */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-border bg-card">
+        <div className="p-3 border-t border-border bg-card flex-shrink-0">
           {!sidebarCollapsed ? (
             <div className="space-y-2">
               <div className="flex items-center gap-3 px-3 py-2">

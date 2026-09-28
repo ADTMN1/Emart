@@ -21,12 +21,17 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useCart } from '@/contexts/CartContext'
 import { useFavorites } from '@/contexts/FavoritesContext'
 import { NavbarNotificationBell } from '@/components/layout/NavbarNotificationBell'
+import { isSellerRole } from '@/types/role'
 
 export const Navbar: React.FC = () => {
   const { t } = useLanguage()
   const { user, isAuthenticated, isLoading, logout } = useAuth()
   const { cartCount } = useCart() // Use shared cart context
   const { favoritesCount } = useFavorites() // Use favorites context
+  // ROLE SEPARATION — a seller-only account can still browse/search the
+  // marketplace, so the shell is unchanged; only the purchasing entry points
+  // (cart, and the buyer links in the mobile menu) are removed for it.
+  const isSeller = isSellerRole(user?.role)
   const [userDropdownOpen, setUserDropdownOpen] = React.useState(false)
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [scrolled, setScrolled] = React.useState(false)
@@ -232,6 +237,8 @@ export const Navbar: React.FC = () => {
                 )}
               </button>
 
+              {/* ROLE SEPARATION — no cart icon for a seller. */}
+              {!isSeller && (
               <Link
                 to="/cart"
                 className="flex p-2.5 rounded-lg hover:bg-muted text-foreground relative group"
@@ -244,6 +251,7 @@ export const Navbar: React.FC = () => {
                   </span>
                 )}
               </Link>
+              )}
 
               {isLoading ? (
                 // Loading skeleton
@@ -399,6 +407,11 @@ export const Navbar: React.FC = () => {
             </NavLink>
           ))}
           <div className="my-2 border-t border-border" />
+          {/* ROLE SEPARATION — the buyer quick links (cart, my orders) are
+              buyer-only, so a seller skips straight to account / Seller Center
+              in the mobile menu instead. */}
+          {!isSeller && (
+          <>
           <Link
             to="/cart"
             className="flex items-center justify-between px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"
@@ -414,6 +427,8 @@ export const Navbar: React.FC = () => {
           >
             {t('navbar.myOrders')}
           </Link>
+          </>
+          )}
           <Link
             to="/account"
             className="flex items-center gap-3 px-4 py-3.5 font-semibold text-base rounded-xl text-foreground hover:bg-muted"

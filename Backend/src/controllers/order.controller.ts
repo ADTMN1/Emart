@@ -42,6 +42,15 @@ export class OrderController {
     }
   }
 
+  async getOrderStats(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const stats = await orderService.getOrderStats(req.user!.id);
+      return sendSuccess(res, stats, 'Order statistics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async updateOrderStatus(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { status } = req.body;
@@ -56,6 +65,15 @@ export class OrderController {
     try {
       const order = await orderService.cancelOrder(req.user!.id, req.params.id);
       return sendSuccess(res, order, 'Order cancelled successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getUserShipments(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const shipments = await orderService.getUserShipments(req.user!.id);
+      return sendSuccess(res, { shipments }, 'Shipments retrieved successfully');
     } catch (error) {
       next(error);
     }

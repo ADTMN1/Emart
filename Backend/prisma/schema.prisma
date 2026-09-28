@@ -9,16 +9,16 @@ datasource db {
 }
 
 model User {
-  id                 String              @id @default(uuid())
-  email              String              @unique
+  id                 String                   @id @default(uuid())
+  email              String                   @unique
   password           String
   firstName          String?
   lastName           String?
   phone              String?
-  role               UserRole            @default(CUSTOMER)
-  suspended          Boolean             @default(false)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  role               UserRole                 @default(CUSTOMER)
+  suspended          Boolean                  @default(false)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
   addresses          Address[]
   cart               Cart?
   orders             Order[]
@@ -29,15 +29,17 @@ model User {
   importRuns          ImportRun[]
   productRatings     ProductRating[]
   /// Seller foundation (Phase 5). A user may hold at most one of each.
-  sellerApplication  SellerApplication? @relation("SellerApplication")
-  sellerProfile      SellerProfile?     @relation("SellerProfile")
+  sellerApplication  SellerApplication?      @relation("SellerApplication")
+  sellerProfile      SellerProfile?          @relation("SellerProfile")
   /// Seller Agreement acceptance (Phase 8). One acceptance per user; only
   /// the current server-controlled version satisfies a new application.
   sellerAgreementAcceptance SellerAgreementAcceptance?
   /// Admin ↔ Seller messaging (Phase 7). Messages are sent by a user and
   /// notifications target the recipient user.
-  sentMessages       Message[]          @relation("SenderMessages")
-  notifications      Notification[]     @relation("UserNotifications")
+  sentMessages          Message[]             @relation("SenderMessages")
+  sentSupportMessages   SupportMessage[]      @relation("SenderSupportMessages")
+  notifications         Notification[]        @relation("UserNotifications")
+  supportConversations  SupportConversation[] @relation("UserSupportConversations")
 
   @@index([email])
   @@map("users")
@@ -326,6 +328,10 @@ model Shipment {
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   order             Order          @relation(fields: [orderId], references: [id])
+  /// In-app notifications raised for this shipment's lifecycle events. Rows
+  /// are removed with the shipment so unread counts can never reference a
+  /// shipment that no longer exists.
+  notifications     Notification[]
 
   @@index([orderId])
   @@index([trackingNumber])
@@ -392,9 +398,44 @@ model SellerProfile {
   user             User         @relation("SellerProfile", fields: [userId], references: [id], onDelete: Cascade)
   products         Product[]    @relation("SellerProducts")
   conversations    Conversation[]
+  paymentMethods   SellerPaymentMethod[]
+
+  // Public storefront media. The URL is what frontends render; the storage
+  // path is kept private so replacements/removals can clean up the old object.
+  logoUrl          String?
+  bannerUrl        String?
+  logoPath         String?
+  bannerPath       String?
 
   @@index([status])
   @@map("seller_profiles")
+}
+
+/// Seller payout methods — card, bank, crypto, etc. One per method type per seller.
+model SellerPaymentMethod {
+  id          String   @id @default(uuid())
+  sellerId    String
+  type        PaymentMethodType
+  // Encrypted sensitive data (card last4, bank IBAN, crypto address, etc.)
+  details     Json
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  seller      SellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, type])
+  @@index([sellerId])
+  @@map("seller_payment_methods")
+}
+
+enum PaymentMethodType {
+  CARD
+  BANK_TRANSFER
+  CRYPTO
+  PAYPAL
+  WISE
+  PAYONEER
 }
 
 /// One user's acceptance of the EMART Seller Agreement (Phase 8). The
@@ -450,6 +491,10 @@ model WalletTransaction {
 
 enum UserRole {
   CUSTOMER
+  /// Approved seller: seller-only account (Seller Center). Cannot use the
+  /// buyer purchasing flow. Written by the admin approval flow; the seller
+  /// application/profile status remains the authority for seller access.
+  SELLER
   ADMIN
 }
 
@@ -468,7 +513,7 @@ enum SellerType {
 
 enum OrderStatus {
   PENDING
-  PAYMENT_RECEIVED
+  CONFIRMED
   PURCHASING
   PURCHASED
   IN_WAREHOUSE
@@ -619,25 +664,89 @@ model Message {
 /// User-targeted in-app notification (Phase 7). Sellers receive a notification
 /// when the admin sends a message; admins receive one when a seller replies.
 model Notification {
-  id             String       @id @default(uuid())
-  userId         String
-  type           String
-  title          String
-  body           String?
-  orderId        String?
-  conversationId String?
-  messageId      String?
-  readAt         DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  user           User         @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-  order          Order?       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  message        Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  id                 String                 @id @default(uuid())
+  userId             String
+  type               String
+  title              String
+  body               String?
+  orderId            String?
+  conversationId     String?
+  messageId          String?
+  supportConversationId String?
+  supportMessageId   String?
+  shipmentId         String?
+  /// Order-request workflow state, independent of `readAt`.
+  ///
+  /// Only meaningful for `type = 'ORDER_REQUEST'`, where this notification row
+  /// IS the order-request record (there is no separate OrderRequest table) and
+  /// the seller confirms it by notification id. `readAt` answers "has the seller
+  /// seen this?"; this field answers "has the seller acted on it?", so simply
+  /// reading a notification can never retire a request. NULL for every other
+  /// notification type.
+  requestStatus      String?
+  /// When the seller accepted/declined the request. NULL while undecided.
+  requestRespondedAt DateTime?
+  readAt             DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  user               User                   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  order              Order?                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  conversation       Conversation?          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message            Message?               @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  supportConversation SupportConversation?  @relation(fields: [supportConversationId], references: [id], onDelete: Cascade)
+  supportMessage     SupportMessage?        @relation(fields: [supportMessageId], references: [id], onDelete: SetNull)
+  shipment           Shipment?              @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([readAt])
+  @@index([shipmentId])
+  // Serves the seller order-request queue, which is a filtered lookup on
+  // (type, requestStatus) scoped to the recipient — not a readAt scan.
+  @@index([userId, type, requestStatus])
   @@map("notifications")
+}
+
+/// Customer ↔ Admin support chat (general support, not order-specific).
+model SupportConversation {
+  id          String            @id @default(uuid())
+  userId      String
+  status      SupportStatus     @default(OPEN)
+  subject     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation("UserSupportConversations", fields: [userId], references: [id], onDelete: Cascade)
+  messages    SupportMessage[]
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("support_conversations")
+}
+
+/// A single message inside a support conversation. `readAt` records when the
+/// RECIPIENT read the message; a null `readAt` means the recipient has not read it yet.
+model SupportMessage {
+  id                  String               @id @default(uuid())
+  conversationId      String
+  senderUserId        String
+  body                String
+  readAt              DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  conversation        SupportConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender              User                 @relation("SenderSupportMessages", fields: [senderUserId], references: [id], onDelete: Cascade)
+  notifications       Notification[]
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+  @@index([senderUserId])
+  @@map("support_messages")
+}
+
+enum SupportStatus {
+  OPEN
+  CLOSED
+  RESOLVED
 }

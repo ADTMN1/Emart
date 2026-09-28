@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useRatings } from '@/contexts/RatingsContext'
 import { useToast } from './Toast'
 import { api, ratingApi } from '@/lib/api'
+import { isSellerRole, SELLER_CANNOT_PURCHASE } from '@/types/role'
 
 interface ProductImage {
   id: string
@@ -134,7 +135,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const { incrementCartCount } = useCart()
   const { toast } = useToast()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
+  // ROLE SEPARATION — sellers browse the catalogue; the cart button is not for
+  // them. The hover action rail drops the cart button and keeps quick view +
+  // wishlist, which are not purchasing actions.
+  const isSeller = isSellerRole(user?.role)
   const { getMyRating, setLocalRating } = useRatings()
   const [isAddingToCart, setIsAddingToCart] = React.useState(false)
   // Interactive star rating state (grid cards only).
@@ -183,6 +188,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   /** Real add-to-cart (same endpoint/flow as the product detail page). */
   const handleAddToCart = async () => {
     if (isAddingToCart) return
+    // ROLE SEPARATION — belt and braces: the button is hidden for SELLER, and
+    // this stops a queued click from reaching the API at all.
+    if (isSeller) {
+      toast({
+        variant: 'error',
+        title: 'Purchasing unavailable',
+        description: SELLER_CANNOT_PURCHASE,
+      })
+      return
+    }
     setIsAddingToCart(true)
     incrementCartCount(1)
 
@@ -204,6 +219,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           variant: 'warning',
           title: 'Sign in required',
           description: 'Please sign in to add items to your cart.',
+        })
+      } else if (status === 403) {
+        // ROLE SEPARATION — the backend refuses cart writes for SELLER, so
+        // report the role reason rather than a generic failure.
+        toast({
+          variant: 'error',
+          title: 'Purchasing unavailable',
+          description: SELLER_CANNOT_PURCHASE,
         })
       } else {
         toast({
@@ -327,6 +350,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <Eye className="h-4 w-4" />
           </Link>
 
+          {/* ROLE SEPARATION — no cart button for a seller-only account. */}
+          {!isSeller && (
           <button
             type="button"
             onClick={(e) => {
@@ -344,6 +369,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               <ShoppingCart className="h-4 w-4" />
             )}
           </button>
+          )}
         </div>
       </div>
 

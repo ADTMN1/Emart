@@ -109,6 +109,11 @@ router.patch(
   paymentController.updatePayment.bind(paymentController)
 );
 
+router.post(
+  '/orders/:orderId/send-to-seller',
+  messageController.sendOrderToSeller.bind(messageController)
+);
+
 // Sales reports / analytics (Phase 4). Aggregate business data only.
 router.get('/reports/sales/overview', salesOverviewValidation, reportController.getSalesOverview.bind(reportController));
 router.get('/reports/sales/trend', salesTrendValidation, reportController.getSalesTrend.bind(reportController));

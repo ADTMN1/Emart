@@ -3,6 +3,45 @@ import { NotFoundError, ValidationError } from '../utils/errors';
 import { OrderFilters, PaginationParams } from '../types';
 import { Prisma } from '@prisma/client';
 
+/**
+ * Address projection shared by the billing and shipping relations of the
+ * order-detail payload. Both relations expose exactly these keys.
+ */
+type OrderAddress = {
+  fullName: string;
+  addressLine: string;
+  city: string;
+  state: string | null;
+  postalCode: string;
+  country: string;
+  phone: string;
+};
+
+/**
+ * Scalar projection for the admin order list.
+ *
+ * The key order is significant: it is the order these keys appear in the
+ * serialised admin order objects, because the relation loader spreads them in
+ * exactly this sequence and appends `user`, `items` and then `sellers`.
+ */
+const ADMIN_ORDER_LIST_SELECT = {
+  id: true,
+  orderNumber: true,
+  status: true,
+  paymentStatus: true,
+  paymentMethod: true,
+  subtotal: true,
+  serviceFees: true,
+  domesticShipping: true,
+  internationalShipping: true,
+  insurance: true,
+  total: true,
+  trackingNumber: true,
+  shippingMethod: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 export class OrderService {
   private generateOrderNumber(): string {
     const timestamp = Date.now().toString(36);
@@ -93,28 +132,11 @@ export class OrderService {
           },
         },
       },
-      billingAddress: {
-        select: {
-          fullName: true,
-          addressLine: true,
-          city: true,
-          state: true,
-          postalCode: true,
-          country: true,
-          phone: true,
-        },
-      },
-      shippingAddress: {
-        select: {
-          fullName: true,
-          addressLine: true,
-          city: true,
-          state: true,
-          postalCode: true,
-          country: true,
-          phone: true,
-        },
-      },
+      // Billing/shipping addresses are loaded by `attachAddresses` in a single
+      // query instead of two per-relation round-trips. Only the FK ids are
+      // selected here; they are stripped before the payload is returned.
+      billingAddressId: true,
+      shippingAddressId: true,
       shipment: {
         select: {
           id: true,
@@ -130,6 +152,77 @@ export class OrderService {
         },
       },
     } satisfies Prisma.OrderSelect;
+  }
+
+  /**
+   * Address fields shared by the billing and shipping projections. The API
+   * contract exposes exactly these keys, so they are re-projected explicitly
+   * after loading instead of returning the raw rows.
+   */
+  private static readonly ADDRESS_FIELDS = {
+    fullName: true,
+    addressLine: true,
+    city: true,
+    state: true,
+    postalCode: true,
+    country: true,
+    phone: true,
+  };
+
+  private static readonly ORDER_ADDRESS_FIELDS = {
+    id: true,
+    ...OrderService.ADDRESS_FIELDS,
+  };
+
+  /**
+   * Loads both addresses of an order with ONE query and returns the order with
+   * `billingAddress` / `shippingAddress` shaped exactly as the previous
+   * per-relation selects produced them.
+   *
+   * Billing and shipping are two independent foreign keys, so they stay
+   * distinct here: each id is mapped to its own row. When both ids point at the
+   * same address the duplicate is de-duplicated in the `IN` list and the same
+   * row is attached to both keys, matching the previous relation behaviour.
+   * The raw FK columns are never leaked into the response.
+   */
+  private async attachAddresses<
+    T extends { billingAddressId: string; shippingAddressId: string },
+  >(order: T): Promise<
+    Omit<T, 'billingAddressId' | 'shippingAddressId'> & {
+      billingAddress: OrderAddress | null;
+      shippingAddress: OrderAddress | null;
+    }
+  > {
+    const { billingAddressId, shippingAddressId, ...rest } = order;
+    const ids = [...new Set([billingAddressId, shippingAddressId].filter(Boolean))];
+
+    const rows = ids.length
+      ? await prisma.address.findMany({
+          where: { id: { in: ids } },
+          select: OrderService.ORDER_ADDRESS_FIELDS,
+        })
+      : [];
+
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const project = (id: string | null | undefined): OrderAddress | null => {
+      const row = id ? byId.get(id) : undefined;
+      if (!row) return null;
+      return {
+        fullName: row.fullName,
+        addressLine: row.addressLine,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postalCode,
+        country: row.country,
+        phone: row.phone,
+      };
+    };
+
+    return {
+      ...rest,
+      billingAddress: project(billingAddressId),
+      shippingAddress: project(shippingAddressId),
+    };
   }
 
   /**
@@ -179,46 +272,10 @@ export class OrderService {
       prisma.order.findMany({
         where,
         select: {
-          id: true,
-          orderNumber: true,
-          status: true,
-          paymentStatus: true,
-          paymentMethod: true,
-          subtotal: true,
-          serviceFees: true,
-          domesticShipping: true,
-          internationalShipping: true,
-          insurance: true,
-          total: true,
-          trackingNumber: true,
-          shippingMethod: true,
-          createdAt: true,
-          updatedAt: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-          items: {
-            select: {
-              id: true,
-              quantity: true,
-              product: {
-                select: {
-                  name: true,
-                  sellerProfile: {
-                    select: {
-                      id: true,
-                      storeName: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          ...ADMIN_ORDER_LIST_SELECT,
+          // Relation key only. Stripped again in the loader so it can never
+          // reach the response, exactly as the nested loader did.
+          userId: true,
         },
         skip,
         take: limit,
@@ -229,8 +286,10 @@ export class OrderService {
       prisma.order.count({ where }),
     ]);
 
+    const hydrated = await this.loadAdminOrderListRelations(orders);
+
     return {
-      orders: orders.map((order) => this.attachSellers(order)),
+      orders: hydrated.map((order) => this.attachSellers(order)),
       pagination: {
         page,
         limit,
@@ -238,6 +297,126 @@ export class OrderService {
         totalPages: Math.ceil(total / limit),
       },
     };
+  }
+
+  /**
+   * Hydrates the nested relations of one admin order-list page.
+   *
+   * Prisma's nested relation loader walks the relation tree one level at a time
+   * and waits for each level to finish before starting the next, which put five
+   * sequential round-trips on the critical path of this endpoint. Two of those
+   * levels are siblings that need nothing but the order ids already in hand:
+   * `user` (keyed by the order's userId) and `items` (keyed by the order id).
+   * They are fetched together here.
+   *
+   * `items -> product -> sellerProfile` is a genuine chain, because product ids
+   * live on the item rows and seller ids on the product rows, so each of those
+   * levels still waits for the level below it. No dependency is faked away.
+   *
+   * The result is byte-identical to what the nested loader produced: same
+   * selected fields, same key order per level, same key presence, and the same
+   * `null` for a relation whose row is absent. `sellers[]` is still built by
+   * `attachSellers` afterwards, so that dedupe logic is untouched.
+   */
+  private async loadAdminOrderListRelations<T extends { id: string; userId: string }>(
+    orders: T[],
+  ): Promise<Array<Omit<T, 'userId'> & {
+    user: { id: string; email: string; firstName: string; lastName: string } | null;
+    items: Array<{
+      id: string;
+      quantity: number;
+      product: { name: string; sellerProfile: { id: string; storeName: string } | null } | null;
+    }>;
+  }>> {
+    if (orders.length === 0) {
+      return [];
+    }
+
+    const orderIds = orders.map((order) => order.id);
+    const userIds = [...new Set(orders.map((order) => order.userId))];
+
+    // Sibling reads: both depend only on ids that are already known.
+    const [users, items] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+        },
+      }),
+      prisma.orderItem.findMany({
+        where: { orderId: { in: orderIds } },
+        select: {
+          id: true,
+          quantity: true,
+          orderId: true,
+          productId: true,
+        },
+      }),
+    ]);
+
+    // Genuine dependency: product ids are only known once the item rows exist.
+    const productIds = [...new Set(items.map((item) => item.productId))];
+    const products = productIds.length
+      ? await prisma.product.findMany({
+        where: { id: { in: productIds } },
+        select: {
+          id: true,
+          name: true,
+          sellerId: true,
+        },
+      })
+      : [];
+
+    // Genuine dependency: seller ids are only known once the product rows exist.
+    const sellerIds = [
+      ...new Set(products.map((product) => product.sellerId).filter((id): id is string => id !== null)),
+    ];
+    const sellerProfiles = sellerIds.length
+      ? await prisma.sellerProfile.findMany({
+        where: { id: { in: sellerIds } },
+        select: {
+          id: true,
+          storeName: true,
+        },
+      })
+      : [];
+
+    const userById = new Map(users.map((user) => [user.id, user]));
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const sellerProfileById = new Map(sellerProfiles.map((profile) => [profile.id, profile]));
+
+    // Bucket items per order while keeping the order the item query returned
+    // them in, so each order's `items` array matches the previous payload.
+    const itemsByOrderId = new Map<string, typeof items>();
+    for (const item of items) {
+      const bucket = itemsByOrderId.get(item.orderId);
+      if (bucket) {
+        bucket.push(item);
+      } else {
+        itemsByOrderId.set(item.orderId, [item]);
+      }
+    }
+
+    return orders.map(({ userId, ...order }) => ({
+      ...order,
+      user: userById.get(userId) ?? null,
+      items: (itemsByOrderId.get(order.id) ?? []).map((item) => {
+        const product = productById.get(item.productId) ?? null;
+        return {
+          id: item.id,
+          quantity: item.quantity,
+          product: product === null
+            ? null
+            : {
+              name: product.name,
+              sellerProfile: (product.sellerId !== null ? sellerProfileById.get(product.sellerId) : undefined) ?? null,
+            },
+        };
+      }),
+    }));
   }
 
   /**
@@ -255,7 +434,7 @@ export class OrderService {
       throw new NotFoundError('Order not found');
     }
 
-    return this.attachSellers(order);
+    return this.attachSellers(await this.attachAddresses(order));
   }
 
   /**
@@ -543,6 +722,80 @@ export class OrderService {
     };
   }
 
+  async getOrderStats(userId: string) {
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    const [
+      totalOrders,
+      inWarehouseOrders,
+      inTransitOrders,
+      totalSpent,
+    ] = await Promise.all([
+      prisma.order.count({ where: { userId } }),
+      prisma.order.count({ where: { userId, status: 'IN_WAREHOUSE' } }),
+      prisma.order.count({ where: { userId, status: 'IN_TRANSIT' } }),
+      prisma.order.aggregate({
+        _sum: { total: true },
+        where: {
+          userId,
+          status: { notIn: ['CANCELLED', 'REFUNDED'] },
+        },
+      }),
+    ]);
+
+    const totalSpentAmount = totalSpent?._sum.total ?? 0;
+    const estimatedSavings = Math.round(totalSpentAmount * 0.15);
+
+    return {
+      totalOrders,
+      inWarehouseOrders,
+      inTransitOrders,
+      totalSpent: totalSpentAmount,
+      estimatedSavings,
+    };
+  }
+
+  async getUserShipments(userId: string) {
+    const orders = await prisma.order.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    const orderIds = orders.map((o) => o.id);
+
+    if (orderIds.length === 0) {
+      return [];
+    }
+
+    const shipments = await prisma.shipment.findMany({
+      where: { orderId: { in: orderIds } },
+      select: {
+        id: true,
+        orderId: true,
+        trackingNumber: true,
+        carrier: true,
+        status: true,
+        shippingCost: true,
+        estimatedDelivery: true,
+        shippedAt: true,
+        deliveredAt: true,
+        createdAt: true,
+        events: true,
+        order: {
+          select: {
+            orderNumber: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return shipments.map((s) => ({
+      ...s,
+      events: s.events ? JSON.parse(JSON.stringify(s.events)) : [],
+    }));
+  }
+
   async getOrderById(userId: string, orderId: string) {
     const order = await prisma.order.findFirst({
       where: {
@@ -556,7 +809,7 @@ export class OrderService {
       throw new NotFoundError('Order not found');
     }
 
-    return order;
+    return this.attachAddresses(order);
   }
 
   async updateOrderStatus(orderId: string, status: string) {
@@ -586,7 +839,7 @@ export class OrderService {
   async cancelOrder(userId: string, orderId: string) {
     const order = await this.getOrderById(userId, orderId);
 
-    if (order.status !== 'PENDING' && order.status !== 'PAYMENT_RECEIVED') {
+    if (order.status !== 'PENDING' && order.status !== 'CONFIRMED') {
       throw new ValidationError('Order cannot be cancelled at this stage');
     }
 

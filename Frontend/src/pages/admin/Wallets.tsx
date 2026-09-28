@@ -24,7 +24,43 @@ interface CryptoWallet {
 type WalletForm = Pick<CryptoWallet, 'currency' | 'network' | 'address' | 'qrCodeUrl' | 'isActive'>
 
 const emptyForm: WalletForm = { currency: '', network: '', address: '', qrCodeUrl: '', isActive: true }
-const networkOptions = ['Bitcoin', 'Ethereum (ERC-20)', 'BNB Smart Chain (BEP-20)', 'Tron (TRC-20)', 'Solana', 'Polygon', 'Other']
+const networkOptions = [
+  'Bitcoin',
+  'Ethereum (ERC-20)',
+  'BNB Smart Chain (BEP-20)',
+  'Tron (TRC-20)',
+  'Solana',
+  'Polygon',
+  'Arbitrum One',
+  'Optimism',
+  'Avalanche C-Chain',
+  'Fantom',
+  'Gnosis Chain',
+  'Base',
+  'zkSync Era',
+  'Linea',
+  'Scroll',
+  'Other',
+]
+const currencyOptions = [
+  'USDT',
+  'USDC',
+  'BTC',
+  'ETH',
+  'BNB',
+  'SOL',
+  'MATIC',
+  'ARB',
+  'OP',
+  'AVAX',
+  'FTM',
+  'DAI',
+  'BUSD',
+  'TUSD',
+  'FDUSD',
+  'PYUSD',
+  'Other',
+]
 
 export const AdminWallets: React.FC = () => {
   const { toast } = useToast()
@@ -35,6 +71,7 @@ export const AdminWallets: React.FC = () => {
   const [editingWallet, setEditingWallet] = React.useState<CryptoWallet | null>(null)
   const [form, setForm] = React.useState<WalletForm>(emptyForm)
   const [networkChoice, setNetworkChoice] = React.useState('')
+  const [currencyChoice, setCurrencyChoice] = React.useState('')
   const [saving, setSaving] = React.useState(false)
   const [deletingWallet, setDeletingWallet] = React.useState<CryptoWallet | null>(null)
   const [deleting, setDeleting] = React.useState(false)
@@ -57,10 +94,13 @@ export const AdminWallets: React.FC = () => {
     setEditingWallet(wallet || null)
     if (wallet) {
       const knownNetwork = networkOptions.includes(wallet.network) ? wallet.network : 'Other'
+      const knownCurrency = currencyOptions.includes(wallet.currency) ? wallet.currency : 'Other'
       setNetworkChoice(knownNetwork)
+      setCurrencyChoice(knownCurrency)
       setForm({ currency: wallet.currency, network: wallet.network, address: wallet.address, qrCodeUrl: wallet.qrCodeUrl || '', isActive: wallet.isActive })
     } else {
       setNetworkChoice('')
+      setCurrencyChoice('')
       setForm(emptyForm)
     }
     setModalOpen(true)
@@ -75,6 +115,11 @@ export const AdminWallets: React.FC = () => {
   const selectNetwork = (network: string) => {
     setNetworkChoice(network)
     updateForm('network', network === 'Other' ? '' : network)
+  }
+
+  const selectCurrency = (currency: string) => {
+    setCurrencyChoice(currency)
+    updateForm('currency', currency === 'Other' ? '' : currency)
   }
 
   const saveWallet = async (event: React.FormEvent) => {
@@ -144,7 +189,7 @@ export const AdminWallets: React.FC = () => {
 
     <Modal isOpen={modalOpen} onClose={closeForm} title={editingWallet ? 'Edit wallet' : 'Add wallet'} description="Only active wallets are shown to customers at checkout." size="md">
       <form id="wallet-form" className="space-y-4" onSubmit={saveWallet}>
-        <div><label className="mb-1.5 block text-sm font-medium">Cryptocurrency</label><Input value={form.currency} onChange={(event) => updateForm('currency', event.target.value)} placeholder="e.g. USDT or BTC" autoComplete="off" /></div>
+        <div><label className="mb-1.5 block text-sm font-medium">Cryptocurrency</label><Select value={currencyChoice} onChange={(event) => selectCurrency(event.target.value)}><option value="" disabled>Select a cryptocurrency</option>{currencyOptions.map((currency) => <option key={currency} value={currency}>{currency}</option>)}</Select>{currencyChoice === 'Other' && <Input className="mt-2" value={form.currency} onChange={(event) => updateForm('currency', event.target.value)} placeholder="Enter cryptocurrency symbol" autoComplete="off" />}</div>
         <div><label className="mb-1.5 block text-sm font-medium">Network</label><Select value={networkChoice} onChange={(event) => selectNetwork(event.target.value)}><option value="" disabled>Select a network</option>{networkOptions.map((network) => <option key={network} value={network}>{network}</option>)}</Select>{networkChoice === 'Other' && <Input className="mt-2" value={form.network} onChange={(event) => updateForm('network', event.target.value)} placeholder="Enter network name" autoComplete="off" />}</div>
         <div><label className="mb-1.5 block text-sm font-medium">EMART receiving address</label><Input value={form.address} onChange={(event) => updateForm('address', event.target.value)} placeholder="Wallet address" autoComplete="off" /></div>
         <div><label className="mb-1.5 block text-sm font-medium">QR code URL <span className="font-normal text-muted-foreground">(optional)</span></label><Input type="url" value={form.qrCodeUrl || ''} onChange={(event) => updateForm('qrCodeUrl', event.target.value)} placeholder="https://…" /></div>

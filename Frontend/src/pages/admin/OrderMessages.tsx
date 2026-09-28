@@ -112,7 +112,7 @@ export const AdminOrderMessages: React.FC = () => {
               data.sellers[0].id,
             );
             await loadOverview();
-            await loadThread(res.conversation.id);
+            await loadThread(res.id);
           } catch (err: any) {
             toast({
               variant: 'error',
@@ -138,7 +138,7 @@ export const AdminOrderMessages: React.FC = () => {
     try {
       const res = await messageApi.adminEnsureConversation(orderId, sellerId);
       await loadOverview();
-      await loadThread(res.conversation.id);
+      await loadThread(res.id);
     } catch (err: any) {
       toast({
         variant: 'error',

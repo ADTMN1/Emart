@@ -118,6 +118,10 @@ const sellerIdParam = param('sellerId')
   .isUUID()
   .withMessage('Invalid seller ID.');
 
+const orderIdParam = param('id')
+  .isUUID()
+  .withMessage('Invalid order ID.');
+
 /** GET /api/v1/admin/sellers/applications */
 export const listSellerApplicationsValidation = [
   query('status')
@@ -163,3 +167,75 @@ export const approveSellerApplicationValidation = [applicationIdParam, validate]
 
 /** POST /api/v1/admin/sellers/:sellerId/suspend and /activate */
 export const sellerStatusActionValidation = [sellerIdParam, validate];
+
+export const sellerOrderIdValidation = [orderIdParam, validate];
+
+const notificationIdParam = param('id')
+  .isUUID()
+  .withMessage('Invalid notification ID.');
+
+export const confirmOrderRequestValidation = [notificationIdParam, validate];
+
+/** POST /api/v1/seller/order-requests/:id/decline */
+export const declineOrderRequestValidation = [notificationIdParam, validate];
+
+const paymentMethodIdParam = param('id')
+  .isUUID()
+  .withMessage('Invalid payment method ID.');
+
+export const addPaymentMethodValidation = [
+  body('type')
+    .exists({ checkFalsy: true })
+    .withMessage('Payment method type is required.')
+    .bail()
+    .isIn(['CARD', 'BANK_TRANSFER', 'CRYPTO', 'PAYPAL', 'WISE', 'PAYONEER'])
+    .withMessage('Invalid payment method type.'),
+  body('details')
+    .exists({ checkFalsy: true })
+    .withMessage('Payment method details are required.')
+    .bail()
+    .isObject()
+    .withMessage('Details must be an object.'),
+  body('isDefault')
+    .optional()
+    .isBoolean()
+    .withMessage('isDefault must be a boolean.'),
+  validate,
+];
+
+export const updatePaymentMethodValidation = [
+  paymentMethodIdParam,
+  body('details')
+    .optional()
+    .isObject()
+    .withMessage('Details must be an object.'),
+  body('isDefault')
+    .optional()
+    .isBoolean()
+    .withMessage('isDefault must be a boolean.'),
+  body('isActive')
+    .optional()
+    .isBoolean()
+    .withMessage('isActive must be a boolean.'),
+  validate,
+];
+
+export const paymentMethodIdValidation = [paymentMethodIdParam, validate];
+
+/** ISO calendar date (YYYY-MM-DD) or a full ISO timestamp. */
+const isDateInput = (value: string) => !Number.isNaN(Date.parse(value));
+
+const salesDateQuery = (field: 'startDate' | 'endDate') =>
+  query(field)
+    .optional()
+    .isString()
+    .withMessage(`${field} must be a date.`)
+    .bail()
+    .custom(isDateInput)
+    .withMessage(`${field} must be a valid ISO date (YYYY-MM-DD).`);
+
+/**
+ * GET /api/v1/seller/sales — optional inclusive window. The window length is
+ * capped server-side; ordering/limit stay fixed by the report contract.
+ */
+export const sellerSalesReportValidation = [salesDateQuery('startDate'), salesDateQuery('endDate'), validate];

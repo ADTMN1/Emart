@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { Prisma } from '@prisma/client';
 import { BadRequestError, ConflictError, NotFoundError } from '../utils/errors';
 import { ProductFilters, PaginationParams } from '../types';
 
@@ -113,14 +114,32 @@ export class ProductService {
    */
   async getProductFacets() {
     const bucketDefs = [
-      { label: 'Under $50', gte: 0, lt: 50 },
-      { label: '$50 - $100', gte: 50, lt: 100 },
-      { label: '$100 - $250', gte: 100, lt: 250 },
-      { label: '$250 - $500', gte: 250, lt: 500 },
-      { label: 'Over $500', gte: 500, lt: undefined as number | undefined },
+      { label: 'Under $50', gte: 0, lt: 50 as number | undefined, alias: 'bucket_under_50' },
+      { label: '$50 - $100', gte: 50, lt: 100, alias: 'bucket_50_100' },
+      { label: '$100 - $250', gte: 100, lt: 250, alias: 'bucket_100_250' },
+      { label: '$250 - $500', gte: 250, lt: 500, alias: 'bucket_250_500' },
+      { label: 'Over $500', gte: 500, lt: undefined, alias: 'bucket_over_500' },
     ];
 
-    const [sourceRows, conditionRows, priceRow, bucketCounts] = await Promise.all([
+    // The five price buckets plus the min/max pair are folded into a single
+    // conditional aggregation instead of five separate `count()` round-trips.
+    // Bucket boundaries are module constants: they are interpolated as bound
+    // query parameters and the only `Prisma.raw` fragment is the hardcoded
+    // column alias, never request input.
+    const bucketCounts = Prisma.join(
+      bucketDefs.map(
+        (b) =>
+          Prisma.sql`COUNT(*) FILTER (WHERE price >= ${b.gte}${
+            b.lt !== undefined ? Prisma.sql` AND price < ${b.lt}` : Prisma.sql``
+          }) AS ${Prisma.raw(b.alias)}`,
+      ),
+      ', ',
+    );
+
+    const [priceRow, sourceRows, conditionRows] = await Promise.all([
+      prisma.$queryRaw<Array<Record<string, number | null>>>(
+        Prisma.sql`SELECT ${bucketCounts}, MIN(price) AS "priceMin", MAX(price) AS "priceMax" FROM products WHERE "isAvailable" = true`,
+      ),
       prisma.product.groupBy({
         by: ['source'],
         where: { isAvailable: true },
@@ -133,29 +152,16 @@ export class ProductService {
         _count: { condition: true },
         orderBy: { _count: { condition: 'desc' } },
       }),
-      prisma.product.aggregate({
-        where: { isAvailable: true },
-        _min: { price: true },
-        _max: { price: true },
-      }),
-      Promise.all(
-        bucketDefs.map((b) =>
-          prisma.product.count({
-            where: {
-              isAvailable: true,
-              price: { gte: b.gte, ...(b.lt !== undefined ? { lt: b.lt } : {}) },
-            },
-          })
-        )
-      ),
     ]);
+
+    const facets = priceRow[0] ?? {};
 
     return {
       sources: sourceRows.map((row) => ({ value: row.source, count: row._count.source })),
       conditions: conditionRows.map((row) => ({ value: row.condition, count: row._count.condition })),
-      buckets: bucketDefs.map((b, i) => ({ label: b.label, count: bucketCounts[i] })),
-      priceMin: priceRow._min.price ?? 0,
-      priceMax: priceRow._max.price ?? 0,
+      buckets: bucketDefs.map((b) => ({ label: b.label, count: Number(facets[b.alias] ?? 0) })),
+      priceMin: facets.priceMin ?? 0,
+      priceMax: facets.priceMax ?? 0,
     };
   }
 

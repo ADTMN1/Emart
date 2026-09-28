@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { isSellerRole } from '@/types/role';
 import { cachedApi } from '../lib/api';
 
 interface CartContextType {
@@ -19,6 +20,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load cart count once on mount for authenticated users
   const refreshCartCount = useCallback(async () => {
     if (!isAuthenticated || !user) {
+      setCartCount(0);
+      return;
+    }
+
+    // ROLE SEPARATION — a seller-only account has no cart, and the backend now
+    // answers GET /cart with 403 for it. Skip the request entirely (and keep
+    // the badge at zero) instead of firing a call that is guaranteed to fail.
+    if (isSellerRole(user.role)) {
       setCartCount(0);
       return;
     }

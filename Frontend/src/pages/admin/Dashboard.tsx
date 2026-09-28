@@ -74,31 +74,38 @@ export const Dashboard: React.FC = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch all data in parallel
-        const [statsRes, usersRes, ordersRes, productsRes] = await Promise.all([
-          api.get<{ success: boolean; data: DashboardStats }>('/admin/stats'),
+        // Fetch all sections in parallel, letting each fail independently so a
+        // hiccup on one endpoint never blanks the whole dashboard.
+        const [statsRes, usersRes, ordersRes, productsRes] = await Promise.allSettled([
+          api.get<DashboardStats>('/admin/stats'),
           api.get<{ users: User[] }>('/admin/users'),
           // Dedicated admin endpoint: all customers' orders, newest first.
           api.get<{ orders: RecentOrder[] }>('/admin/orders?limit=5&page=1'),
-          api.get<{ data: RecentProduct[] }>('/products?limit=5&sortBy=createdAt&order=desc'),
+          api.get<{ products: RecentProduct[] }>('/products?limit=5&sortBy=createdAt&order=desc'),
         ]);
 
-        // Extract data from responses
-        if (statsRes.success && statsRes.data) {
-          setStats(statsRes.data);
+        if (statsRes.status === 'fulfilled') {
+          setStats(statsRes.value);
+        } else {
+          console.error('Failed to load dashboard stats:', statsRes.reason);
         }
-        
-        if (usersRes.users && Array.isArray(usersRes.users)) {
-          console.log('Users found:', usersRes.users.length);
-          setTotalUsers(usersRes.users.length);
+
+        if (usersRes.status === 'fulfilled') {
+          setTotalUsers(usersRes.value.users?.length ?? 0);
+        } else {
+          console.error('Failed to load users:', usersRes.reason);
         }
-        
-        if (ordersRes.orders && Array.isArray(ordersRes.orders)) {
-          setRecentOrders(ordersRes.orders);
+
+        if (ordersRes.status === 'fulfilled') {
+          setRecentOrders(usersRes.status === 'fulfilled' && ordersRes.value.orders ? ordersRes.value.orders : []);
+        } else {
+          console.error('Failed to load recent orders:', ordersRes.reason);
         }
-        
-        if (productsRes.data && Array.isArray(productsRes.data)) {
-          setRecentProducts(productsRes.data);
+
+        if (productsRes.status === 'fulfilled') {
+          setRecentProducts(productsRes.value.products ?? []);
+        } else {
+          console.error('Failed to load recent products:', productsRes.reason);
         }
       } catch (err: any) {
         console.error('Failed to fetch dashboard data:', err);

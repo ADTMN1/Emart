@@ -6,11 +6,9 @@ import {
   Ship,
   MapPinCheck,
   PackageCheck,
-  ShieldCheck,
   Search,
   Globe2,
   Clock,
-  ChevronDown,
   Info,
   CheckCircle2,
   ArrowLeft,
@@ -18,7 +16,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -50,15 +47,6 @@ interface ShipmentItem {
   }
 }
 
-const methods = [
-  { name: 'DHL Express', days: '3-5 days', priceFrom: 22, icon: Plane, speed: 5, coverage: 220, track: true },
-  { name: 'FedEx', days: '4-7 days', priceFrom: 20, icon: Plane, speed: 4, coverage: 220, track: true },
-  { name: 'EMS', days: '5-8 days', priceFrom: 15, icon: Truck, speed: 3.5, coverage: 120, track: true },
-  { name: 'SAL', days: '10-14 days', priceFrom: 10, icon: Truck, speed: 2, coverage: 60, track: true },
-  { name: 'ePacket', days: '12-20 days', priceFrom: 8, icon: Truck, speed: 1.5, coverage: 40, track: true },
-  { name: 'Sea Mail', days: '25-40 days', priceFrom: 6, icon: Ship, speed: 1, coverage: 100, track: false },
-]
-
 const Shipping: React.FC = () => {
   const [trackQuery, setTrackQuery] = React.useState('')
   const [shipments, setShipments] = React.useState<ShipmentItem[]>([])
@@ -68,7 +56,7 @@ const Shipping: React.FC = () => {
     const fetchShipments = async () => {
       try {
         setLoading(true)
-        const res = await api.get<{ shipments: ShipmentItem[] }>('/admin/shipments').catch(() => ({ shipments: [] }))
+        const res = await api.get<{ shipments: ShipmentItem[] }>('/orders/shipments').catch(() => ({ shipments: [] }))
         setShipments(res.shipments || [])
       } catch {
         setShipments([])
@@ -208,110 +196,6 @@ const Shipping: React.FC = () => {
             })}
           </div>
         )}
-      </section>
-
-      {/* Shipping methods */}
-      <section className="py-12 lg:py-16 bg-muted/20 border-y border-border">
-        <div className="container-page">
-          <div className="text-center max-w-2xl mx-auto mb-10">
-            <Badge variant="primary" size="sm" className="mb-3">Global Shipping</Badge>
-            <h2 className="font-display text-2xl lg:text-3xl font-extrabold tracking-tight">
-              Choose Your Shipping Method
-            </h2>
-            <p className="mt-2.5 text-muted-foreground">
-              Balance speed and cost with our trusted carrier partners. Prices shown below are per 500g package.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {methods.map((m) => {
-              const Icon = m.icon
-              return (
-                <Card key={m.name} className="group hover:shadow-card-hover">
-                  <CardContent className="p-5 lg:p-6 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary-50 to-primary-100 text-primary flex items-center justify-center">
-                        <Icon className="h-5.5 w-5.5" />
-                      </div>
-                      <Badge variant={m.speed >= 4 ? 'success' : m.speed >= 2 ? 'info' : 'warning'} size="sm" className="gap-1">
-                        <Clock className="h-3 w-3" />
-                        {m.days}
-                      </Badge>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg">{m.name}</h3>
-                      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                        <ShieldCheck className="h-3 w-3" />
-                        Covers {m.coverage}+ countries {m.track ? '· Full tracking' : '· Limited tracking'}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground font-medium">Speed</span>
-                        <div className="flex gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                'h-1.5 w-4 rounded-full',
-                                i < m.speed ? 'bg-gradient-to-r from-primary to-secondary' : 'bg-border',
-                              )}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-end justify-between pt-2 border-t border-border/60">
-                      <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">Price from</div>
-                        <div className="font-display text-2xl font-extrabold">
-                          {formatCurrency(m.priceFrom, 'USD')}
-                        </div>
-                      </div>
-                      <Button size="md" variant="outline">
-                        Calculator
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="container-page py-12">
-        <Card className="bg-primary-900 text-white border-none overflow-hidden relative">
-          <div className="absolute inset-0 bg-hero-pattern opacity-10" />
-          <CardContent className="p-8 lg:p-10 grid md:grid-cols-2 gap-6 items-center relative">
-            <div>
-              <h3 className="font-display text-2xl lg:text-3xl font-extrabold mb-2">Not sure which method to choose?</h3>
-              <p className="text-primary-100/80 leading-relaxed">
-                Use our shipping calculator to compare exact rates, delivery times, and package insurance options for your country.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Select className="!bg-white/10 !text-white !border-white/20 !placeholder:text-white/50">
-                <option>Select Country</option>
-                <option>🇺🇸 United States</option>
-                <option>🇬🇧 United Kingdom</option>
-                <option>🇨🇦 Canada</option>
-                <option>🇦🇺 Australia</option>
-              </Select>
-              <Select className="!bg-white/10 !text-white !border-white/20">
-                <option>Package Weight</option>
-                <option>Up to 500g</option>
-                <option>500g - 1kg</option>
-                <option>1kg - 2kg</option>
-                <option>2kg - 5kg</option>
-              </Select>
-              <Button size="xl" variant="secondary" className="col-span-2 shadow-lg shadow-secondary/25">
-                Calculate Shipping Rates
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       </section>
     </div>
   )

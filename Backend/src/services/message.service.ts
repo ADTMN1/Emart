@@ -1,7 +1,7 @@
 import prisma from '../config/database';
 import { ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
 import { PaginationParams } from '../types';
-import NotificationService, { NotificationService as NotificationServiceClass } from './notification.service';
+import NotificationService, { NotificationService as NotificationServiceClass, NotificationType } from './notification.service';
 import sellerServiceSingleton from './seller.service';
 
 export const MESSAGE_MAX_LENGTH = 2000;
@@ -49,6 +49,10 @@ export class MessageService {
     this.prisma = prismaClient;
     this.notifications = notificationService;
     this.sellerAuth = sellerService;
+  }
+
+  getPrisma() {
+    return this.prisma;
   }
 
   private assertBody(body: string): string {
@@ -281,7 +285,7 @@ export class MessageService {
 
     await this.notifications.create({
       userId: conversation.seller.userId,
-      type: 'MESSAGE',
+      type: NotificationType.MESSAGE,
       title: 'New message from EMART Admin',
       body: `New message regarding Order ${conversation.order.orderNumber}`,
       orderId: conversation.orderId,
@@ -409,17 +413,21 @@ export class MessageService {
       where: { role: 'ADMIN' },
       select: { id: true },
     });
-    for (const admin of admins) {
-      await this.notifications.create({
-        userId: admin.id,
-        type: 'MESSAGE',
-        title: `New message from ${profile.storeName}`,
-        body: `New message regarding Order ${conversation.order.orderNumber}`,
-        orderId: conversation.orderId,
-        conversationId,
-        messageId: message.id,
-      });
-    }
+    // Fan out concurrently: each admin is an independent insert, so awaiting
+    // them one at a time just serialises the seller's send latency.
+    await Promise.all(
+      admins.map((admin) =>
+        this.notifications.create({
+          userId: admin.id,
+          type: NotificationType.MESSAGE,
+          title: `New message from ${profile.storeName}`,
+          body: `New message regarding Order ${conversation.order.orderNumber}`,
+          orderId: conversation.orderId,
+          conversationId,
+          messageId: message.id,
+        }),
+      ),
+    );
 
     return message;
   }
@@ -433,11 +441,29 @@ export class MessageService {
     if (!conversation) {
       throw new NotFoundError('Conversation not found.');
     }
+    const now = new Date();
     const result = await this.prisma.message.updateMany({
       where: { conversationId, senderUserId: { not: userId }, readAt: null },
-      data: { readAt: new Date() },
+      data: { readAt: now },
     });
-    return { updated: result.count };
+
+    // Opening a conversation is also the "I have seen this" gesture for the
+    // MESSAGE notifications that point at it. Without this, an admin→seller
+    // message leaves the bell badge lit even after the seller reads the thread.
+    // Scoped to this userId AND this conversationId, so it can never mark
+    // another recipient's notifications, or unrelated conversations of this
+    // seller's, as read.
+    const notifications = await this.prisma.notification.updateMany({
+      where: {
+        userId,
+        type: NotificationType.MESSAGE,
+        supportConversationId: conversationId,
+        readAt: null,
+      },
+      data: { readAt: now },
+    });
+
+    return { updated: result.count, notificationsUpdated: notifications.count };
   }
 }
 

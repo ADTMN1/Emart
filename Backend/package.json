@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:restore-admin": "tsx prisma/restore-admin.ts",
     "prisma:reset": "prisma migrate reset",
     "db:push": "prisma db push",
     "db:seed": "npm run prisma:seed"

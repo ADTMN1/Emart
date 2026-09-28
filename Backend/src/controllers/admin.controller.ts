@@ -152,18 +152,19 @@ class AdminController {
       const lastMonth = new Date();
       lastMonth.setMonth(lastMonth.getMonth() - 1);
 
-      const [
-        totalProducts,
-        activeProducts,
-        totalOrders,
-        pendingOrders,
-        totalRevenue,
-        lastMonthRevenue,
-      ] = await prisma.$transaction([
-        prisma.product.count(),
-        prisma.product.count({ where: { isAvailable: true } }),
-        prisma.order.count(),
-        prisma.order.count({ where: { status: 'PENDING' } }),
+      // These are independent read-only aggregates: no atomicity is required
+      // between them, so they run concurrently instead of inside
+      // `$transaction([...])` (which serializes the round-trips). The product
+      // and order counts are also collapsed into one grouped query each.
+      const [productStatusGroups, orderStatusGroups, totalRevenue, lastMonthRevenue] = await Promise.all([
+        prisma.product.groupBy({
+          by: ['isAvailable'],
+          _count: { _all: true },
+        }),
+        prisma.order.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        }),
         prisma.order.aggregate({
           _sum: { total: true },
           where: {
@@ -178,6 +179,11 @@ class AdminController {
           },
         }),
       ]);
+
+      const totalProducts = productStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
+      const activeProducts = productStatusGroups.find((group) => group.isAvailable)?._count._all ?? 0;
+      const totalOrders = orderStatusGroups.reduce((sum, group) => sum + group._count._all, 0);
+      const pendingOrders = orderStatusGroups.find((group) => group.status === 'PENDING')?._count._all ?? 0;
 
       const revenue = totalRevenue?._sum.total ?? 0;
       const lastRevenue = lastMonthRevenue?._sum.total ?? 0;
@@ -438,7 +444,7 @@ class AdminController {
         where: { id: req.params.id },
         data: {
           paymentStatus: status,
-          status: status === 'PAID' ? 'PAYMENT_RECEIVED' : status === 'FAILED' ? 'CANCELLED' : 'PENDING',
+          status: status === 'PAID' ? 'CONFIRMED' : status === 'FAILED' ? 'CANCELLED' : 'PENDING',
         },
       });
 

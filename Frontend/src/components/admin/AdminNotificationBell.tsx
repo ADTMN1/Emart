@@ -3,12 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, MessageSquare, ShoppingBag, CheckCheck, Inbox } from 'lucide-react';
 import { notificationApi, type NotificationItem } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useNotificationPolling } from '@/lib/useNotificationPolling';
 
 const REFRESH_MS = 30000;
 
 /** Broadcast event used by pages after sending a message / marking notifications. */
 export const notificationsChanged = () =>
   window.dispatchEvent(new CustomEvent('emart:notifications-changed'));
+
+/**
+ * Single source of truth for where a notification click lands, shared by the
+ * navbar bell and the full /admin/notifications list.
+ *
+ * Returns `null` for notifications with no navigable entity (e.g. a seller
+ * application alert), which the callers treat as "mark read, stay put".
+ */
+export const notificationTargetPath = (n: NotificationItem): string | null => {
+  // Support threads live in their own queue, not the order-conversation view,
+  // so they are matched first — an admin support message carries no orderId.
+  if (n.type === 'SUPPORT_MESSAGE' && n.supportConversationId) {
+    return `/admin/support?conversationId=${encodeURIComponent(n.supportConversationId)}`;
+  }
+  if (n.conversationId && n.orderId) return `/admin/orders/${n.orderId}/messages`;
+  if (n.orderId) return `/admin/orders/${n.orderId}`;
+  return null;
+};
 
 export function formatRelativeTime(value: string) {
   const seconds = Math.floor((Date.now() - new Date(value).getTime()) / 1000);
@@ -51,19 +70,7 @@ export const AdminNotificationBell: React.FC = () => {
     }
   }, []);
 
-  React.useEffect(() => {
-    refreshUnread();
-    const timer = setInterval(refreshUnread, REFRESH_MS);
-    const onFocus = () => refreshUnread();
-    const onChange = () => refreshUnread();
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('emart:notifications-changed', onChange);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('emart:notifications-changed', onChange);
-    };
-  }, [refreshUnread]);
+  useNotificationPolling(refreshUnread, REFRESH_MS);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -81,11 +88,7 @@ export const AdminNotificationBell: React.FC = () => {
     if (next) loadRecent();
   };
 
-  const openPath = (n: NotificationItem) => {
-    if (n.conversationId && n.orderId) return `/admin/orders/${n.orderId}/messages`;
-    if (n.orderId) return `/admin/orders/${n.orderId}`;
-    return null;
-  };
+  const openPath = notificationTargetPath;
 
   const handleOpenItem = async (n: NotificationItem) => {
     setOpen(false);
@@ -152,7 +155,12 @@ export const AdminNotificationBell: React.FC = () => {
               </div>
             ) : (
               items.map((n) => {
-                const Icon = n.type === 'MESSAGE' ? MessageSquare : ShoppingBag;
+                // Both message flavours are message threads; SUPPORT_MESSAGE gets
+                // its own accent so the support queue is distinguishable at a
+                // glance in the dropdown.
+                const isMessage = n.type === 'MESSAGE' || n.type === 'SUPPORT_MESSAGE';
+                const isSupport = n.type === 'SUPPORT_MESSAGE';
+                const Icon = isMessage ? MessageSquare : ShoppingBag;
                 return (
                   <button
                     key={n.id}
@@ -162,7 +170,10 @@ export const AdminNotificationBell: React.FC = () => {
                     <span
                       className={cn(
                         'mt-0.5 h-8 w-8 rounded-lg flex items-center justify-center shrink-0',
-                        n.type === 'MESSAGE' ? 'bg-secondary/15 text-destructive' : 'bg-primary/10 text-primary'
+                        isMessage
+                          ? 'bg-secondary/15 text-destructive'
+                          : 'bg-primary/10 text-primary',
+                        isSupport && 'bg-accent/20 text-accent-foreground'
                       )}
                     >
                       <Icon className="h-4 w-4" />

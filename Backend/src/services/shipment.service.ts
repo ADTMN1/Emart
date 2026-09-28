@@ -1,6 +1,32 @@
-import prisma from '../config/database';
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors';
 import { Prisma, ShipmentStatus } from '@prisma/client';
+import NotificationService, { NotificationService as NotificationServiceClass, NotificationType } from './notification.service';
+
+/** Predefined carrier options for dropdown selection. */
+export const CARRIER_OPTIONS = [
+  'DHL Express',
+  'FedEx',
+  'UPS',
+  'EMS',
+  'USPS',
+  'TNT',
+  'Aramex',
+  'DB Schenker',
+  'Other',
+] as const;
+
+export type Carrier = typeof CARRIER_OPTIONS[number];
+
+/** Generate a unique tracking number. */
+export function generateTrackingNumber(carrier: string): string {
+  const prefix = carrier
+    .replace(/[^A-Z]/g, '')
+    .substring(0, 3)
+    .toUpperCase() || 'EMT';
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `${prefix}${timestamp}${random}`;
+}
 
 /**
  * Shipment lifecycle management.
@@ -67,6 +93,16 @@ const DEFAULT_STATUS_MESSAGES: Record<ShipmentStatus, string> = {
 };
 
 export class ShipmentService {
+  private notifications: NotificationServiceClass;
+
+  constructor(
+    private prismaClient: typeof prisma = prisma,
+    notificationService: NotificationServiceClass = NotificationService,
+  ) {
+    this.prismaClient = prismaClient;
+    this.notifications = notificationService;
+  }
+
   /** Returns the event array sorted newest-first (by occurredAt, then createdAt). */
   private sortEvents(events: unknown): TrackingEvent[] {
     if (!Array.isArray(events)) return [];
@@ -100,16 +136,22 @@ export class ShipmentService {
 
   /** Load the shipment for an order or throw NotFoundError. */
   private async requireShipment(orderId: string) {
-    const shipment = await prisma.shipment.findUnique({ where: { orderId } });
+    const shipment = await this.prismaClient.shipment.findUnique({ where: { orderId } });
     if (!shipment) {
       throw new NotFoundError('No shipment exists for this order');
     }
     return shipment;
   }
 
+  /** Public: GET shipment for an order (admin or owner-verified customer). */
+  async getShipmentByOrderId(orderId: string, adminView: boolean) {
+    const shipment = await this.requireShipment(orderId);
+    return { ...shipment, events: this.sortEvents(shipment.events) };
+  }
+
   /** Verify the order exists (id is validated as UUID by routes). */
   private async requireOrder(orderId: string) {
-    const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true } });
+    const order = await this.prismaClient.order.findUnique({ where: { id: orderId }, select: { id: true, userId: true, orderNumber: true } });
     if (!order) {
       throw new NotFoundError('Order not found');
     }
@@ -125,29 +167,39 @@ export class ShipmentService {
     orderId: string,
     adminId: string,
     data: {
-      carrier: string;
-      trackingNumber: string;
-      shippingCost: number;
+      carrier: Carrier;
+      trackingNumber?: string; // Optional - auto-generated if not provided
+      shippingCost?: number; // Optional - auto-calculated if not provided
       estimatedDelivery?: Date | null;
       status?: ShipmentStatus;
     }
   ) {
-    await this.requireOrder(orderId);
+    const order = await this.requireOrder(orderId);
 
-    const existing = await prisma.shipment.findUnique({ where: { orderId }, select: { id: true } });
+    const existing = await this.prismaClient.shipment.findUnique({ where: { orderId }, select: { id: true } });
     if (existing) {
       throw new ConflictError('This order already has a shipment. Update it instead.');
     }
 
-    // Tracking numbers are globally unique (schema constraint) — check up front
-    // for a friendly message.
-    const trackingTaken = await prisma.shipment.findUnique({
-      where: { trackingNumber: data.trackingNumber },
+    // Validate carrier
+    if (!CARRIER_OPTIONS.includes(data.carrier)) {
+      throw new ValidationError(`Invalid carrier. Must be one of: ${CARRIER_OPTIONS.join(', ')}`);
+    }
+
+    // Auto-generate tracking number if not provided
+    const trackingNumber = data.trackingNumber || generateTrackingNumber(data.carrier);
+
+    // Check if tracking number is unique (very unlikely to collide with auto-gen)
+    const trackingTaken = await this.prismaClient.shipment.findUnique({
+      where: { trackingNumber },
       select: { id: true },
     });
     if (trackingTaken) {
-      throw new ConflictError('This tracking number is already used by another shipment.');
+      throw new ConflictError('Tracking number collision. Please try again.');
     }
+
+    // Auto-calculate shipping cost if not provided
+    const shippingCost = data.shippingCost ?? await this.calculateShippingCost(orderId);
 
     const status = data.status ?? 'PENDING';
     const now = new Date();
@@ -159,12 +211,12 @@ export class ShipmentService {
       createdBy: adminId,
     };
 
-    return prisma.shipment.create({
+    const shipment = await this.prismaClient.shipment.create({
       data: {
         orderId,
         carrier: data.carrier,
-        trackingNumber: data.trackingNumber,
-        shippingCost: data.shippingCost,
+        trackingNumber,
+        shippingCost,
         estimatedDelivery: data.estimatedDelivery ?? null,
         status,
         shippedAt: status === 'SHIPPED' ? now : null,
@@ -173,12 +225,71 @@ export class ShipmentService {
       },
       select: this.shipmentSelect(true),
     });
+
+    // Notify customer about shipment creation
+    await this.notifications.create({
+      userId: order.userId,
+      type: NotificationType.SHIPMENT_CREATED,
+      title: 'Shipment Created',
+      body: `Your order ${order.orderNumber} has been shipped via ${data.carrier}. Tracking: ${shipment.trackingNumber}`,
+      orderId,
+      shipmentId: shipment.id,
+    });
+
+    return shipment;
   }
 
-  /** GET shipment for an order (admin or owner-verified customer). */
-  async getShipmentByOrderId(orderId: string, adminView: boolean) {
-    const shipment = await this.requireShipment(orderId);
-    return { ...shipment, events: this.sortEvents(shipment.events) };
+  /**
+   * Calculate shipping cost based on order destination and weight.
+   * This is a simplified calculation - can be enhanced with real carrier rates.
+   */
+  private async calculateShippingCost(orderId: string): Promise<number> {
+    const order = await this.prismaClient.order.findUnique({
+      where: { id: orderId },
+      select: {
+        shippingAddress: {
+          select: { country: true, state: true, postalCode: true },
+        },
+        items: {
+          select: {
+            quantity: true,
+            product: {
+              select: { id: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!order?.shippingAddress) return 58; // Default fallback
+
+    const country = order.shippingAddress.country || 'US';
+    // Use default weight of 1kg per item since Product doesn't have weight field yet
+    const totalWeight = order.items.reduce((sum, item) => sum + 1 * item.quantity, 1);
+
+    // Simplified rate calculation based on country and weight
+    const baseRates: Record<string, number> = {
+      US: 25,
+      CA: 35,
+      GB: 45,
+      AU: 55,
+      DE: 40,
+      FR: 40,
+      JP: 50,
+      SG: 35,
+      // Add more as needed
+    };
+
+    const baseRate = baseRates[country] || 58; // Default $58
+    const weightMultiplier = Math.max(1, totalWeight / 2); // $ per 2kg
+    return Math.round(baseRate * weightMultiplier);
+  }
+
+  /** Validate carrier against predefined options. */
+  private validateCarrier(carrier: string): void {
+    if (!CARRIER_OPTIONS.includes(carrier as Carrier)) {
+      throw new ValidationError(`Invalid carrier. Must be one of: ${CARRIER_OPTIONS.join(', ')}`);
+    }
   }
 
   /**
@@ -201,10 +312,13 @@ export class ShipmentService {
 
     const updateData: Record<string, unknown> = {};
 
-    if (data.carrier !== undefined) updateData.carrier = data.carrier;
+    if (data.carrier !== undefined) {
+      this.validateCarrier(data.carrier);
+      updateData.carrier = data.carrier;
+    }
 
     if (data.trackingNumber !== undefined && data.trackingNumber !== shipment.trackingNumber) {
-      const taken = await prisma.shipment.findUnique({
+      const taken = await this.prismaClient.shipment.findUnique({
         where: { trackingNumber: data.trackingNumber },
         select: { id: true },
       });
@@ -243,11 +357,41 @@ export class ShipmentService {
       ] as unknown as Prisma.InputJsonValue[];
     }
 
-    return prisma.shipment.update({
+    const updated = await this.prismaClient.shipment.update({
       where: { id: shipment.id },
       data: updateData,
       select: this.shipmentSelect(true),
-    }).then((updated) => ({ ...updated, events: this.sortEvents(updated.events) }));
+    });
+
+    // Notify customer if status changed
+    if (statusEvents.length > 0) {
+      const order = await this.prismaClient.order.findUnique({
+        where: { id: orderId },
+        select: { userId: true, orderNumber: true },
+      });
+      if (order) {
+        const statusMessages: Record<ShipmentStatus, string> = {
+          PENDING: 'is pending preparation',
+          PROCESSING: 'is being processed at our warehouse',
+          SHIPPED: 'has been shipped',
+          IN_TRANSIT: 'is in transit',
+          OUT_FOR_DELIVERY: 'is out for delivery',
+          DELIVERED: 'has been delivered',
+          FAILED: 'delivery failed',
+          RETURNED: 'has been returned',
+        };
+        await this.notifications.create({
+          userId: order.userId,
+          type: NotificationType.SHIPMENT_STATUS_CHANGED,
+          title: 'Shipment Status Updated',
+          body: `Your order ${order.orderNumber} ${statusMessages[updated.status]}.`,
+          orderId,
+          shipmentId: shipment.id,
+        });
+      }
+    }
+
+    return { ...updated, events: this.sortEvents(updated.events) };
   }
 
   /**
@@ -305,7 +449,7 @@ export class ShipmentService {
       };
     }
 
-    const updated = await prisma.shipment.update({
+    const updated = await this.prismaClient.shipment.update({
       where: { id: shipment.id },
       data: {
         status: data.status,
@@ -323,6 +467,32 @@ export class ShipmentService {
       },
       select: this.shipmentSelect(true),
     });
+
+    // Notify customer of status change
+    const order = await this.prismaClient.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, orderNumber: true },
+    });
+    if (order) {
+      const statusMessages: Record<ShipmentStatus, string> = {
+        PENDING: 'is pending preparation',
+        PROCESSING: 'is being processed at our warehouse',
+        SHIPPED: 'has been shipped',
+        IN_TRANSIT: 'is in transit',
+        OUT_FOR_DELIVERY: 'is out for delivery',
+        DELIVERED: 'has been delivered',
+        FAILED: 'delivery failed',
+        RETURNED: 'has been returned',
+      };
+      await this.notifications.create({
+        userId: order.userId,
+        type: NotificationType.SHIPMENT_STATUS_CHANGED,
+        title: 'Shipment Status Updated',
+        body: `Your order ${order.orderNumber} ${statusMessages[updated.status]}.`,
+        orderId,
+        shipmentId: shipment.id,
+      });
+    }
 
     return { ...updated, events: this.sortEvents(updated.events) };
   }
@@ -348,11 +518,27 @@ export class ShipmentService {
       createdBy: adminId,
     };
 
-    const updated = await prisma.shipment.update({
+    const updated = await this.prismaClient.shipment.update({
       where: { id: shipment.id },
       data: { events: [...(shipment.events as unknown[]), event] as unknown as Prisma.InputJsonValue[] },
       select: this.shipmentSelect(true),
     });
+
+    // Notify customer of new tracking event
+    const order = await this.prismaClient.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true, orderNumber: true },
+    });
+    if (order) {
+      await this.notifications.create({
+        userId: order.userId,
+        type: NotificationType.SHIPMENT_TRACKING_UPDATED,
+        title: 'Shipment Tracking Updated',
+        body: `New update for order ${order.orderNumber}: ${data.message}`,
+        orderId,
+        shipmentId: shipment.id,
+      });
+    }
 
     return { ...updated, events: this.sortEvents(updated.events) };
   }

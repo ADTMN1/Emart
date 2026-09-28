@@ -60,6 +60,13 @@ export const updateProfileValidation = [
     .withMessage('Please provide a valid phone number')
     .isLength({ min: 10, max: 20 })
     .withMessage('Phone number must be between 10 and 20 characters'),
+  body('email')
+    .optional()
+    .trim()
+    .isEmail()
+    .withMessage('Please provide a valid email address')
+    .normalizeEmail()
+    .toLowerCase(),
 ];
 
 export const changePasswordValidation = [

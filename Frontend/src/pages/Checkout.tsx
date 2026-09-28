@@ -29,12 +29,24 @@ import { useToast } from '@/components/ui/Toast'
 import { SuccessState, EmptyCart } from '@/components/ui/States'
 import { useAuth } from '@/contexts/AuthContext'
 import { cachedApi, invalidateCache, api } from '@/lib/api'
+import { SELLER_CANNOT_PURCHASE } from '@/types/role'
 
 interface CartItem {
   id: string
   productId: string
   quantity: number
   product?: Product
+}
+
+interface BuyNowItem {
+  productId: string
+  quantity: number
+  name: string
+  price: number
+  estimatedPriceUsd?: number
+  condition: string
+  image: string
+  source?: string
 }
 
 interface AddressForm {
@@ -95,6 +107,25 @@ const Checkout: React.FC = () => {
   const [billingAddress, setBillingAddress] = React.useState<AddressForm>(emptyAddress)
   const [touchedFields, setTouchedFields] = React.useState<Record<string, boolean>>({})
   const [shippingSubmitted, setShippingSubmitted] = React.useState(false)
+
+  // Buy Now state
+  const [buyNowItem, setBuyNowItem] = React.useState<BuyNowItem | null>(null)
+  const isBuyNow = React.useMemo(() => new URLSearchParams(window.location.search).get('buyNow') === 'true', [])
+
+  // Load Buy Now item from sessionStorage on mount
+  React.useEffect(() => {
+    if (isBuyNow) {
+      const stored = sessionStorage.getItem('buyNowItem')
+      if (stored) {
+        try {
+          const item = JSON.parse(stored)
+          setBuyNowItem(item)
+        } catch {
+          sessionStorage.removeItem('buyNowItem')
+        }
+      }
+    }
+  }, [isBuyNow])
 
   // Helper function to get product image - matches ProductDetails logic
   const getProductImage = (product: any): string => {
@@ -157,6 +188,13 @@ const Checkout: React.FC = () => {
     window.addEventListener('cart:updated', handleCartUpdate)
     return () => window.removeEventListener('cart:updated', handleCartUpdate)
   }, [fetchCart])
+
+  // Buy Now: clear sessionStorage after successful order
+  React.useEffect(() => {
+    if (submitted && isBuyNow) {
+      sessionStorage.removeItem('buyNowItem')
+    }
+  }, [submitted, isBuyNow])
 
   React.useEffect(() => {
     api.get<any>('/payments/crypto').then((config) => { setCryptoConfig(config); setSelectedWalletId(config.walletId) }).catch(() => setCryptoConfig(null)).finally(() => setCryptoLoading(false))
@@ -229,29 +267,50 @@ const Checkout: React.FC = () => {
     })
   }
 
-  const subtotal = cartItems.reduce(
-    (s, i) => s + (i.product?.price || 0) * (quantities[i.productId] || 1),
-    0
+const subtotal = (isBuyNow && buyNowItem
+    ? buyNowItem.price * (buyNowItem.quantity || 1)
+    : cartItems.reduce((s, i) => s + (i.product?.price || 0) * (quantities[i.productId] || 1), 0)
   )
-  const fees = cartItems.length > 0 ? Math.round(subtotal * 0.07) : 0
-  const shipping = cartItems.length > 0 ? 58 : 0
-  const insurance = cartItems.length > 0 ? Math.round(subtotal * 0.02) : 0
+  const fees = subtotal > 0 ? Math.round(subtotal * 0.07) : 0
+  
+  // Calculate shipping based on destination country
+  const getShippingCost = (country: string) => {
+    const baseRates: Record<string, number> = {
+      US: 25,
+      CA: 35,
+      GB: 45,
+      AU: 55,
+      DE: 40,
+      FR: 40,
+      JP: 50,
+      SG: 35,
+    };
+    return baseRates[country] || 58;
+  };
+  
+  const shippingCountry = shippingAddress.country || 'US';
+  const shipping = subtotal > 0 ? getShippingCost(shippingCountry) : 0;
+  const insurance = subtotal > 0 ? Math.round(subtotal * 0.02) : 0
   const total = subtotal + fees + shipping + insurance
 
   const [createdOrder, setCreatedOrder] = React.useState<any>(null)
   const [submittingOrder, setSubmittingOrder] = React.useState(false)
 
   const handleSubmit = async () => {
-    if (cartItems.length === 0) return
+    if (subtotal <= 0) return
+
+    const orderItems = isBuyNow && buyNowItem
+      ? [{ productId: buyNowItem.productId, quantity: buyNowItem.quantity || 1 }]
+      : cartItems.map((item) => ({
+          productId: item.productId,
+          quantity: quantities[item.productId] || item.quantity || 1,
+        }))
 
     try {
       setSubmittingOrder(true)
       invalidateCache.cart()
       const res = await api.post('/orders', {
-        items: cartItems.map((item) => ({
-          productId: item.productId,
-          quantity: quantities[item.productId] || item.quantity || 1,
-        })),
+        items: orderItems,
         shippingMethod: 'dhl',
         paymentMethod: payment,
         paymentProofUrl: paymentScreenshotPreview || null,
@@ -261,8 +320,6 @@ const Checkout: React.FC = () => {
           billingAddress: toOrderAddress(billingAddress),
         } : {}),
       })
-      // Order placement empties the cart server-side — drop the cached cart
-      // so the badge and any later cart reads reflect the cleared cart.
       invalidateCache.cart()
       setCreatedOrder(res)
       setSubmitted(true)
@@ -272,6 +329,20 @@ const Checkout: React.FC = () => {
         description: `Order #${res.orderNumber || res.id} has been confirmed.`,
       })
     } catch (err: any) {
+      // ROLE SEPARATION — the buyer order endpoints reject a seller with 403.
+      // The page is already guarded, so reaching this is a stale session (a
+      // tab left open across an approval): say why and send them to the Seller
+      // Center instead of a bare "checkout failed".
+      const status = err?.status || err?.response?.status
+      if (status === 403) {
+        toast({
+          variant: 'error',
+          title: 'Purchasing unavailable',
+          description: SELLER_CANNOT_PURCHASE,
+        })
+        setTimeout(() => navigate('/seller', { replace: true }), 1500)
+        return
+      }
       toast({
         variant: 'error',
         title: 'Checkout Failed',
@@ -331,7 +402,7 @@ const Checkout: React.FC = () => {
     )
   }
 
-  if (cartItems.length === 0) {
+  if (!isBuyNow && cartItems.length === 0) {
     return (
       <div className="container-page py-16 min-h-[70vh]">
         <div className="max-w-xl mx-auto">
@@ -425,13 +496,39 @@ const Checkout: React.FC = () => {
                       </div>
                       <InlineField error={fieldError(shippingAddress, 'email')}><Input data-address-field="shipping.email" aria-invalid={!!fieldError(shippingAddress, 'email')} className={fieldError(shippingAddress, 'email') ? 'border-destructive focus:border-destructive' : ''} placeholder="Email address" type="email" value={shippingAddress.email} onChange={updateAddress(setShippingAddress, 'email')} required /></InlineField>
                       <InlineField error={fieldError(shippingAddress, 'phone')}><Input data-address-field="shipping.phone" aria-invalid={!!fieldError(shippingAddress, 'phone')} className={fieldError(shippingAddress, 'phone') ? 'border-destructive focus:border-destructive' : ''} placeholder="Phone number" type="tel" value={shippingAddress.phone} onChange={updateAddress(setShippingAddress, 'phone')} required /></InlineField>
-                      <div className="grid sm:grid-cols-3 gap-4">
-                        <InlineField error={fieldError(shippingAddress, 'country')}><Select data-address-field="shipping.country" className={fieldError(shippingAddress, 'country') ? 'border-destructive focus:border-destructive' : ''} value={shippingAddress.country} onChange={updateAddress(setShippingAddress, 'country')} required>
-                          <option value="">Country</option>
-                          <option value="US">United States</option>
-                          <option value="GB">United Kingdom</option>
-                          <option value="CA">Canada</option>
-                        </Select></InlineField>
+<div className="grid sm:grid-cols-3 gap-4">
+                         <InlineField error={fieldError(shippingAddress, 'country')}><Select data-address-field="shipping.country" className={fieldError(shippingAddress, 'country') ? 'border-destructive focus:border-destructive' : ''} value={shippingAddress.country} onChange={updateAddress(setShippingAddress, 'country')} required>
+                           <option value="">Country</option>
+                           <option value="US">United States</option>
+                           <option value="GB">United Kingdom</option>
+                           <option value="CA">Canada</option>
+                           <option value="AU">Australia</option>
+                           <option value="DE">Germany</option>
+                           <option value="FR">France</option>
+                           <option value="JP">Japan</option>
+                           <option value="SG">Singapore</option>
+                           <option value="KR">South Korea</option>
+                           <option value="HK">Hong Kong</option>
+                           <option value="NZ">New Zealand</option>
+                           <option value="CH">Switzerland</option>
+                           <option value="NL">Netherlands</option>
+                           <option value="BE">Belgium</option>
+                           <option value="AT">Austria</option>
+                           <option value="SE">Sweden</option>
+                           <option value="NO">Norway</option>
+                           <option value="DK">Denmark</option>
+                           <option value="FI">Finland</option>
+                           <option value="IE">Ireland</option>
+                           <option value="PL">Poland</option>
+                           <option value="ES">Spain</option>
+                           <option value="IT">Italy</option>
+                           <option value="PT">Portugal</option>
+                           <option value="MX">Mexico</option>
+                           <option value="BR">Brazil</option>
+                           <option value="AE">UAE</option>
+                           <option value="IL">Israel</option>
+                           <option value="ZA">South Africa</option>
+                         </Select></InlineField>
                         <InlineField error={fieldError(shippingAddress, 'state')}><Input data-address-field="shipping.state" className={fieldError(shippingAddress, 'state') ? 'border-destructive focus:border-destructive' : ''} placeholder="State / Province" value={shippingAddress.state} onChange={updateAddress(setShippingAddress, 'state')} required /></InlineField>
                         <InlineField error={fieldError(shippingAddress, 'postalCode')}><Input data-address-field="shipping.postalCode" className={fieldError(shippingAddress, 'postalCode') ? 'border-destructive focus:border-destructive' : ''} placeholder="ZIP / Postal code" value={shippingAddress.postalCode} onChange={updateAddress(setShippingAddress, 'postalCode')} required /></InlineField>
                       </div>
@@ -456,13 +553,39 @@ const Checkout: React.FC = () => {
                             <Input placeholder="Last name" value={billingAddress.lastName} onChange={updateAddress(setBillingAddress, 'lastName')} required />
                           </div>
                           <Input placeholder="Phone number" type="tel" value={billingAddress.phone} onChange={updateAddress(setBillingAddress, 'phone')} required />
-                          <div className="grid sm:grid-cols-3 gap-4">
-                            <Select value={billingAddress.country} onChange={updateAddress(setBillingAddress, 'country')} required>
-                              <option value="">Country</option>
-                              <option value="US">United States</option>
-                              <option value="GB">United Kingdom</option>
-                              <option value="CA">Canada</option>
-                            </Select>
+<div className="grid sm:grid-cols-3 gap-4">
+                             <Select value={billingAddress.country} onChange={updateAddress(setBillingAddress, 'country')} required>
+                               <option value="">Country</option>
+                               <option value="US">United States</option>
+                               <option value="GB">United Kingdom</option>
+                               <option value="CA">Canada</option>
+                               <option value="AU">Australia</option>
+                               <option value="DE">Germany</option>
+                               <option value="FR">France</option>
+                               <option value="JP">Japan</option>
+                               <option value="SG">Singapore</option>
+                               <option value="KR">South Korea</option>
+                               <option value="HK">Hong Kong</option>
+                               <option value="NZ">New Zealand</option>
+                               <option value="CH">Switzerland</option>
+                               <option value="NL">Netherlands</option>
+                               <option value="BE">Belgium</option>
+                               <option value="AT">Austria</option>
+                               <option value="SE">Sweden</option>
+                               <option value="NO">Norway</option>
+                               <option value="DK">Denmark</option>
+                               <option value="FI">Finland</option>
+                               <option value="IE">Ireland</option>
+                               <option value="PL">Poland</option>
+                               <option value="ES">Spain</option>
+                               <option value="IT">Italy</option>
+                               <option value="PT">Portugal</option>
+                               <option value="MX">Mexico</option>
+                               <option value="BR">Brazil</option>
+                               <option value="AE">UAE</option>
+                               <option value="IL">Israel</option>
+                               <option value="ZA">South Africa</option>
+                             </Select>
                             <Input placeholder="State / Province" value={billingAddress.state} onChange={updateAddress(setBillingAddress, 'state')} required />
                             <Input placeholder="ZIP / Postal code" value={billingAddress.postalCode} onChange={updateAddress(setBillingAddress, 'postalCode')} required />
                           </div>
@@ -620,20 +743,17 @@ const Checkout: React.FC = () => {
                     <div>
                       <div className="flex items-center justify-between mb-2.5">
                         <h3 className="text-sm font-bold">
-                          Items ({Object.values(quantities).reduce((s, q) => s + q, 0)})
+                          Items ({isBuyNow && buyNowItem ? (buyNowItem.quantity || 1) : Object.values(quantities).reduce((s, q) => s + q, 0)})
                         </h3>
                       </div>
                       <div className="space-y-3">
-                        {cartItems.map((item, idx) => {
-                          const product = item.product
-                          const qty = quantities[item.productId] || 1
-                          if (!product) return null
-                          return (
-                            <div key={item.id} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
+                        {isBuyNow && buyNowItem ? (
+                          <>
+                            <div key="buyNowItem" className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
                               <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
                                 <OptimizedImage
-                                  src={getProductImage(product)}
-                                  alt={product.name}
+                                  src={buyNowItem.image}
+                                  alt={buyNowItem.name}
                                   size="thumb"
                                   context="thumbnail"
                                   lazy
@@ -643,21 +763,56 @@ const Checkout: React.FC = () => {
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="font-semibold text-sm leading-snug line-clamp-2">{product.name}</div>
+                                <div className="font-semibold text-sm leading-snug line-clamp-2">{buyNowItem.name}</div>
                                 <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
-                                  <span className="font-medium">{product.source}</span>
+                                  <span className="font-medium">{buyNowItem.source || 'Yahoo! Auctions'}</span>
                                   <span>·</span>
-                                  <span>Qty: {qty}</span>
+                                  <span>Qty: {buyNowItem.quantity || 1}</span>
                                 </div>
                               </div>
                               <div className="text-right">
                                 <div className="font-bold text-sm">
-                                  {formatCurrency(product.price * qty, 'USD')}
+                                  {formatCurrency(buyNowItem.price * (buyNowItem.quantity || 1), 'USD')}
                                 </div>
                               </div>
                             </div>
-                          )
-                        })}
+                          </>
+                        ) : (
+                          cartItems.map((item) => {
+                            const product = item.product
+                            const qty = quantities[item.productId] || 1
+                            if (!product) return null
+                            return (
+                              <div key={item.id} className="flex gap-3 p-3 rounded-lg bg-muted/30 border border-border/60">
+                                <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted shrink-0 border border-border">
+                                  <OptimizedImage
+                                    src={getProductImage(product)}
+                                    alt={product.name}
+                                    size="thumb"
+                                    context="thumbnail"
+                                    lazy
+                                    showShimmer
+                                    aspectRatio="aspect-square"
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-sm leading-snug line-clamp-2">{product.name}</div>
+                                  <div className="mt-1 text-xs text-muted-foreground flex items-center gap-2">
+                                    <span className="font-medium">{product.source}</span>
+                                    <span>·</span>
+                                    <span>Qty: {qty}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-bold text-sm">
+                                    {formatCurrency(product.price * qty, 'USD')}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
                       </div>
                     </div>
 
@@ -733,7 +888,9 @@ const Checkout: React.FC = () => {
 
                 <div className="space-y-2.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-foreground/80 font-medium">Subtotal (4 items)</span>
+                    <span className="text-foreground/80 font-medium">
+                      Subtotal ({isBuyNow && buyNowItem ? (buyNowItem.quantity || 1) : Object.values(quantities).reduce((s, q) => s + q, 0)} items)
+                    </span>
                     <span className="font-semibold">{formatCurrency(subtotal, 'USD')}</span>
                   </div>
                   <div className="flex justify-between">
@@ -744,7 +901,8 @@ const Checkout: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-foreground/80 font-medium flex items-center gap-1.5">
-                      <Truck className="h-3.5 w-3.5" /> DHL Express (3-5 days)
+                      <Truck className="h-3.5 w-3.5" />
+                      Shipping to {shippingAddress.country || 'US'}
                     </span>
                     <span className="font-semibold">{formatCurrency(shipping, 'USD')}</span>
                   </div>

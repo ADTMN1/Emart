@@ -11,6 +11,7 @@ import adminRoutes from './admin.routes';
 import favoriteRoutes from './favorite.routes';
 import sellerRoutes from './seller.routes';
 import notificationRoutes from './notification.routes';
+import supportMessageRoutes from './supportMessage.routes';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.use('/admin', adminRoutes);
 router.use('/favorites', favoriteRoutes);
 router.use('/seller', sellerRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/support', supportMessageRoutes);
 
 // Health check
 router.get('/health', (req, res) => {

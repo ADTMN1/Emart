@@ -1,9 +1,13 @@
 import prisma from '../config/database';
 import emailService, { EmailService as EmailServiceClass, SendEmailResult } from './email.service';
+import notificationServiceSingleton, { NotificationService as NotificationServiceClass, NotificationType } from './notification.service';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../utils/errors';
-import { Prisma, SellerStatus } from '@prisma/client';
+import { Prisma, SellerStatus, PaymentMethodType, OrderStatus, PaymentStatus } from '@prisma/client';
 import { SELLER_AGREEMENT_VERSION, SELLER_AGREEMENT_TEXT, SELLER_AGREEMENT_TITLE } from '../config/sellerAgreement';
-import sellerDocumentStorageService from './seller-document-storage.service';
+import sellerDocumentStorageService, {
+  SellerDocumentUpload,
+} from './seller-document-storage.service';
+import sellerShopMediaStorageService, { ShopMediaKind } from './seller-shop-media-storage.service';
 
 /** Pragmatic email shape check — the authoritative validation is the API layer. */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,13 +69,249 @@ export interface ApplicationReviewContext {
   reviewedAt: Date;
 }
 
+/* ------------------------------------------------------------------ *
+ * SALES REPORTING
+ * ------------------------------------------------------------------ */
+
+/** Order states whose line amounts are never counted as seller revenue. */
+const NON_REVENUE_ORDER_STATUSES: OrderStatus[] = ['CANCELLED', 'REFUNDED'];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_SALES_RANGE_DAYS = 30;
+/** Hard ceiling on the report window (inclusive day count). */
+const MAX_SALES_RANGE_DAYS = 366;
+const TOP_PRODUCTS_LIMIT = 5;
+const RECENT_ORDERS_LIMIT = 5;
+
+const startOfUtcDay = (value: Date): Date =>
+  new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+
+/** Inclusive end of the UTC day `value` falls in. */
+const endOfUtcDay = (value: Date): Date => new Date(startOfUtcDay(value).getTime() + DAY_MS - 1);
+
+const utcDayKey = (value: Date): string => startOfUtcDay(value).toISOString().slice(0, 10);
+
+/** Money is stored as Float; every reported figure is rounded to cents. */
+const money = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/**
+ * One seller-scoped order line as read for the report. `serviceFeeAtPurchase`
+ * and `domesticShippingAtPurchase` are already multiplied by the line
+ * quantity at order creation time, while `priceAtPurchase` is the unit price.
+ */
+interface SalesItemRow {
+  orderId: string;
+  orderNumber: string;
+  orderStatus: OrderStatus;
+  paymentStatus: PaymentStatus;
+  orderCreatedAt: Date;
+  productId: string;
+  productName: string;
+  productImage: string | null;
+  quantity: number;
+  priceAtPurchase: number;
+  serviceFeeAtPurchase: number;
+  domesticShippingAtPurchase: number;
+}
+
+export interface SellerSalesTotals {
+  revenue: number;
+  serviceFees: number;
+  shippingCharges: number;
+  netEarnings: number;
+  itemsSold: number;
+  orderCount: number;
+  averageOrderValue: number;
+  paidRevenue: number;
+  pendingRevenue: number;
+  excludedOrders: number;
+  excludedRevenue: number;
+}
+
+export interface SellerSalesPoint {
+  date: string;
+  revenue: number;
+  netEarnings: number;
+  orders: number;
+  units: number;
+}
+
+export interface SellerSalesProduct {
+  productId: string;
+  name: string;
+  image: string | null;
+  unitsSold: number;
+  revenue: number;
+  orderCount: number;
+}
+
+export interface SellerSalesOrder {
+  orderId: string;
+  orderNumber: string;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  createdAt: Date;
+  revenue: number;
+  items: number;
+  units: number;
+}
+
+export interface SellerSalesReport {
+  storeName: string;
+  currency: string;
+  /** Inclusive window as YYYY-MM-DD day keys, matching `series[].date`. */
+  range: { startDate: string; endDate: string; days: number };
+  summary: SellerSalesTotals;
+  /** Same-length window immediately before `range` — the comparison baseline. */
+  previous: { revenue: number; orderCount: number };
+  /** Percent change vs `previous`; null when the baseline is zero. */
+  change: { revenuePercent: number | null; orderPercent: number | null };
+  series: SellerSalesPoint[];
+  topProducts: SellerSalesProduct[];
+  recentOrders: SellerSalesOrder[];
+}
+
+/** Percent change from `previous` to `current`; null when there is no baseline. */
+const percentChange = (current: number, previous: number): number | null =>
+  previous > 0 ? money(((current - previous) / previous) * 100) : null;
+
+/**
+ * Folds seller order lines into the totals/day/product/order buckets the
+ * report is built from. Cancelled and refunded orders are tracked separately
+ * and never contribute to revenue, orders or units.
+ */
+const aggregateSalesItems = (rows: SalesItemRow[]) => {
+  const orders = new Map<string, SellerSalesOrder>();
+  const excluded = new Map<string, number>();
+  const days = new Map<string, SellerSalesPoint>();
+  const products = new Map<
+    string,
+    { product: SellerSalesProduct; orderIds: Set<string> }
+  >();
+
+  let revenue = 0;
+  let serviceFees = 0;
+  let shippingCharges = 0;
+  let netEarnings = 0;
+  let itemsSold = 0;
+  let paidRevenue = 0;
+  let pendingRevenue = 0;
+
+  for (const row of rows) {
+    const gross = money(row.priceAtPurchase * row.quantity);
+
+    if (NON_REVENUE_ORDER_STATUSES.includes(row.orderStatus)) {
+      excluded.set(row.orderId, money((excluded.get(row.orderId) ?? 0) + gross));
+      continue;
+    }
+
+    const fees = money(row.serviceFeeAtPurchase);
+    const shipping = money(row.domesticShippingAtPurchase);
+    const net = money(gross - fees - shipping);
+
+    revenue += gross;
+    serviceFees += fees;
+    shippingCharges += shipping;
+    netEarnings += net;
+    itemsSold += row.quantity;
+    if (row.paymentStatus === 'PAID') paidRevenue += gross;
+    if (row.paymentStatus === 'PENDING') pendingRevenue += gross;
+
+    const order = orders.get(row.orderId) ?? {
+      orderId: row.orderId,
+      orderNumber: row.orderNumber,
+      status: row.orderStatus,
+      paymentStatus: row.paymentStatus,
+      createdAt: row.orderCreatedAt,
+      revenue: 0,
+      items: 0,
+      units: 0,
+    };
+    order.revenue = money(order.revenue + gross);
+    order.items += 1;
+    order.units += row.quantity;
+    orders.set(row.orderId, order);
+
+    const key = utcDayKey(row.orderCreatedAt);
+    const day = days.get(key) ?? {
+      date: key,
+      revenue: 0,
+      netEarnings: 0,
+      orders: 0,
+      units: 0,
+    };
+    day.revenue = money(day.revenue + gross);
+    day.netEarnings = money(day.netEarnings + net);
+    day.units += row.quantity;
+    days.set(key, day);
+
+    const product = products.get(row.productId) ?? {
+      product: {
+        productId: row.productId,
+        name: row.productName,
+        image: row.productImage,
+        unitsSold: 0,
+        revenue: 0,
+        orderCount: 0,
+      },
+      orderIds: new Set<string>(),
+    };
+    product.product.unitsSold += row.quantity;
+    product.product.revenue = money(product.product.revenue + gross);
+    product.orderIds.add(row.orderId);
+    products.set(row.productId, product);
+  }
+
+  // Distinct orders per day bucket.
+  const dayOrderIds = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (NON_REVENUE_ORDER_STATUSES.includes(row.orderStatus)) continue;
+    const key = utcDayKey(row.orderCreatedAt);
+    const ids = dayOrderIds.get(key) ?? new Set<string>();
+    ids.add(row.orderId);
+    dayOrderIds.set(key, ids);
+  }
+  for (const [key, day] of days) {
+    day.orders = dayOrderIds.get(key)?.size ?? 0;
+  }
+
+  const orderCount = orders.size;
+
+  return {
+    totals: {
+      revenue: money(revenue),
+      serviceFees: money(serviceFees),
+      shippingCharges: money(shippingCharges),
+      netEarnings: money(netEarnings),
+      itemsSold,
+      orderCount,
+      averageOrderValue: orderCount > 0 ? money(revenue / orderCount) : 0,
+      paidRevenue: money(paidRevenue),
+      pendingRevenue: money(pendingRevenue),
+      excludedOrders: excluded.size,
+      excludedRevenue: money([...excluded.values()].reduce((sum, value) => sum + value, 0)),
+    } satisfies SellerSalesTotals,
+    days,
+    products,
+    orders: [...orders.values()].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    ),
+  };
+};
+
 export class SellerService {
   private prisma: typeof prisma;
   private email: EmailServiceClass;
+  private notifications: NotificationServiceClass;
 
-  constructor(prismaClient: typeof prisma = prisma, emailClient: EmailServiceClass = emailService) {
+  constructor(
+    prismaClient: typeof prisma = prisma,
+    emailClient: EmailServiceClass = emailService,
+    notificationClient: NotificationServiceClass = notificationServiceSingleton,
+  ) {
     this.prisma = prismaClient;
     this.email = emailClient;
+    this.notifications = notificationClient;
   }
 
   /**
@@ -192,72 +432,126 @@ export class SellerService {
   /**
    * POST /seller/application — submit a first application or resubmit a
    * rejected one (same row). Everything else is a 409 conflict.
+   *
+   * `uploadedFile` is the raw Multer payload from the request (thinned down to
+   * the three fields the storage service needs). When present it is uploaded
+   * to the private bucket CONCURRENTLY with the read-only pre-checks, instead
+   * of the previous fully serial upload-then-check flow. `idDocumentPath` in
+   * `data` is still honored for callers that supply a pre-uploaded document
+   * (unit tests) — the real controller never sets it.
    */
-  async submitApplication(userId: string, data: SellerApplicationInput) {
-    // Submitting (or resubmitting) requires accepting the CURRENT agreement
-    // version first — enforced server-side, never from the client.
-    await this.assertAgreementAccepted(userId);
-
+  async submitApplication(
+    userId: string,
+    data: SellerApplicationInput,
+    uploadedFile?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    // Cheap, synchronous, local validation runs first — nothing remote starts
+    // before the payload itself is known to be well-formed.
     const input = this.applicationInput(data);
 
-    const existing = await this.prisma.sellerApplication.findUnique({ where: { userId } });
-    this.assertNotDuplicatePending(existing);
+    const hasUploadedFile = Boolean(uploadedFile);
+    const hasPreUploadedPath = Boolean(data.idDocumentPath);
 
-    // An identity document is mandatory for a new application. A rejected
-    // applicant may keep their previously uploaded document on resubmission.
-    const hasNewDocument = Boolean(data.idDocumentPath);
-    if (!hasNewDocument && !existing?.idDocumentPath) {
-      throw new ValidationError(
-        'Please upload a clear photo or scan of your ID, passport, or driver\'s license.',
-      );
-    }
+    // All three independent operations start immediately:
+    //  - current-agreement acceptance check (read-only remote call)
+    //  - the caller's existing application row (read-only remote call)
+    //  - the private-storage upload of the identity document (when supplied)
+    // The document upload never races the create/update; the row is only ever
+    // written after the upload has succeeded, so an application can never
+    // exist without its document. See the try/catch below for the no-orphan
+    // guarantee when anything after the upload fails.
+    const existingPromise = this.prisma.sellerApplication.findUnique({
+      where: { userId },
+    });
+    const agreementPromise = this.assertAgreementAccepted(userId);
+    const uploadedPromise: Promise<SellerDocumentUpload | null> = hasUploadedFile
+      ? sellerDocumentStorageService.uploadSellerDocument(
+          userId,
+          uploadedFile!.buffer,
+          uploadedFile!.originalname,
+          uploadedFile!.mimetype,
+        )
+      : Promise.resolve(null);
 
-    const documentFields = hasNewDocument
-      ? { idDocumentPath: data.idDocumentPath!, idDocumentMimeType: data.idDocumentMimeType ?? null }
-      : {};
+    try {
+      const [existing] = await Promise.all([existingPromise, agreementPromise]);
+      this.assertNotDuplicatePending(existing);
 
-    const applicationSelect = {
-      id: true,
-      storeName: true,
-      storeDescription: true,
-      email: true,
-      emergencyContact: true,
-      address: true,
-      status: true,
-      rejectionReason: true,
-      submittedAt: true,
-      reviewedAt: true,
-      createdAt: true,
-      updatedAt: true,
-    } as const;
+      const uploaded = await uploadedPromise;
+      const documentPath = uploaded?.path ?? data.idDocumentPath;
+      const documentMimeType = uploaded?.mimetype ?? data.idDocumentMimeType;
+      const hasNewDocument = Boolean(documentPath);
 
-    if (existing) {
-      // REJECTED → resubmission reuses the same row (documented behavior).
-      const updated = await this.prisma.sellerApplication.update({
-        where: { userId },
-        data: {
-          ...input,
-          ...documentFields,
-          status: 'PENDING',
-          rejectionReason: null,
-          reviewedAt: null,
-          reviewedBy: null,
-          submittedAt: new Date(),
-        },
+      // An identity document is mandatory for a new application. A rejected
+      // applicant may keep their previously uploaded document on resubmission.
+      if (!hasNewDocument && !existing?.idDocumentPath) {
+        throw new ValidationError(
+          'Please upload a clear photo or scan of your ID, passport, or driver\'s license.',
+        );
+      }
+
+      const documentFields = hasNewDocument
+        ? { idDocumentPath: documentPath!, idDocumentMimeType: documentMimeType ?? null }
+        : {};
+
+      const applicationSelect = {
+        id: true,
+        storeName: true,
+        storeDescription: true,
+        email: true,
+        emergencyContact: true,
+        address: true,
+        status: true,
+        rejectionReason: true,
+        submittedAt: true,
+        reviewedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      } as const;
+
+      if (existing) {
+        // REJECTED → resubmission reuses the same row (documented behavior).
+        const updated = await this.prisma.sellerApplication.update({
+          where: { userId },
+          data: {
+            ...input,
+            ...documentFields,
+            status: 'PENDING',
+            rejectionReason: null,
+            reviewedAt: null,
+            reviewedBy: null,
+            submittedAt: new Date(),
+          },
+          select: { ...applicationSelect, idDocumentPath: true },
+        });
+        // Superseded document is removed only after the row is safely updated.
+        if (hasNewDocument && existing.idDocumentPath && existing.idDocumentPath !== documentPath) {
+          await sellerDocumentStorageService.deleteSellerDocument(existing.idDocumentPath);
+        }
+        // A resubmission re-enters the review queue just like a first
+        // submission, so admins get alerted for it too.
+        await this.notifyAdminsOfPendingApplication(input.storeName);
+        return this.withoutDocumentPath(updated);
+      }
+
+      const created = await this.prisma.sellerApplication.create({
+        data: { userId, ...input, ...documentFields, status: 'PENDING' },
         select: { ...applicationSelect, idDocumentPath: true },
       });
-      // Superseded document removed only after the row is safely updated.
-      if (hasNewDocument && existing.idDocumentPath && existing.idDocumentPath !== data.idDocumentPath) {
-        await sellerDocumentStorageService.deleteSellerDocument(existing.idDocumentPath);
+      await this.notifyAdminsOfPendingApplication(created.storeName);
+      return this.withoutDocumentPath(created);
+    } catch (error) {
+      // A failure anywhere after the upload started must never orphan the
+      // freshly uploaded private document. Wait for the upload to settle (it
+      // may still be in flight) and then remove its object from storage.
+      if (hasUploadedFile) {
+        const uploaded = await uploadedPromise.catch(() => null);
+        if (uploaded?.path) {
+          await sellerDocumentStorageService.deleteSellerDocument(uploaded.path);
+        }
       }
-      return this.withoutDocumentPath(updated);
+      throw error;
     }
-
-    const created = await this.prisma.sellerApplication.create({
-      data: { userId, ...input, ...documentFields, status: 'PENDING' },
-      select: { ...applicationSelect, idDocumentPath: true },
-    });
-    return this.withoutDocumentPath(created);
   }
 
   /**
@@ -267,6 +561,40 @@ export class SellerService {
   private withoutDocumentPath<T extends { idDocumentPath?: string | null }>(row: T) {
     const { idDocumentPath, ...rest } = row;
     return { ...rest, hasIdDocument: Boolean(idDocumentPath) };
+  }
+
+  /**
+   * Fan out a `SELLER_APPLICATION_STATUS` notification to every admin when an
+   * application enters (or re-enters) the PENDING review queue.
+   *
+   * Runs after the application row is safely persisted, and never throws: a
+   * failed in-app alert must not roll back a submission the applicant already
+   * completed, so the error is logged instead. The inserts are independent, so
+   * they run concurrently rather than once per admin in sequence.
+   */
+  private async notifyAdminsOfPendingApplication(storeName: string) {
+    try {
+      const admins = await this.prisma.user.findMany({
+        where: { role: 'ADMIN' },
+        select: { id: true },
+      });
+
+      await Promise.all(
+        admins.map((admin) =>
+          this.notifications.create({
+            userId: admin.id,
+            type: NotificationType.SELLER_APPLICATION_STATUS,
+            title: 'New Seller Application Submitted',
+            body: `A new seller application for "${storeName}" is awaiting your review.`,
+          }),
+        ),
+      );
+    } catch (error) {
+      console.error(
+        `[SellerService] Could not notify admins about a new seller application for "${storeName}":`,
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 
   /**
@@ -311,6 +639,8 @@ export class SellerService {
         suspendedAt: true,
         createdAt: true,
         updatedAt: true,
+        logoUrl: true,
+        bannerUrl: true,
       },
     });
   }
@@ -342,8 +672,94 @@ export class SellerService {
         suspendedAt: true,
         createdAt: true,
         updatedAt: true,
+        logoUrl: true,
+        bannerUrl: true,
       },
     });
+  }
+
+  /**
+   * PUT/DELETE /seller/profile/:kind — set or remove the logo/banner on the
+   * caller's own store profile. Works for APPROVED and SUSPENDED sellers
+   * (suspension gates product management, not the seller's own store edits).
+   * The storage path is private; only the public URL is ever returned.
+   */
+  async updateShopMedia(
+    userId: string,
+    kind: ShopMediaKind,
+    media: { path: string; url: string },
+  ) {
+    const existing = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!existing) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    const pathField = kind === 'logo' ? 'logoPath' : 'bannerPath';
+    const urlField = kind === 'logo' ? 'logoUrl' : 'bannerUrl';
+    const previousPath = existing[pathField];
+
+    const updated = await this.prisma.sellerProfile.update({
+      where: { userId },
+      data: {
+        [urlField]: media.url,
+        [pathField]: media.path,
+      },
+      select: {
+        id: true,
+        storeName: true,
+        storeDescription: true,
+        status: true,
+        suspendedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        logoUrl: true,
+        bannerUrl: true,
+      },
+    });
+
+    // The superseded object is removed only after the row is safely updated,
+    // and cleanup is best-effort — a failed delete must never fail the upload.
+    if (previousPath && previousPath !== media.path) {
+      await sellerShopMediaStorageService.deleteShopMedia(previousPath);
+    }
+
+    return updated;
+  }
+
+  async removeShopMedia(userId: string, kind: ShopMediaKind) {
+    const existing = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!existing) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    const pathField = kind === 'logo' ? 'logoPath' : 'bannerPath';
+    const urlField = kind === 'logo' ? 'logoUrl' : 'bannerUrl';
+    const previousPath = existing[pathField];
+
+    const updated = await this.prisma.sellerProfile.update({
+      where: { userId },
+      data: {
+        [urlField]: null,
+        [pathField]: null,
+      },
+      select: {
+        id: true,
+        storeName: true,
+        storeDescription: true,
+        status: true,
+        suspendedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        logoUrl: true,
+        bannerUrl: true,
+      },
+    });
+
+    if (previousPath) {
+      await sellerShopMediaStorageService.deleteShopMedia(previousPath);
+    }
+
+    return updated;
   }
 
   /**
@@ -522,6 +938,14 @@ export class SellerService {
         },
         update: { status: 'APPROVED', suspendedAt: null },
       }),
+      // ROLE SEPARATION — approval is the only event that promotes a buyer to
+      // a seller-only account. It lives in the same transaction as the profile
+      // so the role and the seller identity can never disagree. A PENDING or
+      // REJECTED applicant stays CUSTOMER and keeps buying.
+      this.prisma.user.update({
+        where: { id: application.userId },
+        data: { role: 'SELLER' },
+      }),
     ]);
 
     let email: SendEmailResult;
@@ -584,10 +1008,20 @@ export class SellerService {
     }
     this.assertApplicationTransition(profile.status as SellerStatus, 'SUSPENDED');
 
-    return this.prisma.sellerProfile.update({
-      where: { id: profile.id },
-      data: { status: 'SUSPENDED', suspendedAt: new Date() },
-    });
+    // ROLE SEPARATION — a suspended store is not a seller-only account any
+    // more, so the role is demoted to CUSTOMER in the same transaction. The
+    // profile and its history survive; activateSeller promotes it again.
+    const [suspended] = await this.prisma.$transaction([
+      this.prisma.sellerProfile.update({
+        where: { id: profile.id },
+        data: { status: 'SUSPENDED', suspendedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: profile.userId },
+        data: { role: 'CUSTOMER' },
+      }),
+    ]);
+    return suspended;
   }
 
   /** ADMIN — SUSPENDED → APPROVED on the seller profile. */
@@ -599,10 +1033,306 @@ export class SellerService {
     void adminId;
     this.assertApplicationTransition(profile.status as SellerStatus, 'APPROVED');
 
-    return this.prisma.sellerProfile.update({
-      where: { id: profile.id },
-      data: { status: 'APPROVED', suspendedAt: null },
+    // ROLE SEPARATION — reactivation restores the seller-only role.
+    const [activated] = await this.prisma.$transaction([
+      this.prisma.sellerProfile.update({
+        where: { id: profile.id },
+        data: { status: 'APPROVED', suspendedAt: null },
+      }),
+      this.prisma.user.update({
+        where: { id: profile.userId },
+        data: { role: 'SELLER' },
+      }),
+    ]);
+    return activated;
+  }
+
+  /**
+   * Seller payment methods (payout methods) — sellers manage their own
+   * withdrawal methods. Only accessible to authenticated sellers.
+   */
+
+  /** GET /seller/payment-methods — list caller's payment methods. */
+  async listPaymentMethods(userId: string) {
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+    return this.prisma.sellerPaymentMethod.findMany({
+      where: { sellerId: profile.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        type: true,
+        details: true,
+        isDefault: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
+  }
+
+  /** POST /seller/payment-methods — add a new payment method. */
+  async addPaymentMethod(
+    userId: string,
+    type: string,
+    details: Record<string, any>,
+    isDefault?: boolean,
+  ) {
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    // If this is the first method, make it default
+    const existingCount = await this.prisma.sellerPaymentMethod.count({
+      where: { sellerId: profile.id },
+    });
+    const shouldBeDefault = isDefault ?? existingCount === 0;
+
+    // If setting as default, unset any existing default
+    if (shouldBeDefault) {
+      await this.prisma.sellerPaymentMethod.updateMany({
+        where: { sellerId: profile.id, isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    return this.prisma.sellerPaymentMethod.create({
+      data: {
+        sellerId: profile.id,
+        type: type as PaymentMethodType,
+        details,
+        isDefault: shouldBeDefault,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        type: true,
+        details: true,
+        isDefault: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  /** PUT /seller/payment-methods/:id — update a payment method. */
+  async updatePaymentMethod(
+    userId: string,
+    paymentMethodId: string,
+    data: { details?: Record<string, any>; isDefault?: boolean; isActive?: boolean },
+  ) {
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    const method = await this.prisma.sellerPaymentMethod.findFirst({
+      where: { id: paymentMethodId, sellerId: profile.id },
+    });
+    if (!method) {
+      throw new NotFoundError('Payment method not found.');
+    }
+
+    // If setting as default, unset any existing default
+    if (data.isDefault === true) {
+      await this.prisma.sellerPaymentMethod.updateMany({
+        where: { sellerId: profile.id, isDefault: true, id: { not: paymentMethodId } },
+        data: { isDefault: false },
+      });
+    }
+
+    return this.prisma.sellerPaymentMethod.update({
+      where: { id: paymentMethodId },
+      data: {
+        details: data.details ?? method.details,
+        isDefault: data.isDefault ?? method.isDefault,
+        isActive: data.isActive ?? method.isActive,
+      },
+      select: {
+        id: true,
+        type: true,
+        details: true,
+        isDefault: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  /** DELETE /seller/payment-methods/:id — delete a payment method. */
+  async deletePaymentMethod(userId: string, paymentMethodId: string) {
+    const profile = await this.prisma.sellerProfile.findUnique({ where: { userId } });
+    if (!profile) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    const method = await this.prisma.sellerPaymentMethod.findFirst({
+      where: { id: paymentMethodId, sellerId: profile.id },
+    });
+    if (!method) {
+      throw new NotFoundError('Payment method not found.');
+    }
+
+    const wasDefault = method.isDefault;
+
+    await this.prisma.sellerPaymentMethod.delete({ where: { id: paymentMethodId } });
+
+    // If deleted method was default, make another one default
+    if (wasDefault) {
+      const remaining = await this.prisma.sellerPaymentMethod.findFirst({
+        where: { sellerId: profile.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (remaining) {
+        await this.prisma.sellerPaymentMethod.update({
+          where: { id: remaining.id },
+          data: { isDefault: true },
+        });
+      }
+    }
+  }
+
+  /**
+   * GET /seller/sales — store-scoped sales report.
+   *
+   * Every figure is derived from the caller's own SellerProfile: the only
+   * order lines read are those whose product is owned by this seller, and each
+   * order contributes only the seller's own lines (unit price × quantity,
+   * minus the service fee and domestic shipping captured on the line) — never
+   * the customer's whole order total. Cancelled and refunded orders are
+   * reported separately and excluded from revenue, order and unit counts.
+   *
+   * `startDate`/`endDate` are optional and inclusive; the window is capped at
+   * MAX_SALES_RANGE_DAYS. A `null` percent change means there was no prior
+   * period to compare against (the UI shows "—" rather than inventing 0%).
+   */
+  async getSalesReport(
+    userId: string,
+    range?: { startDate?: Date; endDate?: Date },
+  ): Promise<SellerSalesReport> {
+    const profile = await this.prisma.sellerProfile.findUnique({
+      where: { userId },
+      select: { id: true, storeName: true },
+    });
+    if (!profile) {
+      throw new NotFoundError('Seller profile not found.');
+    }
+
+    const endDate = startOfUtcDay(range?.endDate ?? new Date());
+    const startDate = startOfUtcDay(
+      range?.startDate ?? new Date(endDate.getTime() - (DEFAULT_SALES_RANGE_DAYS - 1) * DAY_MS),
+    );
+    if (startDate.getTime() > endDate.getTime()) {
+      throw new ValidationError('startDate must be on or before endDate.');
+    }
+    if (endDate.getTime() - startDate.getTime() > (MAX_SALES_RANGE_DAYS - 1) * DAY_MS) {
+      throw new ValidationError(`Date range must not exceed ${MAX_SALES_RANGE_DAYS} days.`);
+    }
+
+    const days = Math.round((endDate.getTime() - startDate.getTime()) / DAY_MS) + 1;
+    // Same-length window immediately before the requested one.
+    const previousEnd = new Date(startDate.getTime() - 1);
+    const previousStart = new Date(previousEnd.getTime() - (days - 1) * DAY_MS);
+
+    const [current, previous] = await Promise.all([
+      this.readSalesItems(profile.id, startDate, endOfUtcDay(endDate)),
+      this.readSalesItems(profile.id, previousStart, previousEnd),
+    ]);
+
+    const currentAgg = aggregateSalesItems(current);
+    const previousAgg = aggregateSalesItems(previous);
+
+    // Zero-filled daily series so the chart always spans the whole window.
+    const series: SellerSalesPoint[] = [];
+    for (let index = 0; index < days; index += 1) {
+      const key = utcDayKey(new Date(startDate.getTime() + index * DAY_MS));
+      series.push(
+        currentAgg.days.get(key) ?? {
+          date: key,
+          revenue: 0,
+          netEarnings: 0,
+          orders: 0,
+          units: 0,
+        },
+      );
+    }
+
+    const topProducts = [...currentAgg.products.values()]
+      .map(({ product, orderIds }) => ({ ...product, orderCount: orderIds.size }))
+      .sort((a, b) => b.revenue - a.revenue || b.unitsSold - a.unitsSold)
+      .slice(0, TOP_PRODUCTS_LIMIT);
+
+    return {
+      storeName: profile.storeName,
+      currency: 'USD',
+      range: { startDate: utcDayKey(startDate), endDate: utcDayKey(endDate), days },
+      summary: currentAgg.totals,
+      previous: {
+        revenue: previousAgg.totals.revenue,
+        orderCount: previousAgg.totals.orderCount,
+      },
+      change: {
+        revenuePercent: percentChange(
+          currentAgg.totals.revenue,
+          previousAgg.totals.revenue,
+        ),
+        orderPercent: percentChange(
+          currentAgg.totals.orderCount,
+          previousAgg.totals.orderCount,
+        ),
+      },
+      series,
+      topProducts,
+      recentOrders: currentAgg.orders.slice(0, RECENT_ORDERS_LIMIT),
+    };
+  }
+
+  /** Seller-owned order lines created inside [from, to], flattened for the
+   *  sales aggregation. Filtered by product ownership, not by customer. */
+  private async readSalesItems(sellerId: string, from: Date, to: Date): Promise<SalesItemRow[]> {
+    const rows = await this.prisma.orderItem.findMany({
+      where: {
+        product: { sellerId },
+        order: { createdAt: { gte: from, lte: to } },
+      },
+      select: {
+        orderId: true,
+        quantity: true,
+        priceAtPurchase: true,
+        serviceFeeAtPurchase: true,
+        domesticShippingAtPurchase: true,
+        order: {
+          select: {
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+        product: { select: { id: true, name: true, image: true, images: true } },
+      },
+      orderBy: { order: { createdAt: 'asc' } },
+    });
+
+    return rows.map((row) => ({
+      orderId: row.orderId,
+      orderNumber: row.order.orderNumber,
+      orderStatus: row.order.status,
+      paymentStatus: row.order.paymentStatus,
+      orderCreatedAt: row.order.createdAt,
+      productId: row.product.id,
+      productName: row.product.name,
+      productImage: row.product.image || row.product.images[0] || null,
+      quantity: row.quantity,
+      priceAtPurchase: row.priceAtPurchase,
+      serviceFeeAtPurchase: row.serviceFeeAtPurchase,
+      domesticShippingAtPurchase: row.domesticShippingAtPurchase,
+    }));
   }
 }
 

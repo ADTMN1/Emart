@@ -127,9 +127,9 @@ export class AuthService {
     }
   }
 
-  async updateProfile(userId: string, data: { firstName?: string; lastName?: string; phone?: string }) {
+  async updateProfile(userId: string, data: { firstName?: string; lastName?: string; phone?: string; email?: string }) {
     // Validate that at least one field is being updated
-    if (!data.firstName && !data.lastName && !data.phone) {
+    if (!data.firstName && !data.lastName && !data.phone && !data.email) {
       throw new BadRequestError('Please provide at least one field to update.');
     }
 
@@ -145,6 +145,22 @@ export class AuthService {
     
     if (data.phone !== undefined) {
       updateData.phone = data.phone.trim() || null;
+    }
+
+    if (data.email !== undefined) {
+      const email = data.email.trim().toLowerCase();
+      if (!email) {
+        throw new BadRequestError('Email cannot be empty.');
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        throw new BadRequestError('Invalid email format.');
+      }
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser && existingUser.id !== userId) {
+        throw new BadRequestError('This email is already in use.');
+      }
+      updateData.email = email;
     }
 
     return await prisma.user.update({

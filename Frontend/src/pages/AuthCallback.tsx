@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 import { getAuthProfile } from '@/lib/api';
-import { OAUTH_RETURN_PATH_KEY, resolvePostLoginDestination } from '@/pages/Login';
+import { OAUTH_RETURN_PATH_KEY, resolvePostAuthDestination } from '@/lib/postAuthRedirect';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
@@ -57,10 +57,11 @@ const AuthCallback = () => {
           description: 'You have successfully signed in with Google.',
         });
         
-        // Redirect based on user role. ADMIN always lands on /admin; other
-        // users restore the validated pre-OAuth destination (e.g. /seller) or
-        // fall back to "/". A stored path can never override authorization —
-        // the seller/profile gates still run against the incoming session.
+        // ROLE SEPARATION — the same rule as the password flow: ADMIN → /admin,
+        // SELLER → /seller, and only a CUSTOMER restores the intended
+        // destination. Seller-application status is never consulted for routing.
+        // A stored path can never override authorization either — the seller
+        // and admin gates still run against the incoming session.
         // Split the stored candidate back into pathname + search so the shared
         // validator applies its route blocklist to the path alone (query
         // strings can never be used to smuggle a blocked route through).
@@ -71,11 +72,7 @@ const AuthCallback = () => {
             : oauthReturnPath
               ? { pathname: oauthReturnPath }
               : null;
-        if (userData.role === 'ADMIN') {
-          navigate('/admin', { replace: true });
-        } else {
-          navigate(resolvePostLoginDestination(returnFrom), { replace: true });
-        }
+        navigate(resolvePostAuthDestination(userData.role, returnFrom), { replace: true });
       } catch (err: any) {
         console.error('OAuth callback error:', err);
         setError(err.message || 'Authentication failed');

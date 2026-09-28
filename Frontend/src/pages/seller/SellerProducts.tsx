@@ -112,8 +112,8 @@ export default function SellerProducts() {
               <p className="text-muted-foreground mt-2">
                 Product management is available to approved sellers. Check your seller application status for details.
               </p>
-              <Link to="/account/seller">
-                <Button className="mt-6">View Seller Status</Button>
+              <Link to="/seller">
+                <Button className="mt-6">Return to Seller Center</Button>
               </Link>
             </CardContent>
           </Card>

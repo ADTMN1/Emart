@@ -16,7 +16,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
+import { Input, SearchInput } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -173,10 +173,9 @@ const MyOrders: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <Input
+          <SearchInput
             placeholder="Search orders..."
-            leftIcon={<Search className="h-4 w-4" />}
-            wrapperClassName="w-56"
+            className="w-64"
           />
           <Button variant="outline" size="md">
             <Filter className="h-4 w-4" />

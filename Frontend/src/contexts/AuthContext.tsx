@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { api, getAuthProfile, ApiError } from '../lib/api';
+import { apiCache } from '../lib/apiCache';
+import type { UserRole } from '../types/role';
 
 export interface User {
   id: string;
@@ -7,7 +9,8 @@ export interface User {
   firstName?: string | null;
   lastName?: string | null;
   phone?: string | null;
-  role: string;
+  /** CUSTOMER | SELLER | ADMIN — assigned server-side, never by the client. */
+  role: UserRole;
   createdAt?: string;
 }
 
@@ -26,7 +29,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<User>;
   register: (data: RegisterParams) => Promise<void>;
   logout: () => void;
-  updateProfile: (data: { firstName?: string; lastName?: string; phone?: string }) => Promise<void>;
+  updateProfile: (data: { firstName?: string; lastName?: string; phone?: string; email?: string }) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
   refreshToken: () => Promise<void>;
   setAuthData: (token: string, user: User) => void;
@@ -72,7 +75,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // No valid cache, fetch profile
       setToken(storedToken);
-      setIsLoading(false);
 
       try {
         const userData = await getAuthProfile<User>();
@@ -83,10 +85,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           timestamp: Date.now(),
         }));
       } catch (error) {
-        localStorage.removeItem(TOKEN_KEY);
-        localStorage.removeItem(PROFILE_CACHE_KEY);
-        setToken(null);
-        setUser(null);
+        // Only discard the stored session on an authentication failure
+        // (401/403). A transient network error or server error must NOT
+        // destroy a valid session — keep the token so the next reload can
+        // retry, otherwise a single backend hiccup silently logs users out.
+        const isAuthFailure = error instanceof ApiError && (error.status === 401 || error.status === 403);
+        if (isAuthFailure) {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(PROFILE_CACHE_KEY);
+          setToken(null);
+          setUser(null);
+        }
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -113,11 +124,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await refreshToken();
       } catch (error) {
-        console.error('Token refresh failed:', error);
-        // If refresh fails, clear auth state
-        localStorage.removeItem(TOKEN_KEY);
-        setToken(null);
-        setUser(null);
+        // Only clear the session if the token is actually rejected (401/403).
+        // Network/server hiccups should not wipe a valid session.
+        const isAuthFailure = error instanceof ApiError && (error.status === 401 || error.status === 403);
+        if (isAuthFailure) {
+          console.error('Token refresh failed:', error);
+          localStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+          setUser(null);
+        }
       }
     }, TOKEN_REFRESH_INTERVAL);
 
@@ -176,12 +191,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(PROFILE_CACHE_KEY);
+    // Drop all cached API responses so no seller/order/profile data from the
+    // previous account can surface after switching users.
+    apiCache.clear();
     setToken(null);
     setUser(null);
   }, [token]);
 
   const updateProfile = useCallback(
-    async (data: { firstName?: string; lastName?: string; phone?: string }) => {
+    async (data: { firstName?: string; lastName?: string; phone?: string; email?: string }) => {
       try {
         const updatedUser = await api.put<User>('/auth/profile', data);
         setUser(updatedUser);

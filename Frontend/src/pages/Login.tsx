@@ -15,40 +15,13 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  OAUTH_RETURN_PATH_KEY,
+  resolvePostLoginDestination,
+  resolvePostAuthDestination,
+} from '@/lib/postAuthRedirect'
 
-/**
- * sessionStorage key that carries the intended internal destination from the
- * Login page's Google sign-in button across the OAuth round-trip. Only a
- * validated bare path (e.g. "/seller") is ever stored — never tokens or user
- * data — and AuthCallback removes it as soon as it is consumed.
- */
-export const OAUTH_RETURN_PATH_KEY = 'emart_oauth_return_path'
-
-/**
- * Resolve a safe post-login destination from a guarded route's
- * location.state.from (the target that redirected an unauthenticated user to
- * /login). Only bare absolute paths are accepted — every other value,
- * including protocol-relative (//host), scheme-bearing (https:…),
- * backslash-escaped URLs and the auth pages themselves, falls back to "/" so
- * login can never be abused as an open redirect.
- */
-export function resolvePostLoginDestination(from: unknown): string {
-  if (!from || typeof from !== 'object') return '/'
-  const { pathname, search } = from as { pathname?: unknown; search?: unknown }
-  if (typeof pathname !== 'string' || !pathname.startsWith('/')) return '/'
-  const candidate = pathname + (typeof search === 'string' ? search : '')
-  if (
-    candidate.startsWith('//') ||
-    candidate.includes('\\') ||
-    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate) ||
-    // Blocklist is checked on the pathname alone so a blocked route can never
-    // be smuggled through a query string (e.g. "/auth/callback?token=…").
-    ['/login', '/register', '/auth/callback'].some((p) => pathname === p || pathname.startsWith(`${p}/`))
-  ) {
-    return '/'
-  }
-  return candidate
-}
+export { OAUTH_RETURN_PATH_KEY, resolvePostLoginDestination, resolvePostAuthDestination }
 
 const Login: React.FC = () => {
   const navigate = useNavigate()
@@ -87,27 +60,28 @@ const Login: React.FC = () => {
       // so no second /auth/profile request is needed to check the role.
       const userData = await login(email, password)
 
-      // Redirect based on role
+      // ROLE SEPARATION — the role from the freshly issued token decides the
+      // landing page: ADMIN → /admin, SELLER → /seller, and only a CUSTOMER
+      // may restore an intended destination (the /cart they were opening, or
+      // /seller from an approval email). Seller-application status is
+      // deliberately NOT consulted here.
+      const from = (location.state as { from?: unknown } | null)?.from
+      const destination = resolvePostAuthDestination(userData.role, from)
+
       if (userData.role === 'ADMIN') {
         toast({
           variant: 'success',
           title: 'Admin Login Successful',
           description: 'Redirecting to admin dashboard...'
         })
-        navigate('/admin')
-        return
+      } else {
+        toast({
+          variant: 'success',
+          title: 'Signed in successfully',
+          description: 'Welcome back to EMART!'
+        })
       }
-      toast({ 
-        variant: 'success', 
-        title: 'Signed in successfully', 
-        description: 'Welcome back to EMART!' 
-      })
-      // Preserve the guarded route (e.g. an approved seller's /seller
-      // dashboard opened from the approval email) so a signed-out user lands
-      // back where they intended instead of the home page. Validation is
-      // handled by resolvePostLoginDestination — internal paths only.
-      // (Non-ADMIN is guaranteed here: the ADMIN branch returned above.)
-      navigate(resolvePostLoginDestination((location.state as { from?: unknown } | null)?.from))
+      navigate(destination)
     } catch (err: any) {
       setErrorMsg(err.message || 'Login failed. Please check your credentials.')
       toast({ 

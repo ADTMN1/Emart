@@ -9,6 +9,13 @@ import {
   createSellerApplicationValidation,
   resubmitSellerApplicationValidation,
   updateSellerProfileValidation,
+  sellerOrderIdValidation,
+  confirmOrderRequestValidation,
+  declineOrderRequestValidation,
+  addPaymentMethodValidation,
+  updatePaymentMethodValidation,
+  paymentMethodIdValidation,
+  sellerSalesReportValidation,
 } from '../middleware/validations/seller.validation';
 import {
   createSellerProductValidation,
@@ -40,6 +47,19 @@ router.put(
   updateSellerProfileValidation,
   sellerController.updateMyProfile.bind(sellerController),
 );
+// Storefront media — the public shop-media bucket. Field name is 'image'.
+router.put(
+  '/profile/logo',
+  uploadSingle,
+  sellerController.uploadShopMedia('logo'),
+);
+router.delete('/profile/logo', sellerController.removeShopMedia('logo'));
+router.put(
+  '/profile/banner',
+  uploadSingle,
+  sellerController.uploadShopMedia('banner'),
+);
+router.delete('/profile/banner', sellerController.removeShopMedia('banner'));
 
 // ---------------------------------------------------------------------
 // Phase 6: Seller-owned product management.
@@ -142,5 +162,23 @@ sellerConversationRouter.patch(
 );
 
 router.use(sellerConversationRouter);
+
+// Order requests for seller
+router.get('/order-requests', messageController.getOrderRequests.bind(messageController));
+router.post('/order-requests/:id/confirm', confirmOrderRequestValidation, messageController.confirmOrderRequest.bind(messageController));
+router.post('/order-requests/:id/decline', declineOrderRequestValidation, messageController.declineOrderRequest.bind(messageController));
+router.get('/orders', messageController.getSellerOrders.bind(messageController));
+router.get('/orders/:id', sellerOrderIdValidation, messageController.getSellerOrderById.bind(messageController));
+
+// Seller payment methods (payout methods)
+router.get('/payment-methods', sellerController.listPaymentMethods.bind(sellerController));
+router.post('/payment-methods', addPaymentMethodValidation, sellerController.addPaymentMethod.bind(sellerController));
+router.put('/payment-methods/:id', updatePaymentMethodValidation, sellerController.updatePaymentMethod.bind(sellerController));
+router.delete('/payment-methods/:id', paymentMethodIdValidation, sellerController.deletePaymentMethod.bind(sellerController));
+
+// Store-scoped sales report (revenue, orders, best sellers) for a date window.
+// The window defaults to the last 30 days server-side; the seller is always
+// resolved from the authenticated user, never from the query string.
+router.get('/sales', sellerSalesReportValidation, sellerController.getSalesReport.bind(sellerController));
 
 export default router;

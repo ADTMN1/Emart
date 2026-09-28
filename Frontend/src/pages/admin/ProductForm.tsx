@@ -66,6 +66,9 @@ export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ sco
   const navigate = useNavigate();
   const { toast } = useToast();
   const homePath = scope === 'seller' ? '/seller/products' : '/admin/products';
+
+  // Admin CRUD endpoints are mounted directly under /products; seller ones under /seller/products.
+  const productsBasePath = scope === 'seller' ? '/seller/products' : '/products';
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const isEditMode = !!id;
@@ -127,7 +130,7 @@ export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ sco
     if (!isEditMode || !id) return;
     try {
       const cacheBuster = `t=${Date.now()}-${refreshKey}`;
-      const product = await api.get(`/${scope}/products/${id}?${cacheBuster}`);
+      const product = await api.get(`${productsBasePath}/${id}?${cacheBuster}`);
       
       if (product.productImages && product.productImages.length > 0) {
         setImages(product.productImages);
@@ -149,7 +152,7 @@ export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ sco
         setError(null);
 
         const cacheBuster = `t=${Date.now()}-${refreshKey}`;
-        const product = await api.get(`/${scope}/products/${id}?${cacheBuster}`);
+        const product = await api.get(`${productsBasePath}/${id}?${cacheBuster}`);
         
         setFormData({
           sku: product.sku || '',
@@ -545,7 +548,7 @@ export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ sco
       };
 
       if (isEditMode && id) {
-        await api.put(`/${scope}/products/${id}`, payload);
+        await api.put(`${productsBasePath}/${id}`, payload);
 
         // Bust the storefront product cache (lists + detail) so edits show immediately
         invalidateCache.products();
@@ -557,7 +560,7 @@ export const AdminProductForm: React.FC<{ scope?: 'admin' | 'seller' }> = ({ sco
         });
         navigate(homePath);
       } else {
-        const newProduct = await api.post(`/${scope}/products`, payload);
+        const newProduct = await api.post(`${productsBasePath}`, payload);
 
         if (pendingImages.length > 0) {
           let primaryImageId: string | null = null;

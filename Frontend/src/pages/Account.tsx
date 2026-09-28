@@ -39,6 +39,7 @@ import {
   Loader2,
   Upload,
   Trash2,
+  ArrowLeft,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -49,7 +50,8 @@ import { useToast } from '@/components/ui/Toast'
 import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
-import { api, notificationApi, sellerAgreementApi, sellerApplicationApi, type NotificationItem, type SellerAgreement } from '@/lib/api'
+import { ApiError, api, notificationApi, sellerAgreementApi, sellerApplicationApi, orderApi, supportApi, type NotificationItem, type SellerAgreement, type SupportConversationSummary, type SupportMessage, type SupportConversationPayload } from '@/lib/api'
+import { prepareIdentityDocument, type PreparedIdentityDocument } from '@/lib/identityDocument'
 import {
   notificationsChanged,
   formatRelativeTime,
@@ -116,7 +118,21 @@ const Account: React.FC = () => {
   const [idDocument, setIdDocument] = React.useState<File | null>(null)
   const [idDocumentError, setIdDocumentError] = React.useState<string | null>(null)
   const idDocumentInputRef = React.useRef<HTMLInputElement>(null)
-  const [sellerSubmitting, setSellerSubmitting] = React.useState(false)
+
+  // Submission progress — distinct, honest stages instead of a generic spinner.
+  // `preparing` → browser-side ID compression; `uploading` → real % from XHR;
+  // `creating` → upload complete, server is validating + persisting;
+  // `done` → success response received.
+  type SellerSubmitStage = 'idle' | 'preparing' | 'uploading' | 'creating' | 'done'
+  const [submitStage, setSubmitStageState] = React.useState<SellerSubmitStage>('idle')
+  const submitStageRef = React.useRef<SellerSubmitStage>('idle')
+  const setSubmitStage = (stage: SellerSubmitStage) => {
+    submitStageRef.current = stage
+    setSubmitStageState(stage)
+  }
+  const sellerSubmitting = submitStage !== 'idle'
+  const [uploadPercent, setUploadPercent] = React.useState(0)
+  const [preparedDocument, setPreparedDocument] = React.useState<PreparedIdentityDocument | null>(null)
 
   // Phase 8: EMART Seller Agreement. The version/text come from the server;
   // acceptance is recorded server-side and gates application submission.
@@ -179,6 +195,119 @@ const Account: React.FC = () => {
     if (tab !== 'wallet') return
     fetchWallet()
   }, [tab, fetchWallet])
+
+  // Order stats for overview tab
+  const [orderStats, setOrderStats] = React.useState<{
+    totalOrders: number
+    inWarehouseOrders: number
+    inTransitOrders: number
+    totalSpent: number
+    estimatedSavings: number
+  } | null>(null)
+  const [loadingOrderStats, setLoadingOrderStats] = React.useState(false)
+
+  const fetchOrderStats = React.useCallback(async () => {
+    try {
+      setLoadingOrderStats(true)
+      const stats = await orderApi.getStats()
+      setOrderStats(stats)
+    } catch {
+      // keep defaults
+    } finally {
+      setLoadingOrderStats(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    if (tab !== 'overview') return
+    fetchOrderStats()
+  }, [tab, fetchOrderStats])
+
+  // Support chat state
+  const [supportConversations, setSupportConversations] = React.useState<SupportConversationSummary[]>([])
+  const [activeSupportConversation, setActiveSupportConversation] = React.useState<SupportConversationSummary | null>(null)
+  const [supportMessages, setSupportMessages] = React.useState<SupportMessage[]>([])
+  const [supportLoading, setSupportLoading] = React.useState(false)
+  const [supportError, setSupportError] = React.useState<string | null>(null)
+  const [newMessage, setNewMessage] = React.useState('')
+  const [sendingMessage, setSendingMessage] = React.useState(false)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+  const fetchSupportConversations = React.useCallback(async () => {
+    try {
+      setSupportLoading(true)
+      setSupportError(null)
+      const res = await supportApi.listConversations()
+      setSupportConversations(res.conversations || [])
+    } catch (err: any) {
+      setSupportError(err.message || 'Failed to load conversations')
+    } finally {
+      setSupportLoading(false)
+    }
+  }, [])
+
+  const openSupportConversation = React.useCallback(async (conversation: SupportConversationSummary) => {
+    setActiveSupportConversation(conversation)
+    setSupportMessages([])
+    setSupportError(null)
+    try {
+      setSupportLoading(true)
+      const res = await supportApi.getMessages(conversation.id)
+      setSupportMessages(res.messages || [])
+      // Mark as read
+      if (res.unreadCount > 0) {
+        await supportApi.markRead(conversation.id)
+        // Update local unread count
+        setSupportConversations((prev) =>
+          prev.map((c) => (c.id === conversation.id ? { ...c, unreadCount: 0 } : c))
+        )
+      }
+    } catch (err: any) {
+      setSupportError(err.message || 'Failed to load messages')
+    } finally {
+      setSupportLoading(false)
+    }
+  }, [])
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newMessage.trim() || !activeSupportConversation || sendingMessage) return
+    const body = newMessage.trim()
+    setNewMessage('')
+    setSendingMessage(true)
+    try {
+      const message = await supportApi.sendMessage(activeSupportConversation.id, body)
+      setSupportMessages((prev) => [...prev, message])
+    } catch (err: any) {
+      setSupportError(err.message || 'Failed to send message')
+      setNewMessage(body)
+    } finally {
+      setSendingMessage(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (tab !== 'support') return
+    fetchSupportConversations()
+  }, [tab, fetchSupportConversations])
+
+  React.useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [supportMessages])
+
+  // Poll for new messages when a conversation is open
+  React.useEffect(() => {
+    if (!activeSupportConversation) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await supportApi.getMessages(activeSupportConversation.id)
+        setSupportMessages(res.messages || [])
+      } catch {
+        // ignore polling errors
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [activeSupportConversation])
 
   // Open the hidden native file input from a type="button" trigger. File inputs
   // cannot be programmatically re-filled, so selection is validated into React
@@ -249,38 +378,79 @@ const Account: React.FC = () => {
       })
       return
     }
+
+    setUploadPercent(0)
+    setPreparedDocument(null)
+
     try {
-      setSellerSubmitting(true)
+      // 1. Prepare an upload copy of the ID document in the browser. Images are
+      //    compressed/resized in memory; PDFs and unsupported files pass through
+      //    untouched. The user's original file is never modified.
+      setSubmitStage('preparing')
+      let documentFile = idDocument
+      try {
+        const prepared = await prepareIdentityDocument(idDocument)
+        documentFile = prepared.file
+        setPreparedDocument(prepared)
+      } catch {
+        // Compression is best-effort — fall through with the original file.
+        // The backend still validates whatever arrives, independently.
+      }
+
+      // 2. Upload with REAL progress (XHR). The %. Once the bytes are sent the
+      //    server is validating + persisting, so switch to the "creating" stage.
       const payload = {
         shopName: shopName.trim(),
         email: applicantEmail.trim(),
         emergencyContact: emergencyContact.trim() || undefined,
         address: address.trim(),
-        idDocument,
+        idDocument: documentFile,
       }
+
+      setSubmitStage('uploading')
+      const onProgress = (percent: number) => {
+        setUploadPercent(percent)
+        if (percent >= 100 && submitStageRef.current === 'uploading') {
+          setSubmitStage('creating')
+        }
+      }
+
       if (sellerApp?.status === 'REJECTED') {
-        await sellerApplicationApi.resubmit(payload)
+        await sellerApplicationApi.resubmit(payload, onProgress)
       } else {
-        await sellerApplicationApi.submit(payload)
+        await sellerApplicationApi.submit(payload, onProgress)
       }
+
+      setSubmitStage('done')
       toast({
         variant: 'success',
-        title: 'Application submitted',
+        title: 'Application submitted successfully',
         description: 'Your seller application is now under review.',
       })
       setShopName('')
       setEmergencyContact('')
       setAddress('')
       clearIdDocument()
-      await refreshSeller()
+      setPreparedDocument(null)
+      // Force so the just-submitted PENDING status is not masked by the
+      // login-phase seller-status cache.
+      await refreshSeller({ force: true })
+      setSubmitStage('idle')
     } catch (err: any) {
+      // A network-level failure (ApiError with status 0) means the document
+      // never reached the server. Server rejections carry a meaningful message.
+      const networkError = !(err instanceof ApiError) || err.status === 0
+      setSubmitStage('idle')
+      setPreparedDocument(null)
       toast({
         variant: 'error',
-        title: 'Submission failed',
-        description: err.message || 'Could not submit your application.',
+        title: networkError
+          ? "We couldn't upload your ID document."
+          : 'Your application could not be submitted.',
+        description: networkError
+          ? 'Please check your connection and try again.'
+          : err?.message || 'Please try again.',
       })
-    } finally {
-      setSellerSubmitting(false)
     }
   }
 
@@ -406,6 +576,59 @@ const Account: React.FC = () => {
     </div>
   )
 
+  // Honest submission progress, shown only while a submission is in flight.
+  // "uploading" reports a REAL percentage (XHR upload progress); the other
+  // stages are named and never faked.
+  const sellerSubmitProgress = submitStage === 'idle' ? null : (
+    <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          {submitStage === 'done' && <CheckCircle2 className="h-4 w-4 text-success" />}
+          {submitStage === 'preparing' && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+          {submitStage === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+          {submitStage === 'creating' && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+          {submitStage === 'preparing' && 'Preparing ID document…'}
+          {submitStage === 'uploading' &&
+            (uploadPercent > 0 ? `Uploading ID document… ${uploadPercent}%` : 'Uploading ID document…')}
+          {submitStage === 'creating' && 'Creating your application…'}
+          {submitStage === 'done' && 'Application submitted successfully.'}
+        </p>
+        {submitStage === 'done' && (
+          <Badge variant="success" size="sm">
+            Done
+          </Badge>
+        )}
+      </div>
+
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        {submitStage === 'uploading' && uploadPercent > 0 && uploadPercent < 100 ? (
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-150"
+            style={{ width: `${uploadPercent}%` }}
+          />
+        ) : submitStage === 'done' ? (
+          <div className="h-full w-full rounded-full bg-success" />
+        ) : (
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+        )}
+      </div>
+
+      {preparedDocument && submitStage !== 'preparing' && (
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+          {preparedDocument.wasCompressed ? (
+            <>
+              ID image prepared: {formatFileSize(preparedDocument.originalBytes)} →{' '}
+              {formatFileSize(preparedDocument.uploadedBytes)}
+            </>
+          ) : (
+            <>ID document ready (sent as-is)</>
+          )}
+        </p>
+      )}
+    </div>
+  )
+
   // "Become a Seller" application fields — reused by the first application
   // and the rejected-resubmission form. The identity document is uploaded as
   // multipart/form-data and stored privately by the backend.
@@ -517,6 +740,7 @@ const Account: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={openIdDocumentPicker}
+                disabled={sellerSubmitting}
               >
                 Replace
               </Button>
@@ -527,6 +751,7 @@ const Account: React.FC = () => {
                 className="text-destructive hover:bg-destructive/5"
                 leftIcon={<Trash2 className="h-4 w-4" />}
                 onClick={clearIdDocument}
+                disabled={sellerSubmitting}
               >
                 Remove
               </Button>
@@ -536,11 +761,13 @@ const Account: React.FC = () => {
           <button
             type="button"
             onClick={openIdDocumentPicker}
+            disabled={sellerSubmitting}
             className={cn(
               'flex w-full items-center gap-3 rounded-xl border border-dashed p-4 text-left transition-colors',
               idDocumentError
                 ? 'border-destructive/40 bg-destructive/5 hover:bg-destructive/10'
                 : 'border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40',
+              sellerSubmitting && 'cursor-not-allowed opacity-60',
             )}
           >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -685,10 +912,38 @@ const Account: React.FC = () => {
               {/* Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {[
-                  { l: 'Total Orders', v: '12', s: '+3 this month', icon: Package, c: 'text-primary', b: 'bg-primary/10' },
-                  { l: 'In Warehouse', v: '2', s: 'Ready to ship', icon: Building, c: 'text-secondary', b: 'bg-secondary/10' },
-                  { l: 'In Transit', v: '1', s: 'ETA Sep 12', icon: Truck, c: 'text-info', b: 'bg-info/10' },
-                  { l: 'Savings This Year', v: '$486', s: 'vs individual shipping', icon: Gift, c: 'text-success', b: 'bg-success/10' },
+                  {
+                    l: 'Total Orders',
+                    v: orderStats?.totalOrders ?? 0,
+                    s: loadingOrderStats ? 'Loading...' : '+3 this month',
+                    icon: Package,
+                    c: 'text-primary',
+                    b: 'bg-primary/10',
+                  },
+                  {
+                    l: 'In Warehouse',
+                    v: orderStats?.inWarehouseOrders ?? 0,
+                    s: loadingOrderStats ? 'Loading...' : 'Ready to ship',
+                    icon: Building,
+                    c: 'text-secondary',
+                    b: 'bg-secondary/10',
+                  },
+                  {
+                    l: 'In Transit',
+                    v: orderStats?.inTransitOrders ?? 0,
+                    s: loadingOrderStats ? 'Loading...' : 'ETA Sep 12',
+                    icon: Truck,
+                    c: 'text-info',
+                    b: 'bg-info/10',
+                  },
+                  {
+                    l: 'Savings This Year',
+                    v: orderStats ? formatCurrency(orderStats.estimatedSavings, 'USD') : '$0',
+                    s: loadingOrderStats ? 'Loading...' : 'vs individual shipping',
+                    icon: Gift,
+                    c: 'text-success',
+                    b: 'bg-success/10',
+                  },
                 ].map((s) => (
                   <Card key={s.l}>
                     <CardContent className="p-5">
@@ -1144,7 +1399,7 @@ const Account: React.FC = () => {
               <CardContent className="p-5 lg:p-6 space-y-5">
                 <h2 className="font-display text-lg font-bold flex items-center gap-2">
                   <Store className="h-5 w-5 text-primary" />
-                  Become a Seller
+                  {sellerApp?.status === 'APPROVED' || sellerApp?.status === 'SUSPENDED' ? 'Seller Center' : 'Become a Seller'}
                 </h2>
 
                 {sellerLoading ? (
@@ -1211,6 +1466,7 @@ const Account: React.FC = () => {
                       <p className="text-sm font-semibold">Submit a new application</p>
                       {sellerApplicationFields}
                       {sellerAgreementSection}
+                      {sellerSubmitProgress}
                       <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                         {sellerSubmitting ? 'Submitting…' : 'Resubmit Application'}
                       </Button>
@@ -1223,6 +1479,7 @@ const Account: React.FC = () => {
                     </p>
                     {sellerApplicationFields}
                     {sellerAgreementSection}
+                    {sellerSubmitProgress}
                     <Button type="submit" disabled={sellerSubmitting || !sellerAgreed}>
                       {sellerSubmitting ? 'Submitting…' : 'Submit Application'}
                     </Button>
@@ -1450,18 +1707,197 @@ const Account: React.FC = () => {
             </Card>
           )}
 
+          {/* Support Chat */}
           {tab === 'support' && (
-            <Card>
-              <CardContent className="p-8 min-h-[300px] flex flex-col items-center justify-center text-center">
-                <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                  <Headphones className="h-7 w-7 text-muted-foreground" />
-                </div>
-                <h3 className="font-bold text-lg mb-1 capitalize">{tab}</h3>
-                <p className="text-sm text-muted-foreground max-w-sm">
-                  Manage your {tab} preferences. This section can be expanded with specific controls and options.
-                </p>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col h-[600px] md:h-[700px]">
+              {/* Conversation List */}
+              <Card className="flex-1 flex flex-col min-h-0">
+                <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+                  <div className="p-4 border-b border-border flex items-center justify-between">
+                    <h2 className="font-display text-lg font-bold flex items-center gap-2">
+                      <Headphones className="h-5 w-5 text-primary" />
+                      Support Center
+                    </h2>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => {
+                        setActiveSupportConversation(null)
+                        fetchSupportConversations()
+                      }}
+                      disabled={supportLoading}
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Chat
+                    </Button>
+                  </div>
+
+                  {supportLoading && !activeSupportConversation ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-sm text-muted-foreground">Loading conversations...</div>
+                    </div>
+                  ) : supportError ? (
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="text-center p-4">
+                        <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                        <p className="text-sm text-destructive mb-2">{supportError}</p>
+                        <Button variant="outline" size="sm" onClick={fetchSupportConversations}>
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : !activeSupportConversation ? (
+                    <div className="flex-1 overflow-y-auto">
+                      {supportConversations.length === 0 ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
+                          <div className="h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                            <Headphones className="h-7 w-7 text-muted-foreground" />
+                          </div>
+                          <h3 className="font-bold text-lg mb-1">No conversations yet</h3>
+                          <p className="text-sm text-muted-foreground max-w-sm mb-4">
+                            Start a new chat with our support team for help with orders, account issues, or general questions.
+                          </p>
+                          <Button
+                            variant="primary"
+                            onClick={() => {
+                              setActiveSupportConversation(null)
+                              fetchSupportConversations()
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Start New Chat
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-border">
+                          {supportConversations.map((conv) => (
+                            <button
+                              key={conv.id}
+                              onClick={() => openSupportConversation(conv)}
+                              className="w-full p-4 text-left hover:bg-muted/50 transition-colors flex items-center gap-3"
+                            >
+                              <div className="flex-1 min-w-0 text-left">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-sm truncate">{conv.subject || 'General Support'}</span>
+                                  <Badge variant={conv.status === 'OPEN' ? 'success' : conv.status === 'RESOLVED' ? 'info' : 'secondary'} size="xs">
+                                    {conv.status}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {conv.lastMessage ? conv.lastMessage.body : 'No messages yet'}
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(conv.updatedAt).toLocaleDateString()}
+                                </span>
+                                {conv.unreadCount > 0 && (
+                                  <Badge variant="primary" size="xs" className="gap-0.5">
+                                    {conv.unreadCount}
+                                  </Badge>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+
+              {/* Active Conversation */}
+              {activeSupportConversation && (
+                <Card className="flex flex-col h-[500px] md:h-[600px] border-t border-primary/20">
+                  <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+                    {/* Header */}
+                    <div className="p-4 border-b border-border flex items-center justify-between gap-4">
+                      <Button variant="ghost" size="icon" onClick={() => setActiveSupportConversation(null)}>
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold truncate">{activeSupportConversation.subject || 'General Support'}</h3>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant={activeSupportConversation.status === 'OPEN' ? 'success' : activeSupportConversation.status === 'RESOLVED' ? 'info' : 'secondary'} size="xs">
+                            {activeSupportConversation.status}
+                          </Badge>
+                          <span>·</span>
+                          <span>Updated {new Date(activeSupportConversation.updatedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={messagesEndRef}>
+                      {supportMessages.length === 0 ? (
+                        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                          No messages yet. Start the conversation!
+                        </div>
+                      ) : (
+                        supportMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={cn('flex gap-3', msg.isOwn ? 'flex-row-reverse' : '')}
+                          >
+                            <div
+                              className={cn(
+                                'h-8 w-8 rounded-full flex items-center justify-center shrink-0 text-xs font-bold',
+                                msg.isOwn ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+                              )}
+                            >
+                              {msg.senderName.charAt(0).toUpperCase()}
+                            </div>
+                            <div
+                              className={cn(
+                                'max-w-[70%] px-4 py-2 rounded-2xl text-sm',
+                                msg.isOwn
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : 'bg-muted rounded-bl-md'
+                              )}
+                            >
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <span className="font-medium text-xs">{msg.senderName}</span>
+                                <span className="text-[10px] opacity-70">
+                                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap">{msg.body}</p>
+                              {msg.isOwn && msg.readAt && (
+                                <div className="text-[10px] opacity-60 mt-1 flex items-center gap-1">
+                                  <CheckCheck className="h-3 w-3" />
+                                  Read
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Input */}
+                    <div className="p-4 border-t border-border">
+                      <form onSubmit={handleSendMessage} className="flex gap-2">
+                        <Input
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder="Type your message..."
+                          disabled={sendingMessage || activeSupportConversation.status === 'CLOSED'}
+                          className="flex-1"
+                        />
+                        <Button type="submit" disabled={!newMessage.trim() || sendingMessage || activeSupportConversation.status === 'CLOSED'}>
+                          {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Send</span>}
+                        </Button>
+                      </form>
+                      {activeSupportConversation.status === 'CLOSED' && (
+                        <p className="text-xs text-muted-foreground text-center mt-2">
+                          This conversation is closed. You can start a new one from the conversation list.
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           )}
       {/* Seller Agreement Modal — the Agree button appears only after the
           full agreement has been read (scrolled to the end). */}

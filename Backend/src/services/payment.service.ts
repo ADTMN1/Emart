@@ -49,6 +49,7 @@ export class PaymentService {
         id: true,
         orderNumber: true,
         userId: true,
+        status: true,
         paymentStatus: true,
         paymentMethod: true,
         paymentProofUrl: true,
@@ -106,12 +107,17 @@ export class PaymentService {
     const order = await this.requireOrder(orderId);
     this.assertTransition(order.paymentStatus as PaymentStatus, nextStatus);
 
+    // Determine order status transition when payment is verified
+    const shouldUpdateOrderStatus = nextStatus === 'PAID' && order.status === 'PENDING';
+
     // Only payment state/information changes — totals, items, shipment and
     // order status are untouched. Existing proof/method are preserved.
-    const updated = await prisma.order.update({
+const updated = await prisma.order.update({
       where: { id: order.id },
       data: {
         paymentStatus: nextStatus,
+        // When payment is verified (PAID) and order is PENDING, advance to CONFIRMED
+        ...(shouldUpdateOrderStatus && { status: 'CONFIRMED' as any }),
         // Explicit-undefined check (not ??) so an intentional `null` (rejection)
         // clears the timestamp instead of falling back to the old value.
         paidAt: options.paidAt !== undefined ? options.paidAt : order.paidAt,

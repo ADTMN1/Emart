@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Link } from 'react-router-dom'
 import { Bell } from 'lucide-react'
 import { notificationApi } from '@/lib/api'
+import { useNotificationPolling } from '@/lib/useNotificationPolling'
 
 const REFRESH_MS = 30000
 
@@ -24,19 +25,7 @@ export const NavbarNotificationBell: React.FC = () => {
     }
   }, [])
 
-  React.useEffect(() => {
-    refreshUnread()
-    const timer = setInterval(refreshUnread, REFRESH_MS)
-    const onFocus = () => refreshUnread()
-    const onChange = () => refreshUnread()
-    window.addEventListener('focus', onFocus)
-    window.addEventListener('emart:notifications-changed', onChange)
-    return () => {
-      clearInterval(timer)
-      window.removeEventListener('focus', onFocus)
-      window.removeEventListener('emart:notifications-changed', onChange)
-    }
-  }, [refreshUnread])
+  useNotificationPolling(refreshUnread, REFRESH_MS)
 
   return (
     <Link

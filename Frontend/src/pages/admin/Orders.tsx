@@ -11,7 +11,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input, SearchInput } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -217,20 +217,18 @@ export const AdminOrders: React.FC = () => {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <Input
-                placeholder="Search by order #, customer, email, or tracking #..."
-                leftIcon={<Search className="h-4 w-4" />}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-3">
+          <div className="flex flex-col md:flex-row gap-4">
+            <SearchInput
+              placeholder="Search by order #, customer, email, or tracking #..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="flex-1"
+            />
+            <div className="flex gap-3 w-full md:w-auto">
               <Select
                 value={statusFilter}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                className="flex-1"
+                className="w-48"
               >
                 {orderStatusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -241,7 +239,7 @@ export const AdminOrders: React.FC = () => {
               <Select
                 value={paymentStatusFilter}
                 onChange={(e) => handlePaymentStatusChange(e.target.value)}
-                className="flex-1"
+                className="w-48"
               >
                 {paymentStatusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>

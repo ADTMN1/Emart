@@ -50,7 +50,6 @@ const Cart: React.FC = () => {
   const { toggleFavorite, isFavorite } = useFavorites()
   const [items, setItems] = React.useState<CartItem[]>(initialCart)
   const [shipCountry, setShipCountry] = React.useState('US')
-  const [shippingMethod, setShippingMethod] = React.useState('dhl')
   const [loading, setLoading] = React.useState(true)
   const [updatingIds, setUpdatingIds] = React.useState<Set<string>>(new Set())
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set())
@@ -121,7 +120,7 @@ const Cart: React.FC = () => {
     (sum, i) => sum + Math.round(i.product.domesticShipping * 0.007) * i.quantity,
     0,
   )
-  const shipping = shippingMethod === 'sea' ? 18 : shippingMethod === 'sal' ? 28 : shippingMethod === 'ems' ? 42 : 58
+  const shipping = 58
   const insurance = Math.round(subtotal * 0.02)
   const total = subtotal + proxyFees + domestic + shipping + insurance
 
@@ -416,57 +415,35 @@ const Cart: React.FC = () => {
                   </label>
                   <Select value={shipCountry} onChange={(e) => setShipCountry(e.target.value)}>
                     <option value="US">🇺🇸 United States</option>
-                    <option value="UK">🇬🇧 United Kingdom</option>
+                    <option value="GB">🇬🇧 United Kingdom</option>
                     <option value="CA">🇨🇦 Canada</option>
                     <option value="AU">🇦🇺 Australia</option>
                     <option value="DE">🇩🇪 Germany</option>
                     <option value="FR">🇫🇷 France</option>
+                    <option value="JP">🇯🇵 Japan</option>
                     <option value="SG">🇸🇬 Singapore</option>
+                    <option value="KR">🇰🇷 South Korea</option>
+                    <option value="HK">🇭🇰 Hong Kong</option>
+                    <option value="NZ">🇳🇿 New Zealand</option>
+                    <option value="CH">🇨🇭 Switzerland</option>
+                    <option value="NL">🇳🇱 Netherlands</option>
+                    <option value="BE">🇧🇪 Belgium</option>
+                    <option value="AT">🇦🇹 Austria</option>
+                    <option value="SE">🇸🇪 Sweden</option>
+                    <option value="NO">🇳🇴 Norway</option>
+                    <option value="DK">🇩🇰 Denmark</option>
+                    <option value="FI">🇫🇮 Finland</option>
+                    <option value="IE">🇮🇪 Ireland</option>
+                    <option value="PL">🇵🇱 Poland</option>
+                    <option value="ES">🇪🇸 Spain</option>
+                    <option value="IT">🇮🇹 Italy</option>
+                    <option value="PT">🇵🇹 Portugal</option>
+                    <option value="MX">🇲🇽 Mexico</option>
+                    <option value="BR">🇧🇷 Brazil</option>
+                    <option value="AE">🇦🇪 UAE</option>
+                    <option value="IL">🇮🇱 Israel</option>
+                    <option value="ZA">🇿🇦 South Africa</option>
                   </Select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 block">
-                    {t('cart.shippingMethod')}
-                  </label>
-                  <div className="space-y-2">
-                    {[
-                      { id: 'dhl', name: 'DHL Express', days: '3-5 days', price: 58 },
-                      { id: 'ems', name: 'EMS', days: '5-8 days', price: 42 },
-                      { id: 'sal', name: 'SAL', days: '10-14 days', price: 28 },
-                      { id: 'sea', name: 'Sea Mail', days: '25-40 days', price: 18 },
-                    ].map((m) => (
-                      <label
-                        key={m.id}
-                        className={cn(
-                          'flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-all',
-                          shippingMethod === m.id
-                            ? 'border-primary bg-primary-50/50 ring-2 ring-primary/15'
-                            : 'border-border bg-white hover:border-border/80',
-                        )}
-                      >
-                        <input
-                          type="radio"
-                          name="ship"
-                          value={m.id}
-                          checked={shippingMethod === m.id}
-                          onChange={() => setShippingMethod(m.id)}
-                          className="h-4 w-4 text-primary focus:ring-primary"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-sm">{m.name}</span>
-                            <span className="font-bold text-sm">
-                              {formatCurrency(m.price, 'USD')}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-muted-foreground mt-0.5">
-                            {m.days} · {t('cart.fullyTracked')}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
                 </div>
 
                 <div className="flex items-center justify-between text-sm">

@@ -100,6 +100,10 @@ function makeApp() {
     };
   }
 
+  // In-memory notifications table, so tests can assert the read-state coupling
+  // between messages and their MESSAGE notifications.
+  const notificationRows: any[] = [];
+
   fixture.prisma = {
     order: {
       findUnique: async ({ where }: any) => orders.find((o) => o.id === where.id) || null,
@@ -168,6 +172,25 @@ function makeApp() {
         }));
       },
     },
+    notification: {
+      updateMany: async ({ where, data }: any) => {
+        const target = notificationRows.filter((n) => matches(n, where));
+        for (const n of target) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined) n[k] = v;
+          }
+        }
+        return { count: target.length };
+      },
+      findMany: async ({ where }: any) => notificationRows.filter((n) => matches(n, where)),
+      findFirst: async ({ where }: any) => notificationRows.find((n) => matches(n, where)) || null,
+      findUnique: async ({ where }: any) => notificationRows.find((n) => n.id === where.id) || null,
+      create: async ({ data }: any) => {
+        const row = { id: `n${nextId++}`, readAt: null, requestStatus: null, ...data };
+        notificationRows.push(row);
+        return row;
+      },
+    },
     user: {
       findMany: async ({ where }: any) => {
         if (where.id?.in) return users.filter((u) => (where.id.in as string[]).includes(u.id));
@@ -220,7 +243,12 @@ function makeApp() {
       seller(profileId: string, userId: string, status = 'APPROVED') {
         return { profileId, userId, storeName: `Store ${profileId}`, status };
       },
+      notification(n: any) {
+        notificationRows.push({ readAt: null, requestStatus: null, ...n });
+        return n;
+      },
     },
+    notifications: notificationRows,
   };
 }
 
@@ -412,4 +440,102 @@ test('getAdminConversationMessages: enriches sender roles (admin vs seller)', as
   assert.equal(res.messages[0].senderName, 'ABC Store');
   assert.equal(res.messages[1].senderRole, 'admin');
   assert.equal(res.messages[1].senderName, 'EMART Admin');
+});
+// ---------------------------------------------------------------------------
+// Phase 5 — reading a conversation must also clear its MESSAGE notifications.
+//
+// Opening a thread is the "I have seen this" gesture for the notifications that
+// point at it. Before this coupling existed, the bell badge stayed lit after the
+// seller had read the entire conversation.
+// ---------------------------------------------------------------------------
+
+test('markSellerConversationRead: marks the conversation MESSAGE notifications read', async () => {
+  const app = makeApp();
+  const { seed, service, fixture, notifications } = app;
+  seed.profile({ id: 's1', userId: 'seller-user-1', storeName: 'ABC Store', status: 'APPROVED' });
+  fixture.sellers.push(seed.seller('s1', 'seller-user-1'));
+  seed.order({ id: 'o1', orderNumber: 'EM-1', items: [{ product: { sellerId: 's1' } }] });
+  seed.conversation({ id: 'conv1', orderId: 'o1', sellerId: 's1' });
+  seed.message({ id: 'm1', conversationId: 'conv1', senderUserId: 'admin1', body: 'hi', readAt: null });
+
+  seed.notification({
+    id: 'n1',
+    userId: 'seller-user-1',
+    type: 'MESSAGE',
+    title: 'New message',
+    supportConversationId: 'conv1',
+    readAt: null,
+  });
+
+  const res = await service.markSellerConversationRead('seller-user-1', 'conv1');
+
+  assert.equal(res.updated, 1, 'the unread incoming message is marked');
+  assert.equal(res.notificationsUpdated, 1, 'its MESSAGE notification is marked too');
+  assert.ok(notifications[0].readAt instanceof Date, 'notification readAt is set');
+});
+
+test('markSellerConversationRead: only clears notifications for THIS conversation', async () => {
+  const app = makeApp();
+  const { seed, service, fixture, notifications } = app;
+  seed.profile({ id: 's1', userId: 'seller-user-1', storeName: 'ABC Store', status: 'APPROVED' });
+  fixture.sellers.push(seed.seller('s1', 'seller-user-1'));
+  seed.order({ id: 'o1', orderNumber: 'EM-1', items: [{ product: { sellerId: 's1' } }] });
+  seed.conversation({ id: 'conv1', orderId: 'o1', sellerId: 's1' });
+  seed.conversation({ id: 'conv2', orderId: 'o2', sellerId: 's1' });
+  seed.message({ id: 'm1', conversationId: 'conv1', senderUserId: 'admin1', body: 'hi', readAt: null });
+
+  seed.notification({ id: 'n1', userId: 'seller-user-1', type: 'MESSAGE', supportConversationId: 'conv1', readAt: null });
+  seed.notification({ id: 'n2', userId: 'seller-user-1', type: 'MESSAGE', supportConversationId: 'conv2', readAt: null });
+
+  const res = await service.markSellerConversationRead('seller-user-1', 'conv1');
+
+  assert.equal(res.notificationsUpdated, 1, 'only the opened conversation clears');
+  assert.equal(notifications.find((n) => n.id === 'n1').readAt instanceof Date, true);
+  assert.equal(notifications.find((n) => n.id === 'n2').readAt, null, 'the other thread is untouched');
+});
+
+test('markSellerConversationRead: never marks another recipient notifications read', async () => {
+  const app = makeApp();
+  const { seed, service, fixture, notifications } = app;
+  seed.profile({ id: 's1', userId: 'seller-user-1', storeName: 'ABC Store', status: 'APPROVED' });
+  fixture.sellers.push(seed.seller('s1', 'seller-user-1'));
+  seed.order({ id: 'o1', orderNumber: 'EM-1', items: [{ product: { sellerId: 's1' } }] });
+  seed.conversation({ id: 'conv1', orderId: 'o1', sellerId: 's1' });
+  seed.message({ id: 'm1', conversationId: 'conv1', senderUserId: 'admin1', body: 'hi', readAt: null });
+
+  // Same conversation id, but addressed to a different user account.
+  seed.notification({ id: 'n1', userId: 'seller-user-1', type: 'MESSAGE', supportConversationId: 'conv1', readAt: null });
+  seed.notification({ id: 'n2', userId: 'somebody-else', type: 'MESSAGE', supportConversationId: 'conv1', readAt: null });
+
+  const res = await service.markSellerConversationRead('seller-user-1', 'conv1');
+
+  assert.equal(res.notificationsUpdated, 1, 'scoped to the caller');
+  assert.equal(notifications.find((n) => n.id === 'n2').readAt, null, "another user's row is untouched");
+});
+
+test('markSellerConversationRead: leaves ORDER_REQUEST notifications unread', async () => {
+  const app = makeApp();
+  const { seed, service, fixture, notifications } = app;
+  seed.profile({ id: 's1', userId: 'seller-user-1', storeName: 'ABC Store', status: 'APPROVED' });
+  fixture.sellers.push(seed.seller('s1', 'seller-user-1'));
+  seed.order({ id: 'o1', orderNumber: 'EM-1', items: [{ product: { sellerId: 's1' } }] });
+  seed.conversation({ id: 'conv1', orderId: 'o1', sellerId: 's1' });
+  seed.message({ id: 'm1', conversationId: 'conv1', senderUserId: 'admin1', body: 'hi', readAt: null });
+
+  // An ORDER_REQUEST is not a support message; reading a thread must not retire
+  // a request, which is what the old readAt conflation used to cause.
+  seed.notification({
+    id: 'n1',
+    userId: 'seller-user-1',
+    type: 'ORDER_REQUEST',
+    orderId: 'o1',
+    requestStatus: 'PENDING',
+    readAt: null,
+  });
+
+  const res = await service.markSellerConversationRead('seller-user-1', 'conv1');
+
+  assert.equal(res.notificationsUpdated, 0, 'order requests are not conversation notifications');
+  assert.equal(notifications[0].readAt, null, 'the pending request stays unread');
+  assert.equal(notifications[0].requestStatus, 'PENDING', 'and stays PENDING');
 });

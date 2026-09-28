@@ -1,5 +1,6 @@
 import { body, param } from 'express-validator';
 import { ShipmentStatus } from '@prisma/client';
+import { CARRIER_OPTIONS } from '../../services/shipment.service';
 
 /** The full set of ShipmentStatus values from the Prisma schema. */
 export const SHIPMENT_STATUSES = Object.values(ShipmentStatus) as ShipmentStatus[];
@@ -16,17 +17,15 @@ export const createShipmentValidation = [
     .trim()
     .notEmpty()
     .withMessage('Carrier is required')
-    .isLength({ min: 2, max: 80 })
-    .withMessage('Carrier must be between 2 and 80 characters'),
+    .isIn(CARRIER_OPTIONS)
+    .withMessage(`Carrier must be one of: ${CARRIER_OPTIONS.join(', ')}`),
   body('trackingNumber')
+    .optional({ nullable: true })
     .trim()
-    .notEmpty()
-    .withMessage('Tracking number is required')
     .isLength({ min: 4, max: 100 })
     .withMessage('Tracking number must be between 4 and 100 characters'),
   body('shippingCost')
-    .exists({ checkFalsy: false })
-    .withMessage('Shipping cost is required')
+    .optional({ nullable: true })
     .isFloat({ min: 0 })
     .withMessage('Shipping cost must be a non-negative number')
     .toFloat(),
@@ -46,8 +45,8 @@ export const updateShipmentValidation = [
   body('carrier')
     .optional()
     .trim()
-    .isLength({ min: 2, max: 80 })
-    .withMessage('Carrier must be between 2 and 80 characters'),
+    .isIn(CARRIER_OPTIONS)
+    .withMessage(`Carrier must be one of: ${CARRIER_OPTIONS.join(', ')}`),
   body('trackingNumber')
     .optional()
     .trim()

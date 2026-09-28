@@ -2,6 +2,11 @@ import { lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/layout/Layout'
 import { AdminLayout } from './components/admin/AdminLayout'
+import { SellerCenterLayout } from './components/seller/SellerLayout'
+import { BuyerRoute, BuyerOutlet } from './components/auth/BuyerRoute'
+
+const RedirectToSellerOrdersRequests = () => <Navigate to="/seller/orders/requests" replace />;
+const SellerOrderDetail = lazy(() => import('./pages/seller/SellerOrderDetail').then((module) => ({ default: module.SellerOrderDetail })));
 
 const Home = lazy(() => import('./pages/Home'))
 const Marketplace = lazy(() => import('./pages/Marketplace'))
@@ -19,10 +24,18 @@ const Account = lazy(() => import('./pages/Account'))
 const Wallet = lazy(() => import('./pages/Wallet'))
 const Favorites = lazy(() => import('./pages/Favorites'))
 const SellerProducts = lazy(() => import('./pages/seller/SellerProducts'))
-const SellerLayout = lazy(() => import('./components/seller/SellerLayout').then((module) => ({ default: module.SellerLayout })))
-const SellerDashboard = lazy(() => import('./pages/seller/SellerDashboard'))
+const SellerOverview = lazy(() => import('./pages/seller/SellerOverview'))
 const SellerStore = lazy(() => import('./pages/seller/SellerStore'))
 const SellerProductForm = lazy(() => import('./pages/admin/ProductForm').then((module) => ({ default: module.AdminProductForm })))
+const SellerInventory = lazy(() => import('./pages/seller/SellerInventory'))
+const SellerOrderRequests = lazy(() => import('./pages/seller/SellerOrderRequests'))
+const SellerConfirmedOrders = lazy(() => import('./pages/seller/SellerConfirmedOrders'))
+const SellerSales = lazy(() => import('./pages/seller/SellerSales'))
+const SellerPayments = lazy(() => import('./pages/seller/SellerPayments'))
+const SellerSettings = lazy(() => import('./pages/seller/SellerSettings'))
+const SellerShopLogo = lazy(() => import('./pages/seller/SellerShopLogo'))
+const SellerShopBanner = lazy(() => import('./pages/seller/SellerShopBanner'))
+const SellerShopSettings = lazy(() => import('./pages/seller/SellerShopSettings'))
 const AccountLayout = lazy(() => import('./components/account/AccountLayout').then((module) => ({ default: module.AccountLayout })))
 
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard').then((module) => ({ default: module.Dashboard })))
@@ -44,19 +57,25 @@ const AdminDeposits = lazy(() => import('./pages/admin/Deposits').then((module) 
 const AdminSellerApplications = lazy(() => import('./pages/admin/SellerApplications').then((module) => ({ default: module.AdminSellerApplications })))
 const AdminOrderMessages = lazy(() => import('./pages/admin/OrderMessages').then((module) => ({ default: module.AdminOrderMessages })))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications').then((module) => ({ default: module.AdminNotifications })))
+const AdminSupport = lazy(() => import('./pages/admin/Support').then((module) => ({ default: module.AdminSupport })))
 const SellerMessages = lazy(() => import('./pages/seller/SellerMessages').then((module) => ({ default: module.SellerMessages })))
 const SellerMessageThread = lazy(() => import('./pages/seller/SellerMessageThread').then((module) => ({ default: module.SellerMessageThread })))
+const SellerNotifications = lazy(() => import('./pages/seller/SellerNotifications').then((module) => ({ default: module.SellerNotifications })))
 
 function App() {
   return (
     <Routes>
+      {/* path="/" element={<Layout />} — the buyer shell: marketplace navbar,
+          search, cart and wishlist. Sellers can still BROWSE here; the guards
+          below only strip the purchasing surfaces, so public pages keep working
+          for every role. */}
       <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="marketplace" element={<Marketplace />} />
           <Route path="categories" element={<Categories />} />
           <Route path="product/:id" element={<ProductDetails />} />
-          <Route path="cart" element={<Cart />} />
-          <Route path="checkout" element={<Checkout />} />
+          <Route path="cart" element={<BuyerRoute><Cart /></BuyerRoute>} />
+          <Route path="checkout" element={<BuyerRoute><Checkout /></BuyerRoute>} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="auth/callback" element={<AuthCallback />} />
@@ -73,28 +92,47 @@ function App() {
             <Route path="usdc-policy" element={<Account />} />
             <Route path="support" element={<Account />} />
           </Route>
+          {/* Buyer orders + shipping share the account shell, so they use the
+              Outlet form of the guard. */}
           <Route path="orders" element={<AccountLayout />}>
-            <Route index element={<MyOrders />} />
-            <Route path=":id" element={<OrderDetails />} />
-          </Route>
-          <Route path="shipping" element={<AccountLayout />}>
-            <Route index element={<Shipping />} />
-          </Route>
-          <Route path="wallet" element={<Wallet />} />
-          <Route path="favorites" element={<Favorites />} />
-          {/* Seller area — same Account/Store sidebar, compact seller sub-nav
-              inside the content column instead of a second full sidebar. */}
-          <Route path="seller" element={<AccountLayout />}>
-            <Route element={<SellerLayout />}>
-              <Route index element={<SellerDashboard />} />
-              <Route path="products" element={<SellerProducts />} />
-              <Route path="products/new" element={<SellerProductForm scope="seller" />} />
-              <Route path="products/:id/edit" element={<SellerProductForm scope="seller" />} />
-              <Route path="store" element={<SellerStore />} />
-              <Route path="messages" element={<SellerMessages />} />
-              <Route path="messages/:id" element={<SellerMessageThread />} />
+            <Route element={<BuyerOutlet />}>
+              <Route index element={<MyOrders />} />
+              <Route path=":id" element={<OrderDetails />} />
             </Route>
           </Route>
+          <Route path="shipping" element={<AccountLayout />}>
+            <Route element={<BuyerOutlet />}>
+              <Route index element={<Shipping />} />
+            </Route>
+          </Route>
+          <Route path="wallet" element={<BuyerRoute><Wallet /></BuyerRoute>} />
+          <Route path="favorites" element={<Favorites />} />
+        </Route>
+        {/* Dedicated Seller Center — a genuinely separate application shell
+            (its own sidebar + header), OUTSIDE the customer Layout so the
+            marketplace navbar/search/cart/wishlist/footer never render here.
+            The same top-level architectural pattern the Admin Dashboard uses. */}
+        <Route path="/seller" element={<SellerCenterLayout />}>
+          <Route index element={<SellerOverview />} />
+          <Route path="products" element={<SellerProducts />} />
+          <Route path="products/new" element={<SellerProductForm scope="seller" />} />
+          <Route path="products/:id/edit" element={<SellerProductForm scope="seller" />} />
+          <Route path="products/inventory" element={<SellerInventory />} />
+          <Route path="orders" element={<RedirectToSellerOrdersRequests />} />
+          <Route path="orders/requests" element={<SellerOrderRequests />} />
+          <Route path="orders/:id" element={<SellerOrderDetail />} />
+          <Route path="orders/confirmed" element={<SellerConfirmedOrders />} />
+          <Route path="messages" element={<SellerMessages />} />
+          <Route path="messages/:id" element={<SellerMessageThread />} />
+          <Route path="notifications" element={<SellerNotifications />} />
+          <Route path="shop" element={<SellerStore />} />
+          <Route path="store" element={<SellerStore />} />
+          <Route path="shop/logo" element={<SellerShopLogo />} />
+          <Route path="shop/banner" element={<SellerShopBanner />} />
+          <Route path="shop/settings" element={<SellerShopSettings />} />
+          <Route path="sales" element={<SellerSales />} />
+          <Route path="payments" element={<SellerPayments />} />
+          <Route path="settings" element={<SellerSettings />} />
         </Route>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
@@ -116,6 +154,7 @@ function App() {
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="wallets" element={<AdminWallets />} />
           <Route path="deposits" element={<AdminDeposits />} />
+          <Route path="support" element={<AdminSupport />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>

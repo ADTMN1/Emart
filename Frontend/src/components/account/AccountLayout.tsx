@@ -3,24 +3,21 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Bell,
   ChevronRight,
-  CreditCard,
   FileText,
   Gift,
   Headphones,
   Home as HomeIcon,
   LogOut,
-  MapPin,
   Package,
   Store,
   Truck,
   User,
-  Wallet as WalletIcon,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
-import { api } from '@/lib/api'
+import { getSellerStatus, sellerStatusIsCached } from '@/lib/api'
 
 interface SellerApplicationState {
   id: string
@@ -41,7 +38,7 @@ export interface AccountOutletContext {
   sellerProfile: SellerApplicationState | null
   sellerLoading: boolean
   sellerError: string | null
-  refreshSeller: (opts?: { silent?: boolean }) => Promise<void>
+  refreshSeller: (opts?: { silent?: boolean; force?: boolean }) => Promise<void>
 }
 
 interface NavItem {
@@ -61,28 +58,7 @@ const navItems: NavItem[] = [
     match: (p) => p === '/account' || p.startsWith('/account/overview'),
   },
   { key: 'orders', label: 'My Orders', icon: Package, path: '/orders', match: (p) => p.startsWith('/orders') },
-  {
-    key: 'wallet',
-    label: 'My Wallet',
-    icon: WalletIcon,
-    path: '/account/wallet',
-    match: (p) => p.startsWith('/account/wallet'),
-  },
   { key: 'shipping', label: 'Shipments', icon: Truck, path: '/shipping', match: (p) => p.startsWith('/shipping') },
-  {
-    key: 'addresses',
-    label: 'Addresses',
-    icon: MapPin,
-    path: '/account/addresses',
-    match: (p) => p.startsWith('/account/addresses'),
-  },
-  {
-    key: 'payments',
-    label: 'Payment Methods',
-    icon: CreditCard,
-    path: '/account/payments',
-    match: (p) => p.startsWith('/account/payments'),
-  },
   {
     key: 'notifications',
     label: 'Notifications',
@@ -108,11 +84,12 @@ const navItems: NavItem[] = [
 ]
 
 /**
- * Persistent Account/Store shell. One sidebar shared by every Account page,
- * My Orders, Warehouse, Shipments, Wallet, and the /seller Store area — the
- * page only swaps the main content column. The seller slot keeps the red
- * accent and derives its label ("Become a Seller" / "Seller Application" /
- * "Store") from the real backend application status.
+ * Persistent Account shell. One sidebar shared by every Account page, My
+ * Orders, Warehouse, Shipments and Wallet — the page only swaps the main
+ * content column. The seller slot keeps the red accent and derives its label
+ * ("Become a Seller" / "Seller Application" / "Seller Center") from the real
+ * backend application status; an active seller is sent on to the dedicated
+ * Seller Center rather than kept on the customer account pages.
  */
 export const AccountLayout: React.FC = () => {
   const { user, logout } = useAuth()
@@ -126,27 +103,22 @@ export const AccountLayout: React.FC = () => {
   // no longer trigger seller resources they don't need.
   const [sellerApp, setSellerApp] = React.useState<SellerApplicationState | null>(null)
   const [sellerProfile, setSellerProfile] = React.useState<SellerApplicationState | null>(null)
-  const [sellerLoading, setSellerLoading] = React.useState(true)
+  const [sellerLoading, setSellerLoading] = React.useState(() => !sellerStatusIsCached())
   const [sellerError, setSellerError] = React.useState<string | null>(null)
 
   const isSellerArea = path.startsWith('/account/seller') || path.startsWith('/seller')
 
-  const refreshSeller = React.useCallback(async (opts?: { silent?: boolean }) => {
+  const refreshSeller = React.useCallback(async (opts?: { silent?: boolean; force?: boolean }) => {
     try {
-      // A silent refresh (e.g. from the window-focus listener) must NOT toggle
-      // the full-page sellerLoading state, otherwise it unmounts the current
-      // seller application form and tears down the native file input mid-pick.
-      if (!opts?.silent) setSellerLoading(true)
+      // Skip the spinner when a fresh seller-status result is already cached
+      // (e.g. login fetched it moments ago) — the shared lookup resolves fast.
+      const wasCached = sellerStatusIsCached()
+      if (!opts?.silent && !wasCached) setSellerLoading(true)
 
-      // Fetch the application and profile independently. A failure on either
-      // request must never erase the other's successful result, and a failed
-      // request must NEVER be mistaken for "this user has no seller account" —
-      // that state only originates from a successful 200 response with
-      // data: null. Last-known-good values are preserved on failure.
-      const [appResult, profileResult] = await Promise.allSettled([
-        api.get<SellerApplicationState | null>('/seller/application'),
-        api.get<SellerApplicationState | null>('/seller/profile'),
-      ])
+      // Shared, deduped, briefly-cached seller-status lookup — same source the
+      // login redirect decision and the Seller Center layout consume, so the
+      // /account/seller page never issues a duplicate pair of requests.
+      const { profile: profileResult, application: appResult } = await getSellerStatus({ force: opts?.force })
 
       if (import.meta.env.DEV) {
         const summarize = (r: PromiseSettledResult<SellerApplicationState | null>) =>
@@ -195,7 +167,7 @@ export const AccountLayout: React.FC = () => {
   React.useEffect(() => {
     if (!isSellerArea) return
     const onFocus = () => {
-      refreshSeller({ silent: true })
+      refreshSeller({ silent: true, force: true })
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
@@ -212,7 +184,7 @@ export const AccountLayout: React.FC = () => {
     else if (path.startsWith('/account/payments')) acc.push({ label: 'Payment Methods' })
     else if (path.startsWith('/account/notifications')) acc.push({ label: 'Notifications' })
     else if (path.startsWith('/account/usdc-policy')) acc.push({ label: 'USDC Policy' })
-    else if (path.startsWith('/account/seller')) acc.push({ label: sellerActive ? 'Store' : 'Seller' })
+    else if (path.startsWith('/account/seller')) acc.push({ label: sellerActive ? 'Seller Center' : 'Seller' })
     else if (path.startsWith('/account/support')) acc.push({ label: 'Support & FAQ' })
     else if (path.startsWith('/orders')) {
       acc.push({ label: 'My Orders', to: '/orders' })
@@ -287,11 +259,12 @@ export const AccountLayout: React.FC = () => {
                 {navItems.map((n) => {
                   const Icon = n.icon
                   const isSellerItem = n.key === 'seller'
-                  // Approved/suspended: "Store" is the red-accented deep link
-                  // into the seller area; otherwise it stays an Account tab.
+                  // Approved/suspended: "Seller Center" is the red-accented deep
+                  // link into the dedicated Seller Center; otherwise it stays an
+                  // Account tab (apply/application status).
                   const label = isSellerItem
                     ? sellerActive
-                      ? 'Store'
+                      ? 'Seller Center'
                       : sellerApp?.status === 'PENDING'
                         ? 'Seller Application'
                         : 'Become a Seller'

@@ -7,6 +7,7 @@ import { notificationApi, type NotificationItem } from '@/lib/api';
 import {
   notificationsChanged,
   formatRelativeTime,
+  notificationTargetPath,
 } from '@/components/admin/AdminNotificationBell';
 import { cn } from '@/lib/utils';
 
@@ -40,11 +41,7 @@ export const AdminNotifications: React.FC = () => {
     fetchPage(page);
   }, [fetchPage, page]);
 
-  const openPath = (n: NotificationItem) => {
-    if (n.conversationId && n.orderId) return `/admin/orders/${n.orderId}/messages`;
-    if (n.orderId) return `/admin/orders/${n.orderId}`;
-    return null;
-  };
+  const openPath = notificationTargetPath;
 
   const handleOpenItem = async (n: NotificationItem) => {
     setMarking(n.id);
@@ -118,7 +115,12 @@ export const AdminNotifications: React.FC = () => {
           ) : (
             <div className="divide-y divide-border">
               {items.map((n) => {
-                const Icon = n.type === 'MESSAGE' ? MessageSquare : ShoppingBag;
+                // Both message flavours are message threads; SUPPORT_MESSAGE gets
+                // its own accent so the support queue is distinguishable at a
+                // glance in the list.
+                const isMessage = n.type === 'MESSAGE' || n.type === 'SUPPORT_MESSAGE';
+                const isSupport = n.type === 'SUPPORT_MESSAGE';
+                const Icon = isMessage ? MessageSquare : ShoppingBag;
                 return (
                   <button
                     key={n.id}
@@ -132,9 +134,10 @@ export const AdminNotifications: React.FC = () => {
                     <span
                       className={cn(
                         'mt-0.5 h-10 w-10 rounded-xl flex items-center justify-center shrink-0',
-                        n.type === 'MESSAGE'
+                        isMessage
                           ? 'bg-destructive/10 text-destructive'
                           : 'bg-primary/10 text-primary',
+                        isSupport && 'bg-accent/20 text-accent-foreground',
                       )}
                     >
                       <Icon className="h-5 w-5" />

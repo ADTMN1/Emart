@@ -39,8 +39,8 @@ export const errorHandler = (
       return sendError(res, 'Requested resource not found or invalid ID format', 404);
     }
 
-    if (code === 'P1001' || code === 'P1010' || code === 'P1002' || code === 'P2024') {
-      return sendError(res, 'Database connection failed. Check your DATABASE_URL and Supabase project status.', 503);
+    if (code === 'P1001' || code === 'P1010' || code === 'P1002' || code === 'P2024' || code === 'P1008') {
+      return sendError(res, 'Database connection failed. Check your DATABASE_URL and Supabase status.', 503);
     }
 
     console.error('Prisma Known Error:', code, err.message);

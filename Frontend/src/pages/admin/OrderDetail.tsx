@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   XCircle,
   MessageSquare,
+  Send,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -24,7 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { api } from '@/lib/api';
+import { api, messageApi } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 
 interface TrackingEvent {
@@ -189,10 +190,21 @@ const shipmentStatusVariant = (status: string): 'warning' | 'info' | 'primary' |
   return map[status] || 'default';
 };
 
+const CARRIER_OPTIONS = [
+  'DHL Express',
+  'FedEx',
+  'UPS',
+  'EMS',
+  'USPS',
+  'TNT',
+  'Aramex',
+  'DB Schenker',
+  'Other',
+] as const;
+
 const emptyShipmentForm = {
   carrier: '',
-  trackingNumber: '',
-  shippingCost: '',
+  trackingNumber: '', // Auto-generated, shown for reference
   estimatedDelivery: '',
   status: 'PENDING',
 };
@@ -202,12 +214,24 @@ export const AdminOrderDetail: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [order, setOrder] = React.useState<OrderDetail | null>(null);
+const [order, setOrder] = React.useState<OrderDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [updating, setUpdating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Shipment modals: which one is open + shared busy flag.
+  const sendingSellerRef = React.useRef<string | null>(null);
+  const [sendingSeller, setSendingSeller] = React.useState<string | null>(null);
+  /**
+   * Order/seller pairs already dispatched in this session. The backend rejects a
+   * repeat send with 409, so this only mirrors that truth for the UI — the
+   * authoritative guard is the server-side idempotency check.
+   */
+  const [sentToSeller, setSentToSeller] = React.useState<Set<string>>(new Set());
+  const sellerRequestKey = React.useCallback(
+    (orderId: string, sellerProfileId: string) => `${orderId}:${sellerProfileId}`,
+    [],
+  );
+
   const [shipmentModal, setShipmentModal] = React.useState<'create' | 'edit' | 'status' | 'event' | null>(null);
   const [submittingShipment, setSubmittingShipment] = React.useState(false);
   const [shipmentForm, setShipmentForm] = React.useState(emptyShipmentForm);
@@ -276,7 +300,6 @@ export const AdminOrderDetail: React.FC = () => {
     setShipmentForm({
       carrier: s.carrier,
       trackingNumber: s.trackingNumber,
-      shippingCost: s.shippingCost != null ? String(s.shippingCost) : '',
       estimatedDelivery: s.estimatedDelivery ? new Date(s.estimatedDelivery).toISOString().slice(0, 10) : '',
       status: s.status,
     });
@@ -323,10 +346,15 @@ export const AdminOrderDetail: React.FC = () => {
 
     const payload: Record<string, unknown> = {
       carrier: shipmentForm.carrier.trim(),
-      trackingNumber: shipmentForm.trackingNumber.trim(),
-      shippingCost: shipmentForm.shippingCost === '' ? 0 : Number(shipmentForm.shippingCost),
       estimatedDelivery: shipmentForm.estimatedDelivery || null,
     };
+
+    // Only include trackingNumber on edit (create auto-generates)
+    if (shipmentModal === 'edit' && shipmentForm.trackingNumber) {
+      payload.trackingNumber = shipmentForm.trackingNumber.trim();
+    }
+
+    // shippingCost is auto-calculated on backend, not sent from frontend
 
     if (shipmentModal === 'create') {
       payload.status = shipmentForm.status;
@@ -480,14 +508,75 @@ export const AdminOrderDetail: React.FC = () => {
           {order.status.replace(/_/g, ' ')}
         </Badge>
         {(order.sellers?.length ?? 0) >= 1 && (
-          <Link
-            to={`/admin/orders/${order.id}/messages`}
-            aria-label={order.sellers!.length === 1 ? `Message ${order.sellers![0].storeName}` : 'Message sellers'}
-          >
-            <Button variant="destructive" size="sm" leftIcon={<MessageSquare className="h-4 w-4" />}>
-              Message Seller{order.sellers!.length > 1 ? 's' : ''}
+          <>
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={
+                sentToSeller.has(sellerRequestKey(order.id, order.sellers![0].id)) ? (
+                  <CheckCircle2 className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )
+              }
+              onClick={async () => {
+                // Prevent multiple clicks using ref (immediate check)
+                if (sendingSellerRef.current === order.id) return;
+
+                const firstSeller = order.sellers![0];
+                const requestKey = sellerRequestKey(order.id, firstSeller.id);
+                if (sentToSeller.has(requestKey)) {
+                  toast({
+                    variant: 'info',
+                    title: 'Already sent',
+                    description: `Order ${order.orderNumber} has already been sent to ${firstSeller.storeName}.`,
+                  });
+                  return;
+                }
+
+                try {
+                  // Send order to seller via new endpoint
+                  sendingSellerRef.current = order.id;
+                  setSendingSeller(order.id);
+                  await api.post(`/admin/orders/${order.id}/send-to-seller`, { sellerId: firstSeller.id });
+                  setSentToSeller((prev) => new Set(prev).add(requestKey));
+                  toast({ variant: 'success', title: 'Order sent to seller', description: `Order ${order.orderNumber} has been sent to ${firstSeller.storeName} for fulfillment.` });
+                } catch (err: any) {
+                  // 409 means a prior send already exists server-side — treat it
+                  // as fulfilled rather than a failure so the button stays off.
+                  if (err?.status === 409) {
+                    setSentToSeller((prev) => new Set(prev).add(requestKey));
+                    toast({
+                      variant: 'info',
+                      title: 'Already sent',
+                      description: err.message || `Order ${order.orderNumber} has already been sent to ${firstSeller.storeName}.`,
+                    });
+                  } else {
+                    toast({ variant: 'error', title: 'Failed to send', description: err.message || 'Could not send order to seller.' });
+                  }
+                } finally {
+                  sendingSellerRef.current = null;
+                  setSendingSeller(null);
+                }
+              }}
+              isLoading={sendingSeller === order.id}
+              disabled={sentToSeller.has(sellerRequestKey(order.id, order.sellers![0].id))}
+            >
+              {sendingSeller === order.id
+                ? 'Sending...'
+                : sentToSeller.has(sellerRequestKey(order.id, order.sellers![0].id))
+                  ? 'Sent to Seller'
+                  : 'Send to Seller'}
             </Button>
-          </Link>
+            <Link
+              to={`/admin/orders/${order.id}/messages`}
+              aria-label={order.sellers!.length === 1 ? `Message ${order.sellers![0].storeName}` : 'Message sellers'}
+            >
+              <Button variant="destructive" size="sm" leftIcon={<MessageSquare className="h-4 w-4" />}>
+                Message Seller{order.sellers!.length > 1 ? 's' : ''}
+              </Button>
+            </Link>
+          </>
         )}
       </div>
 
@@ -873,44 +962,40 @@ export const AdminOrderDetail: React.FC = () => {
             <label className="block text-sm font-medium mb-1.5">
               Carrier <span className="text-destructive">*</span>
             </label>
-            <Input
+            <Select
               value={shipmentForm.carrier}
               onChange={(e) => setShipmentForm({ ...shipmentForm, carrier: e.target.value })}
-              placeholder="e.g. DHL Express"
               required
-              minLength={2}
-              maxLength={80}
-            />
+            >
+              <option value="">Select carrier…</option>
+              {CARRIER_OPTIONS.map((carrier) => (
+                <option key={carrier} value={carrier}>{carrier}</option>
+              ))}
+            </Select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1.5">
-              Tracking Number <span className="text-destructive">*</span>
-            </label>
-            <Input
-              value={shipmentForm.trackingNumber}
-              onChange={(e) => setShipmentForm({ ...shipmentForm, trackingNumber: e.target.value })}
-              placeholder="e.g. DHL1234567890"
-              required
-              minLength={4}
-              maxLength={100}
-              className="font-mono"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+          {shipmentModal === 'create' && (
             <div>
               <label className="block text-sm font-medium mb-1.5">
-                Shipping Cost (USD) <span className="text-destructive">*</span>
+                Tracking Number <span className="text-muted-foreground">(Auto-generated)</span>
               </label>
               <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={shipmentForm.shippingCost}
-                onChange={(e) => setShipmentForm({ ...shipmentForm, shippingCost: e.target.value })}
-                placeholder="0.00"
-                required
+                value={shipmentForm.trackingNumber || 'Will be generated on create'}
+                disabled
+                className="bg-muted/50 font-mono"
               />
             </div>
+          )}
+          {shipmentModal === 'edit' && shipmentForm.trackingNumber && (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Tracking Number</label>
+              <Input
+                value={shipmentForm.trackingNumber}
+                disabled
+                className="bg-muted/50 font-mono"
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Estimated Delivery</label>
               <Input
