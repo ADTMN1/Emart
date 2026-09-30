@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../types';
 import sellerService from '../services/seller.service';
 import sellerDocumentStorageService from '../services/seller-document-storage.service';
+import sellerDocumentController from './seller-document.controller';
 import { sendSuccess } from '../utils/response';
 import { ValidationError } from '../utils/errors';
 
@@ -40,17 +41,37 @@ class AdminSellerController {
   /**
    * GET /api/v1/admin/sellers/applications/:id/document
    *
-   * Returns a short-lived signed URL for the applicant's identity document.
-   * ADMIN-only (router gate); the storage path is never returned to clients.
+   * Returns a short-lived signed URL that streams the applicant's identity
+   * document through this backend. ADMIN-only (router gate); neither the
+   * storage path nor the file itself is ever exposed publicly.
    */
   async getApplicationDocument(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const storagePath = await sellerService.getApplicationDocumentPath(req.params.id);
-      const url = await sellerDocumentStorageService.createSignedDocumentUrl(storagePath);
-      sendSuccess(res, { url, expiresIn: 300 });
+      const { path } = await sellerService.getApplicationDocument(req.params.id);
+      const url = await sellerDocumentStorageService.createSignedDocumentUrl(path);
+      sendSuccess(res, {
+        url,
+        expiresIn: sellerDocumentStorageService.signedUrlTtlSeconds,
+      });
     } catch (error) {
       next(error);
     }
+  }
+
+  /**
+   * GET /api/v1/admin/sellers/applications/:id/document/content
+   *
+   * Streams the applicant's identity document directly, for API clients that
+   * authenticate with a Bearer token instead of following the signed URL.
+   * Authorization is enforced by the admin router gate; errors are handled by
+   * the shared error middleware.
+   */
+  getApplicationDocumentContent(
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    return sellerDocumentController.streamApplicationDocument(req, res, next);
   }
 
   /** POST /api/v1/admin/sellers/applications/:id/approve */

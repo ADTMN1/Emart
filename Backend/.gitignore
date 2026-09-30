@@ -35,3 +35,7 @@ Thumbs.db
 # the database schema across environments; local *.db files stay ignored)
 *.db
 *.db-journal
+
+# Local development storage tree (production uses /var/lib/emart/storage,
+# which is provisioned outside the repository).
+storage/

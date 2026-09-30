@@ -40,7 +40,7 @@ export const errorHandler = (
     }
 
     if (code === 'P1001' || code === 'P1010' || code === 'P1002' || code === 'P2024' || code === 'P1008') {
-      return sendError(res, 'Database connection failed. Check your DATABASE_URL and Supabase status.', 503);
+      return sendError(res, 'Database connection failed. Check your DATABASE_URL and database status.', 503);
     }
 
     console.error('Prisma Known Error:', code, err.message);
@@ -51,7 +51,7 @@ export const errorHandler = (
     console.error('Prisma Initialization Error:', err.message);
     return sendError(
       res,
-      'Database connection failed. Check your DATABASE_URL and Supabase status.',
+      'Database connection failed. Check your DATABASE_URL and database status.',
       503
     );
   }

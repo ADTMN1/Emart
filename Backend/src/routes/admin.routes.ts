@@ -154,6 +154,14 @@ router.get(
   getSellerApplicationValidation,
   adminSellerController.getApplicationDocument.bind(adminSellerController)
 );
+// Direct authenticated stream of the same document, for API clients that do
+// not follow the short-lived signed URL. Registered after the route above so
+// "document" is never captured as the `:id`/sub-path of another match.
+router.get(
+  '/sellers/applications/:id/document/content',
+  getSellerApplicationValidation,
+  adminSellerController.getApplicationDocumentContent.bind(adminSellerController)
+);
 router.post(
   '/sellers/applications/:id/approve',
   approveSellerApplicationValidation,

@@ -4,7 +4,10 @@ import morgan from 'morgan';
 import compression from 'compression';
 import config from './config/env';
 import routes from './routes';
+import uploadsRoutes from './routes/uploads.routes';
 import prisma from './config/database';
+import localFileStorage from './services/local-file-storage.service';
+import { storageConfig } from './config/storage';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -29,6 +32,11 @@ app.get('/health', async (_req, res) => {
     });
   }
 });
+
+// Public storage: the public namespaces (product images, seller shop media) are
+// served straight off disk. Mounted before the request logger and before the
+// no-store API cache policy so assets keep their long-lived immutable caching.
+app.use(uploadsRoutes);
 
 // Middleware
 app.use(cors({ origin: config.cors.origin, credentials: true }));
@@ -75,13 +83,32 @@ async function startServer() {
     const connectStart = Date.now();
     await prisma.$connect();
     const connectLatency = Date.now() - connectStart;
-    console.log(`[DB] Connected to Supabase PostgreSQL (${connectLatency}ms)`);
+    console.log(`[DB] Connected to PostgreSQL (${connectLatency}ms)`);
   } catch (err: any) {
     console.error('[DB] FATAL: Failed to establish database connection on startup');
     console.error(`[DB] Error: ${err.message?.substring(0, 200)}`);
     if (config.env !== 'production') {
       console.warn('[DB] Continuing in dev mode — requests may fail until DB is reachable');
     }
+  }
+
+  // Create and verify the storage namespaces up front. A missing or
+  // read-only storage root must fail the boot loudly instead of surfacing as
+  // a confusing 400 on the first upload.
+  try {
+    const storageStart = Date.now();
+    await localFileStorage.ensureReady();
+    console.log(
+      `[Storage] Local storage ready at ${storageConfig.root} (${Date.now() - storageStart}ms)`,
+    );
+  } catch (err: any) {
+    console.error('[Storage] FATAL: Failed to initialize the local storage root');
+    console.error(`[Storage] Error: ${err?.message?.substring(0, 300)}`);
+    if (config.env === 'production') {
+      console.error('[Storage] Refusing to serve traffic with an unusable storage root.');
+      process.exit(1);
+    }
+    console.warn('[Storage] Continuing in dev mode — uploads will fail until storage is writable');
   }
 
   const server = app.listen(PORT, () => {
@@ -94,6 +121,7 @@ async function startServer() {
 ║   Port: ${PORT.toString().padEnd(31)}║
 ║   API Version: ${config.apiVersion.padEnd(24)}║
 ║   CORS Origin: ${config.cors.origin.join(', ').padEnd(24)}║
+║   Storage Root: ${storageConfig.root.padEnd(23)}║
 ║                                        ║
 ║   API Base: http://localhost:${PORT}/api/${config.apiVersion}  ║
 ║   Health:   http://localhost:${PORT}/health          ║

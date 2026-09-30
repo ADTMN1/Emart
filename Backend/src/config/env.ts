@@ -49,9 +49,29 @@ export const config = {
     fromName: (process.env.EMAIL_FROM_NAME || 'EMART').trim(),
   },
 
-  supabase: {
-    url: process.env.SUPABASE_URL || '',
-    secretKey: process.env.SUPABASE_SECRET_KEY || '',
+  /**
+   * Local filesystem storage (replaces Supabase Storage).
+   *
+   * `root` is the absolute directory that holds every namespace
+   * (products/, shop-media/, seller-documents/). `publicBaseUrl` is the origin
+   * that publicly serves `<publicPathPrefix>` — normally the public origin of
+   * this API (Nginx terminates TLS and proxies here). It is only used to build
+   * public asset URLs and the identity-document download URL; when empty,
+   * root-relative URLs are emitted for same-origin deployments.
+   */
+  storage: {
+    root: (process.env.STORAGE_ROOT || '/var/lib/emart/storage').trim(),
+    publicPathPrefix: (process.env.STORAGE_PUBLIC_PATH_PREFIX || '/uploads').trim(),
+    publicBaseUrl: (process.env.STORAGE_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, ''),
+    /** Lifetime of a minted identity-document download token, in seconds. */
+    documentUrlTtlSeconds: parseInt(process.env.STORAGE_DOCUMENT_URL_TTL || '300', 10),
+  },
+
+  cj: {
+    apiKey: process.env.CJ_API_KEY || '',
+    accessToken: process.env.CJ_ACCESS_TOKEN || '',
+    refreshToken: process.env.CJ_REFRESH_TOKEN || '',
+    baseUrl: 'https://developers.cjdropshipping.com/api2.0/v1',
   },
 };
 

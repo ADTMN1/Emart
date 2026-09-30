@@ -870,14 +870,14 @@ export class SellerService {
   }
 
   /**
-   * ADMIN — resolve the private storage path for an application's identity
-   * document so the controller can mint a short-lived signed URL. The path is
-   * never returned to the client.
+   * ADMIN — resolve the private storage path (and its MIME type) for an
+   * application's identity document so the controller can mint a short-lived
+   * download link or stream the file. The path is never returned to the client.
    */
-  async getApplicationDocumentPath(applicationId: string): Promise<string> {
+  async getApplicationDocument(applicationId: string): Promise<{ path: string; mimetype: string | null }> {
     const application = await this.prisma.sellerApplication.findUnique({
       where: { id: applicationId },
-      select: { idDocumentPath: true },
+      select: { idDocumentPath: true, idDocumentMimeType: true },
     });
     if (!application) {
       throw new NotFoundError('Seller application not found.');
@@ -885,7 +885,7 @@ export class SellerService {
     if (!application.idDocumentPath) {
       throw new NotFoundError('This application has no identity document on file.');
     }
-    return application.idDocumentPath;
+    return { path: application.idDocumentPath, mimetype: application.idDocumentMimeType ?? null };
   }
 
   /** Shared transition validation. */

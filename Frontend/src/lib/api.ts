@@ -1090,3 +1090,106 @@ export const notificationApi = {
 
   markAllRead: () => api.patch<{ updated: number }>('/notifications/read-all'),
 };
+
+// -------------------------------------------------------------------
+// CJ Supplier Catalog API (Admin only)
+// -------------------------------------------------------------------
+
+export interface CJProductListItem {
+  id: string;
+  name: string;
+  image: string;
+  price: number;
+  currency: string;
+  categoryId: number;
+  categoryName: string;
+  warehouse: string;
+  shippingTime: string;
+  stock: number;
+}
+
+export interface CJProductVariant {
+  vid: string;
+  sku: string;
+  name: string;
+  price: number;
+  stock: number;
+  attrs: Array<{
+    attrId: number;
+    attrValueId: number;
+    attrName: string;
+    attrValue: string;
+  }>;
+}
+
+export interface CJProductDetail {
+  id: string;
+  name: string;
+  description: string;
+  image: string;
+  images: string[];
+  price: number;
+  currency: string;
+  categoryId: number;
+  categoryName: string;
+  categoryPath: string;
+  warehouse: string;
+  shippingTime: string;
+  stock: number;
+  videoUrl?: string;
+  attributes: any[];
+  variants: CJProductVariant[];
+}
+
+export interface CJPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export const cjSupplierApi = {
+  searchProducts: (params: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+    categoryId?: number;
+    warehouse?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.keyword) qs.set('keyword', params.keyword);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.pageSize) qs.set('pageSize', String(params.pageSize));
+    if (params.categoryId) qs.set('categoryId', String(params.categoryId));
+    if (params.warehouse) qs.set('warehouse', params.warehouse);
+    const query = qs.toString();
+    return api.get<{
+      products: CJProductListItem[];
+      pagination: CJPagination;
+    }>(`/admin/suppliers/cj/products${query ? `?${query}` : ''}`);
+  },
+
+  getProductDetail: (productId: string) =>
+    api.get<CJProductDetail>(`/admin/suppliers/cj/products/${productId}`),
+
+  importProduct: (productId: string, options?: { categoryId?: string; priceMarkupPercent?: number }) =>
+    api.post<{
+      id: string;
+      name: string;
+      sku: string;
+      price: number;
+      estimatedPriceUsd: number;
+      stock: number;
+      isAvailable: boolean;
+      sourceType: string;
+      externalProductId: string;
+    }>(`/admin/suppliers/cj/products/${productId}/import`, options || {}),
+
+  getCategories: () =>
+    api.get<Array<{
+      categoryId: number;
+      categoryName: string;
+      parentId: number;
+      level: number;
+    }>>('/admin/suppliers/cj/categories'),
+};

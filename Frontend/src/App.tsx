@@ -58,6 +58,7 @@ const AdminSellerApplications = lazy(() => import('./pages/admin/SellerApplicati
 const AdminOrderMessages = lazy(() => import('./pages/admin/OrderMessages').then((module) => ({ default: module.AdminOrderMessages })))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications').then((module) => ({ default: module.AdminNotifications })))
 const AdminSupport = lazy(() => import('./pages/admin/Support').then((module) => ({ default: module.AdminSupport })))
+const SupplierCatalog = lazy(() => import('./pages/admin/SupplierCatalog').then((module) => ({ default: module.SupplierCatalog })))
 const SellerMessages = lazy(() => import('./pages/seller/SellerMessages').then((module) => ({ default: module.SellerMessages })))
 const SellerMessageThread = lazy(() => import('./pages/seller/SellerMessageThread').then((module) => ({ default: module.SellerMessageThread })))
 const SellerNotifications = lazy(() => import('./pages/seller/SellerNotifications').then((module) => ({ default: module.SellerNotifications })))
@@ -155,6 +156,7 @@ function App() {
           <Route path="wallets" element={<AdminWallets />} />
           <Route path="deposits" element={<AdminDeposits />} />
           <Route path="support" element={<AdminSupport />} />
+          <Route path="suppliers/cj" element={<SupplierCatalog />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>

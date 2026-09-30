@@ -117,6 +117,14 @@ model Product {
   ratingAgg                Float            @default(0)
   /// Number of distinct user ratings backing ratingAgg.
   ratingCount              Int              @default(0)
+  /// Source type: SELLER (marketplace/seller) or CJ (CJdropshipping supplier).
+  sourceType               SourceType       @default(SELLER)
+  /// External CJ product ID (for CJ-sourced products).
+  externalProductId        String?
+  /// External CJ supplier ID (for CJ-sourced products).
+  supplierId               String?
+  /// Raw CJ product/variant data for reference (JSON).
+  supplierData             Json?
 
   @@index([categoryId])
   @@index([categoryId, isAvailable, createdAt])
@@ -133,6 +141,8 @@ model Product {
   @@index([estimatedPriceUsd])
   @@index([createdAt])
   @@index([name])
+  @@index([sourceType])
+  @@unique([externalProductId])
   @@map("products")
 }
 
@@ -496,6 +506,11 @@ enum UserRole {
   /// application/profile status remains the authority for seller access.
   SELLER
   ADMIN
+}
+
+enum SourceType {
+  SELLER
+  CJ
 }
 
 enum ProductCondition {

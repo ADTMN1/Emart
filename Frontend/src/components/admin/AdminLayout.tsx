@@ -43,6 +43,7 @@ const navItems: NavItem[] = [
   { name: 'Customers', path: '/admin/customers', icon: Users },
   { name: 'Support', path: '/admin/support', icon: Headphones },
   { name: 'Seller Applications', path: '/admin/sellers', icon: Store },
+  { name: 'Supplier Catalog', path: '/admin/suppliers/cj', icon: Truck },
   { name: 'Wallets', path: '/admin/wallets', icon: WalletCards },
   { name: 'Deposits', path: '/admin/deposits', icon: ReceiptText },
   { name: 'Settings', path: '/admin/settings', icon: Settings },

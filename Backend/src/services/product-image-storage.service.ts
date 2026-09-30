@@ -1,9 +1,10 @@
-import supabase from '../config/supabase';
 import prisma from '../config/database';
+import { STORAGE_NAMESPACE, publicFileUrl } from '../config/storage';
+import localFileStorage, { StorageError } from './local-file-storage.service';
 import { BadRequestError, NotFoundError } from '../utils/errors';
 import path from 'path';
 
-const BUCKET_NAME = 'products';
+const NAMESPACE = STORAGE_NAMESPACE.products;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'];
 const ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.avif'];
@@ -16,7 +17,20 @@ interface UploadResult {
   sortOrder: number;
 }
 
+/**
+ * Product image storage on the local filesystem.
+ *
+ * The database keeps the *relative* storage path (`<productId>/<ts>-<name>.jpg`)
+ * plus the public URL derived from configuration, so moving the storage root
+ * never requires a data migration. Both admin and seller products share this
+ * single pipeline.
+ */
 export class ProductImageStorageService {
+  /**
+   * @param prismaClient Injectable for tests; defaults to the shared client.
+   */
+  constructor(private readonly prismaClient: typeof prisma = prisma) {}
+
   /**
    * Sanitize filename to prevent path traversal attacks
    */
@@ -27,7 +41,7 @@ export class ProductImageStorageService {
       .replace(/\.{2,}/g, '.')
       .replace(/-{2,}/g, '-')
       .toLowerCase();
-    
+
     // Ensure filename doesn't start with a dot or dash
     return sanitized.replace(/^[.-]+/, '');
   }
@@ -74,38 +88,7 @@ export class ProductImageStorageService {
   }
 
   /**
-   * Retry helper with exponential backoff
-   */
-  private async retryWithBackoff<T>(
-    operation: () => Promise<T>,
-    maxRetries: number = 3,
-    initialDelayMs: number = 1000
-  ): Promise<T> {
-    let lastError: any;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error: any) {
-        lastError = error;
-        
-        if (attempt === maxRetries) {
-          break;
-        }
-
-        const delay = initialDelayMs * Math.pow(2, attempt - 1);
-        console.log(`Storage upload attempt ${attempt} failed, retrying in ${delay}ms...`);
-        console.error('Error:', error.message || error);
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
-    throw lastError;
-  }
-
-  /**
-   * Upload product image to Supabase Storage and save metadata to database
+   * Upload product image to local storage and save metadata to database
    */
   async uploadProductImage(
     productId: string,
@@ -114,7 +97,7 @@ export class ProductImageStorageService {
     mimetype: string
   ): Promise<UploadResult> {
     // Validate product exists
-    const product = await prisma.product.findUnique({
+    const product = await this.prismaClient.product.findUnique({
       where: { id: productId },
       select: { id: true },
     });
@@ -129,44 +112,37 @@ export class ProductImageStorageService {
     // Generate storage path
     const storagePath = this.generateStoragePath(productId, filename);
 
-    // Upload to Supabase Storage with retry logic
-    await this.retryWithBackoff(async () => {
-      const { error: uploadError } = await supabase.storage
-        .from(BUCKET_NAME)
-        .upload(storagePath, file, {
-          contentType: mimetype,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        throw new Error(`Failed to upload image: ${uploadError.message}`);
+    // Write to local storage. The file is only visible under its final name
+    // once the write has completed, so a failed upload can never be served.
+    try {
+      await localFileStorage.write(NAMESPACE, storagePath, file);
+    } catch (error) {
+      console.error('Product image storage error:', error);
+      if (error instanceof StorageError) {
+        throw new BadRequestError('Failed to store the image. Please try again.');
       }
+      throw error;
+    }
 
-      return true;
-    }, 3, 2000); // 3 retries, starting with 2s delay
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(storagePath);
+    // Public URL is derived from configuration, never hardcoded
+    const publicUrl = publicFileUrl(NAMESPACE, storagePath);
 
     try {
       // Place the new image after the current last one. Using max(sortOrder)+1
       // (instead of the row count) keeps sequences dense and collision-free
       // even after images have been deleted or reordered.
-      const last = await prisma.productImage.aggregate({
+      const last = await this.prismaClient.productImage.aggregate({
         where: { productId },
         _max: { sortOrder: true },
       });
       const nextSortOrder = (last._max.sortOrder ?? -1) + 1;
 
       // Save metadata to database
-      const productImage = await prisma.productImage.create({
+      const productImage = await this.prismaClient.productImage.create({
         data: {
           productId,
           path: storagePath,
-          url: urlData.publicUrl,
+          url: publicUrl,
           isPrimary: nextSortOrder === 0, // First image is primary by default
           sortOrder: nextSortOrder,
         },
@@ -180,25 +156,22 @@ export class ProductImageStorageService {
         sortOrder: productImage.sortOrder,
       };
     } catch (dbError) {
-      // If database save fails, clean up uploaded file
+      // If database save fails, clean up the stored file so the disk does not
+      // accumulate images that no product references.
       console.error('Database save error:', dbError);
-      
-      try {
-        await supabase.storage.from(BUCKET_NAME).remove([storagePath]);
-      } catch (cleanupError) {
-        console.error('Failed to cleanup uploaded file:', cleanupError);
-      }
+
+      await localFileStorage.remove(NAMESPACE, storagePath);
 
       throw new BadRequestError('Failed to save image metadata');
     }
   }
 
   /**
-   * Delete product image from Storage and database
+   * Delete product image from local storage and database
    */
   async deleteProductImage(productId: string, imageId: string): Promise<void> {
     // Find the image
-    const image = await prisma.productImage.findFirst({
+    const image = await this.prismaClient.productImage.findFirst({
       where: {
         id: imageId,
         productId,
@@ -209,30 +182,25 @@ export class ProductImageStorageService {
       throw new NotFoundError('Image not found');
     }
 
-    // Delete from Storage first
-    const { error: storageError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([image.path]);
-
-    if (storageError) {
-      console.error('Storage deletion error:', storageError);
-      // Continue with DB deletion even if Storage deletion fails
-    }
+    // Remove the file first. A failure here is logged by the storage layer and
+    // must not block the DB deletion, otherwise a single unremovable file
+    // would make the image undeletable forever.
+    await localFileStorage.remove(NAMESPACE, image.path);
 
     // Delete from database
-    await prisma.productImage.delete({
+    await this.prismaClient.productImage.delete({
       where: { id: imageId },
     });
 
     // If deleted image was primary, set another image as primary
     if (image.isPrimary) {
-      const nextImage = await prisma.productImage.findFirst({
+      const nextImage = await this.prismaClient.productImage.findFirst({
         where: { productId },
         orderBy: { sortOrder: 'asc' },
       });
 
       if (nextImage) {
-        await prisma.productImage.update({
+        await this.prismaClient.productImage.update({
           where: { id: nextImage.id },
           data: { isPrimary: true },
         });
@@ -244,15 +212,14 @@ export class ProductImageStorageService {
    * Get public URL for a product image
    */
   getPublicProductImageUrl(path: string): string {
-    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(path);
-    return data.publicUrl;
+    return publicFileUrl(NAMESPACE, path);
   }
 
   /**
    * Get all images for a product
    */
   async getProductImages(productId: string) {
-    return await prisma.productImage.findMany({
+    return await this.prismaClient.productImage.findMany({
       where: { productId },
       orderBy: [
         { isPrimary: 'desc' },
@@ -266,7 +233,7 @@ export class ProductImageStorageService {
    */
   async setPrimaryImage(productId: string, imageId: string): Promise<void> {
     // Verify image belongs to product
-    const image = await prisma.productImage.findFirst({
+    const image = await this.prismaClient.productImage.findFirst({
       where: {
         id: imageId,
         productId,
@@ -278,13 +245,13 @@ export class ProductImageStorageService {
     }
 
     // Remove primary flag from all product images
-    await prisma.productImage.updateMany({
+    await this.prismaClient.productImage.updateMany({
       where: { productId },
       data: { isPrimary: false },
     });
 
     // Set the new primary image
-    await prisma.productImage.update({
+    await this.prismaClient.productImage.update({
       where: { id: imageId },
       data: { isPrimary: true },
     });
@@ -295,7 +262,7 @@ export class ProductImageStorageService {
    */
   async reorderImages(productId: string, imageOrders: { id: string; sortOrder: number }[]): Promise<void> {
     // Verify all images belong to the product
-    const images = await prisma.productImage.findMany({
+    const images = await this.prismaClient.productImage.findMany({
       where: {
         productId,
         id: { in: imageOrders.map(io => io.id) },
@@ -308,9 +275,9 @@ export class ProductImageStorageService {
 
     // Update sort orders atomically so a partial failure cannot leave a
     // half-reordered sequence behind.
-    await prisma.$transaction(
+    await this.prismaClient.$transaction(
       imageOrders.map(({ id, sortOrder }) =>
-        prisma.productImage.update({
+        this.prismaClient.productImage.update({
           where: { id },
           data: { sortOrder },
         })

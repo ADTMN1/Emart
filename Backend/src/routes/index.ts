@@ -10,8 +10,10 @@ import paymentRoutes from './payment.routes';
 import adminRoutes from './admin.routes';
 import favoriteRoutes from './favorite.routes';
 import sellerRoutes from './seller.routes';
+import sellerDocumentRoutes from './seller-document.routes';
 import notificationRoutes from './notification.routes';
 import supportMessageRoutes from './supportMessage.routes';
+import cjSupplierRoutes from './cj-supplier.routes';
 
 const router = Router();
 
@@ -27,8 +29,10 @@ router.use('/payments', paymentRoutes);
 router.use('/admin', adminRoutes);
 router.use('/favorites', favoriteRoutes);
 router.use('/seller', sellerRoutes);
+router.use('/seller-documents', sellerDocumentRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/support', supportMessageRoutes);
+router.use('/admin/suppliers/cj', cjSupplierRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
