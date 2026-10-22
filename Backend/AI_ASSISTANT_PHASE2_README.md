@@ -1,13 +1,13 @@
-# EMART AI Shopping Assistant - Phase 2: Knowledge System + RAG
+# Marcari23 AI Shopping Assistant - Phase 2: Knowledge System + RAG
 
 ## Overview
 
-Phase 2 extends the EMART AI Shopping Assistant with a Knowledge Retrieval system (RAG - Retrieval-Augmented Generation). The AI now has access to comprehensive EMART documentation and provides accurate, specific answers based on official company information.
+Phase 2 extends the Marcari23 AI Shopping Assistant with a Knowledge Retrieval system (RAG - Retrieval-Augmented Generation). The AI now has access to comprehensive Marcari23 documentation and provides accurate, specific answers based on official company information.
 
 ## What's New in Phase 2
 
 ### Knowledge Base
-- 10 structured markdown documents covering all EMART operations
+- 10 structured markdown documents covering all Marcari23 operations
 - Keyword-based retrieval system
 - Automatic context injection to AI responses
 
@@ -20,8 +20,8 @@ Phase 2 extends the EMART AI Shopping Assistant with a Knowledge Retrieval syste
 
 The knowledge base includes:
 
-1. **company.md** - EMART company information and mission
-2. **how-it-works.md** - Step-by-step explanation of the EMART process
+1. **company.md** - Marcari23 company information and mission
+2. **how-it-works.md** - Step-by-step explanation of the Marcari23 process
 3. **proxy-fees.md** - Complete proxy fee structure with exact costs
 4. **domestic-shipping.md** - Japanese domestic shipping information
 5. **international-shipping.md** - International shipping methods, costs, and zones
@@ -84,7 +84,7 @@ User Answer
 **Enhanced System Instruction:**
 ```
 CRITICAL RULES:
-1. ONLY use information from the EMART Knowledge Base
+1. ONLY use information from the Marcari23 Knowledge Base
 2. DO NOT invent policies, fees, or information
 3. If knowledge base has the answer, use it
 4. If knowledge base doesn't have the answer, say so
@@ -99,12 +99,12 @@ CRITICAL RULES:
 
 ### After Phase 2 (Specific Knowledge)
 **Q:** "How much is the proxy fee for a ¥3,000 item?"  
-**A:** "For an item that costs ¥3,000, the EMART proxy fee is **¥500**. According to our fee structure, all items priced between ¥0 and ¥5,000 have a flat proxy fee of ¥500 per item."
+**A:** "For an item that costs ¥3,000, the Marcari23 proxy fee is **¥500**. According to our fee structure, all items priced between ¥0 and ¥5,000 have a flat proxy fee of ¥500 per item."
 
 ### More Examples
 
 **Q:** "How long can I store items for free?"  
-**A:** "You can store your items at the EMART warehouse for **60 days for free** from the date your first item arrives."
+**A:** "You can store your items at the Marcari23 warehouse for **60 days for free** from the date your first item arrives."
 
 **Q:** "What does photo inspection cost?"  
 **A:** "Photo inspection costs depend on the level of detail:
@@ -260,7 +260,7 @@ Current keyword search is sufficient for 10 well-structured documents.
 
 ## Next Steps (Future Phases)
 
-Phase 2 focuses on EMART knowledge. Future phases may include:
+Phase 2 focuses on Marcari23 knowledge. Future phases may include:
 - Product database integration (search actual products)
 - Order management tools (check status, modify orders)
 - Cart actions (add/remove items via chat)

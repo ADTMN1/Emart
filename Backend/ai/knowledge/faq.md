@@ -1,9 +1,9 @@
-# EMART Frequently Asked Questions (FAQ)
+# Marcari23 Frequently Asked Questions (FAQ)
 
 ## General Questions
 
-### What is EMART?
-EMART is a proxy shopping service that helps you buy products from Japanese marketplaces (Mercari, Rakuten, Yahoo! Auctions, Amazon Japan, etc.) and ships them internationally to your door.
+### What is Marcari23?
+Marcari23 is a proxy shopping service that helps you buy products from Japanese marketplaces (Mercari, Rakuten, Yahoo! Auctions, Amazon Japan, etc.) and ships them internationally to your door.
 
 ### How does proxy shopping work?
 You find an item in Japan, we buy it on your behalf using local payment methods, receive it at our warehouse, and then ship it internationally to you.
@@ -17,12 +17,12 @@ You find an item in Japan, we buy it on your behalf using local payment methods,
 - Other Japanese online stores (case-by-case)
 
 ### Do I need a Japanese address or payment method?
-No! That's the point of using EMART. We provide the Japanese address and use local payment methods.
+No! That's the point of using Marcari23. We provide the Japanese address and use local payment methods.
 
 ## Account and Registration
 
 ### Is registration free?
-Yes, creating an EMART account is completely free with no subscription fees.
+Yes, creating an Marcari23 account is completely free with no subscription fees.
 
 ### What information do I need to register?
 - Email address
@@ -34,7 +34,7 @@ Yes, you can save multiple addresses and choose which one to use for each order.
 
 ## Costs and Fees
 
-### What fees does EMART charge?
+### What fees does Marcari23 charge?
 - **Proxy fee**: ¥500 to 8% depending on item price
 - Additional optional services: Photo inspection, repackaging, etc.
 - See the Proxy Fees knowledge document for complete breakdown
@@ -48,14 +48,14 @@ You pay two types of shipping:
 No. All fees are clearly displayed in your quote before you pay.
 
 ### Do I pay customs duties?
-Yes, customs duties and taxes in your country are your responsibility. EMART cannot predict these costs as they vary by country and item.
+Yes, customs duties and taxes in your country are your responsibility. Marcari23 cannot predict these costs as they vary by country and item.
 
 ## Ordering Process
 
 ### How do I place an order?
 1. Find item on Japanese marketplace
 2. Copy the URL
-3. Paste into your EMART dashboard
+3. Paste into your Marcari23 dashboard
 4. We calculate costs and send you a quote
 5. Approve quote and pay
 6. We purchase the item
@@ -170,7 +170,7 @@ Yes. We use PCI-compliant payment processors with SSL encryption.
 ## Customer Support
 
 ### How do I contact support?
-- Email: support@emart.com
+- Email: support@marcari23emart.com
 - Live chat: Available on dashboard
 - Response time: Within 24 hours (usually faster)
 
@@ -204,18 +204,18 @@ Use the "Forgot Password" link on login page. Reset link will be sent to your re
 
 ## Special Cases
 
-### Can businesses use EMART?
+### Can businesses use Marcari23?
 Yes! We offer business accounts with:
 - Invoice payment options
 - Volume discounts
 - Dedicated account manager
-- Contact sales@emart.com
+- Contact sales@marcari23emart.com
 
 ### Do you offer wholesale purchasing?
 For bulk orders or wholesale inquiries, contact our business team.
 
-### Can I work with EMART as an affiliate?
-Yes! We have an affiliate program. Email affiliate@emart.com for details.
+### Can I work with Marcari23 as an affiliate?
+Yes! We have an affiliate program. Email affiliate@marcari23emart.com for details.
 
 ### Do you offer expedited service?
 For urgent orders, contact support. Expedited processing may be available for additional fee.
@@ -246,7 +246,7 @@ For urgent orders, contact support. Expedited processing may be available for ad
 
 If your question isn't answered here:
 1. Check our detailed knowledge documents
-2. Email support@emart.com
+2. Email support@marcari23emart.com
 3. Use live chat on your dashboard
 4. Check our blog for tips and guides
 

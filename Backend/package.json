@@ -1,7 +1,7 @@
 {
   "name": "emart-backend",
   "version": "1.0.0",
-  "description": "EMART Global Proxy Shopping Backend API",
+  "description": "Marcari23 Global Proxy Shopping Backend API",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -24,7 +24,7 @@
     "proxy-shopping",
     "api"
   ],
-  "author": "EMART",
+  "author": "Marcari23",
   "license": "MIT",
   "dependencies": {
     "@getbrevo/brevo": "^6.0.3",

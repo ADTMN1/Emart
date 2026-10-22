@@ -11,7 +11,7 @@ import {
   type ThreadMessage,
 } from '@/lib/api';
 
-/** /seller/messages/:id — the store's own conversation with EMART admin. */
+/** /seller/messages/:id — the store's own conversation with Marcari23 admin. */
 export const SellerMessageThread: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -81,7 +81,7 @@ export const SellerMessageThread: React.FC = () => {
             Order {thread.order?.orderNumber ?? 'Conversation'}
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Conversation with EMART management
+            Conversation with Marcari23 management
             {thread.order?.status ? ` · ${thread.order.status.replace(/_/g, ' ')}` : ''}
           </p>
         </div>

@@ -82,7 +82,7 @@ class CJSupplierController {
       }, 'CJ product imported successfully', 201);
     } catch (error: any) {
       if (error?.statusCode === 409) {
-        const existingId = error.message?.match(/EMART ID: ([^)]+)/)?.[1] || null;
+        const existingId = error.message?.match(/Marcari23 ID: ([^)]+)/)?.[1] || null;
         return res.status(409).json({
           success: false,
           error: error.message || 'Product already imported',

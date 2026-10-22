@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# EMART Authentication Flow Testing Script
+# Marcari23 Authentication Flow Testing Script
 # This script tests the complete authentication flow
 
 API_BASE="http://localhost:5000/api/v1"
@@ -11,7 +11,7 @@ TEST_FIRSTNAME="John"
 TEST_LASTNAME="Doe"
 
 echo "======================================"
-echo "EMART Authentication Testing"
+echo "Marcari23 Authentication Testing"
 echo "======================================"
 echo ""
 echo "Base URL: $API_BASE"

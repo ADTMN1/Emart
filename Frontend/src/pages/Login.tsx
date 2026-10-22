@@ -78,7 +78,7 @@ const Login: React.FC = () => {
         toast({
           variant: 'success',
           title: 'Signed in successfully',
-          description: 'Welcome back to EMART!'
+          description: 'Welcome back to Marcari23!'
         })
       }
       navigate(destination)
@@ -107,7 +107,7 @@ const Login: React.FC = () => {
               <span className="font-display font-extrabold text-xl">E</span>
             </div>
             <div className="flex flex-col leading-none">
-              <span className="font-display text-xl font-extrabold tracking-tight">EMART</span>
+              <span className="font-display text-xl font-extrabold tracking-tight">Marcari23</span>
               <span className="text-[10px] font-semibold text-primary-200 tracking-widest uppercase">Global Proxy Shopping</span>
             </div>
           </Link>
@@ -152,7 +152,7 @@ const Login: React.FC = () => {
           </div>
 
           <p className="text-xs text-primary-300/80">
-            © {new Date().getFullYear()} EMART Co., Ltd. All rights reserved.
+            © {new Date().getFullYear()} Marcari23 Co., Ltd. All rights reserved.
           </p>
         </div>
       </div>
@@ -163,13 +163,13 @@ const Login: React.FC = () => {
             <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-white">
               <span className="font-display font-extrabold text-lg">E</span>
             </div>
-            <span className="font-display text-xl font-extrabold tracking-tight">EMART</span>
+            <span className="font-display text-xl font-extrabold tracking-tight">Marcari23</span>
           </Link>
 
           <div className="mb-8">
             <h1 className="font-display text-3xl font-extrabold tracking-tight">Welcome back</h1>
             <p className="mt-2 text-muted-foreground">
-              Sign in to your EMART account to continue shopping and track your orders.
+              Sign in to your Marcari23 account to continue shopping and track your orders.
             </p>
           </div>
 
@@ -283,7 +283,7 @@ const Login: React.FC = () => {
           </form>
 
           <div className="mt-8 p-5 rounded-xl bg-gradient-to-r from-primary-50 to-secondary-50 border border-primary-100 text-xs">
-            <span className="font-semibold text-foreground">New to EMART?</span>{' '}
+            <span className="font-semibold text-foreground">New to Marcari23?</span>{' '}
             <Link to="/register" className="text-primary font-bold hover:underline transition-colors">
               Create a free account →
             </Link>

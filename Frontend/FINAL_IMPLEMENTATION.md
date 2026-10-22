@@ -1,4 +1,4 @@
-# EMART 3D Product Showcase - Final Implementation
+# Marcari23 3D Product Showcase - Final Implementation
 
 ## ✅ COMPLETED & PRODUCTION READY
 
@@ -256,4 +256,4 @@ npm run preview
 
 **Live URL**: http://localhost:5174
 
-**Enjoy your premium EMART 3D showcase! 🎉**
+**Enjoy your premium Marcari23 3D showcase! 🎉**

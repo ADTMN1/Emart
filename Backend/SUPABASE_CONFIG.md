@@ -1,8 +1,8 @@
-# Supabase PostgreSQL Configuration for EMART Backend
+# Supabase PostgreSQL Configuration for Marcari23 Backend
 
 ## ✅ Configuration Complete
 
-The EMART backend has been successfully configured to use Supabase PostgreSQL with proper connection pooling.
+The Marcari23 backend has been successfully configured to use Supabase PostgreSQL with proper connection pooling.
 
 ### Changes Made
 

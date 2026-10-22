@@ -1,8 +1,8 @@
-# EMART Warehouse Services
+# Marcari23 Warehouse Services
 
 ## Our Warehouse
 
-EMART operates a secure warehouse facility in Japan where all purchased items are received, processed, and stored before international shipping.
+Marcari23 operates a secure warehouse facility in Japan where all purchased items are received, processed, and stored before international shipping.
 
 **Location**: Tokyo, Japan (specific address provided to registered users)
 
@@ -78,7 +78,7 @@ For fragile or valuable items:
 
 ## Your Warehouse Dashboard
 
-Track all your items in real-time through your EMART account:
+Track all your items in real-time through your Marcari23 account:
 - View all items currently in warehouse
 - See arrival dates and storage time remaining
 - Request services (photos, repackaging, consolidation)
@@ -124,7 +124,7 @@ Our warehouse cannot accept:
 ## Customer Support
 
 Warehouse-related questions:
-- Email: warehouse@emart.com
+- Email: warehouse@marcari23emart.com
 - Response time: Within 24 hours
 - Live chat: Available on dashboard
 - Phone support: Available for urgent issues

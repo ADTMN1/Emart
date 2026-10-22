@@ -1,8 +1,8 @@
-# EMART Authentication System Documentation
+# Marcari23 Authentication System Documentation
 
 ## Overview
 
-The EMART platform implements a secure, professional-grade authentication system with JWT (JSON Web Tokens), password hashing, rate limiting, and comprehensive validation.
+The Marcari23 platform implements a secure, professional-grade authentication system with JWT (JSON Web Tokens), password hashing, rate limiting, and comprehensive validation.
 
 ## Table of Contents
 
@@ -109,7 +109,7 @@ Response (201 Created):
     },
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   },
-  "message": "Account created successfully! Welcome to EMART."
+  "message": "Account created successfully! Welcome to Marcari23."
 }
 ```
 
@@ -561,4 +561,4 @@ For issues or questions:
 
 **Last Updated**: September 8, 2026  
 **Version**: 1.0.0  
-**Maintained by**: EMART Development Team
+**Maintained by**: Marcari23 Development Team

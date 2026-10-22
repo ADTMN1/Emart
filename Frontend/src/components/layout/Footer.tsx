@@ -124,7 +124,7 @@ export const Footer: React.FC = () => {
               </div>
               <div className="flex flex-col leading-none">
                 <span className="font-display text-xl font-extrabold tracking-tight text-white">
-                  EMART
+                  Marcari23
                 </span>
                 <span className="text-[10px] font-semibold text-primary-300 tracking-widest uppercase">
                   {t('footer.globalProxyShopping')}
@@ -141,7 +141,7 @@ export const Footer: React.FC = () => {
                 <div className="p-1.5 rounded-md bg-white/5">
                   <Mail className="h-4 w-4 text-secondary" />
                 </div>
-                support@emart.com
+                support@marcari23emart.com
               </div>
               <div className="flex items-center gap-2.5">
                 <div className="p-1.5 rounded-md bg-white/5">
@@ -185,7 +185,7 @@ export const Footer: React.FC = () => {
       <div className="border-t border-white/10 bg-primary-950/50">
         <div className="container-page py-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-primary-300">
           <div>
-            © {new Date().getFullYear()} EMART Co., Ltd. {t('footer.allRightsReserved')}
+            © {new Date().getFullYear()} Marcari23 Co., Ltd. {t('footer.allRightsReserved')}
           </div>
           <div className="flex items-center gap-5">
             <a href="#terms" className="hover:text-white transition-colors">{t('footer.terms')}</a>

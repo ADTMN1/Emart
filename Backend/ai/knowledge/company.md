@@ -1,8 +1,8 @@
-# EMART Company Information
+# Marcari23 Company Information
 
-## About EMART
+## About Marcari23
 
-EMART is a global proxy shopping platform that bridges the gap between international marketplaces and customers worldwide. We specialize in helping customers purchase products from Japanese and other international marketplaces that typically don't ship internationally.
+Marcari23 is a global proxy shopping platform that bridges the gap between international marketplaces and customers worldwide. We specialize in helping customers purchase products from Japanese and other international marketplaces that typically don't ship internationally.
 
 ## Mission
 
@@ -22,7 +22,7 @@ Our mission is to make global shopping accessible to everyone by eliminating geo
 - **Available Worldwide**: We ship to most countries globally
 - **24/7 Support**: Customer service available around the clock
 
-## Why Choose EMART
+## Why Choose Marcari23
 
 1. **No Language Barriers**: We handle all communication with sellers in their native language
 2. **Local Payment Methods**: We use local payment methods so you don't need Japanese credit cards or bank accounts

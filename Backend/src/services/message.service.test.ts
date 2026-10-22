@@ -345,7 +345,7 @@ test('sendAdminMessage: creates message + seller notification', async () => {
   const n = fixture.notifications.calls[0];
   assert.equal(n.userId, 'seller-user-1');
   assert.equal(n.type, 'MESSAGE');
-  assert.equal(n.title, 'New message from EMART Admin');
+  assert.equal(n.title, 'New message from Marcari23 Admin');
   assert.equal(n.orderId, 'o1');
   assert.equal(n.conversationId, 'conv1');
   assert.equal(n.messageId, msg.id);
@@ -439,7 +439,7 @@ test('getAdminConversationMessages: enriches sender roles (admin vs seller)', as
   assert.equal(res.messages[0].senderRole, 'seller');
   assert.equal(res.messages[0].senderName, 'ABC Store');
   assert.equal(res.messages[1].senderRole, 'admin');
-  assert.equal(res.messages[1].senderName, 'EMART Admin');
+  assert.equal(res.messages[1].senderName, 'Marcari23 Admin');
 });
 // ---------------------------------------------------------------------------
 // Phase 5 — reading a conversation must also clear its MESSAGE notifications.

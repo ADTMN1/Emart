@@ -48,7 +48,7 @@ export const SellerMessages: React.FC = () => {
       <div>
         <h1 className="font-display text-xl font-bold">Messages</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          Order conversations with EMART management
+          Order conversations with Marcari23 management
         </p>
       </div>
 
@@ -69,7 +69,7 @@ export const SellerMessages: React.FC = () => {
               <Inbox className="h-10 w-10 text-muted-foreground mb-4" />
               <p className="font-semibold">No conversations yet</p>
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                When EMART staff start a conversation about one of your orders, it will appear here.
+                When Marcari23 staff start a conversation about one of your orders, it will appear here.
               </p>
             </div>
           ) : (
@@ -106,7 +106,7 @@ export const SellerMessages: React.FC = () => {
                       </span>
                       <span className="block text-xs text-muted-foreground mt-1 truncate">
                         {last
-                          ? `${last.fromSeller ? 'You' : 'EMART Admin'}: ${last.body}`
+                          ? `${last.fromSeller ? 'You' : 'Marcari23 Admin'}: ${last.body}`
                           : 'No messages yet'}
                       </span>
                     </span>

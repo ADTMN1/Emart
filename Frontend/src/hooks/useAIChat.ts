@@ -7,9 +7,9 @@ const CHAT_ENDPOINT = `${API_BASE_URL}/api/v1/ai/chat`;
 const WELCOME_MESSAGE: Message = {
   id: 'welcome',
   role: 'assistant',
-  content: `Hello! 👋 I'm the EMART AI assistant. I'm here to help you with:
+  content: `Hello! 👋 I'm the Marcari23 AI assistant. I'm here to help you with:
 
-• Understanding how EMART works
+• Understanding how Marcari23 works
 • Information about proxy fees and shipping
 • Payment methods and policies
 • Warehouse services and storage

@@ -141,8 +141,8 @@ export class KnowledgeService {
     }
 
     // Build context string from relevant documents
-    let context = '=== EMART KNOWLEDGE BASE ===\n\n';
-    context += 'The following information is from EMART\'s official documentation. Use this information to answer the user\'s question accurately.\n\n';
+    let context = '=== Marcari23 KNOWLEDGE BASE ===\n\n';
+    context += 'The following information is from Marcari23\'s official documentation. Use this information to answer the user\'s question accurately.\n\n';
 
     relevantDocs.forEach((doc, index) => {
       context += `--- Document ${index + 1}: ${doc.title} ---\n\n`;

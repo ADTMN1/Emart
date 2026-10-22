@@ -12,7 +12,7 @@ interface ChatWindowProps {
 }
 
 const SUGGESTED_QUESTIONS = [
-  'How does EMART work?',
+  'How does Marcari23 work?',
   'What are your proxy fees?',
   'How does international shipping work?',
   'What payment methods do you accept?',
@@ -57,7 +57,7 @@ const ChatWindow = ({ onClose, isFirstVisit }: ChatWindowProps) => {
             <Bot className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold leading-none">EMART AI Assistant</h3>
+            <h3 className="text-sm font-semibold leading-none">Marcari23 AI Assistant</h3>
             <p className="mt-1 text-xs opacity-90">Always here to help</p>
           </div>
         </div>

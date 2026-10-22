@@ -1,8 +1,8 @@
-# International Shipping from EMART
+# International Shipping from Marcari23
 
 ## Shipping Methods
 
-EMART offers multiple international shipping options with different speeds and costs:
+Marcari23 offers multiple international shipping options with different speeds and costs:
 
 ### EMS (Express Mail Service)
 - **Speed**: 3-7 business days
@@ -104,7 +104,7 @@ Countries are grouped into zones affecting price:
 
 **Important**: You (the customer) are responsible for customs duties, taxes, and fees in your country.
 
-- EMART declares packages accurately and honestly
+- Marcari23 declares packages accurately and honestly
 - We cannot mark packages as "gift" or undervalue items
 - Each country has different duty-free thresholds
 - You may be contacted by customs for payment
@@ -121,7 +121,7 @@ Actual delivery time depends on:
 ## Tracking
 
 All shipments include tracking numbers. You can track packages through:
-- EMART dashboard
+- Marcari23 dashboard
 - Carrier's website
 - Universal tracking services
 

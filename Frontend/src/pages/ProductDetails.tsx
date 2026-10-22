@@ -577,7 +577,7 @@ const ProductDetails: React.FC = () => {
                       free: product.domesticShipping === 0,
                     },
                     {
-                      label: 'EMART Service Fee (7%)',
+                      label: 'Marcari23 Service Fee (7%)',
                       value: formatCurrency(product.serviceFee, 'USD'),
                       valueUsd: formatCurrency(product.serviceFee, 'USD'),
                       icon: ShieldCheck,
@@ -719,7 +719,7 @@ const ProductDetails: React.FC = () => {
                 {[
                   ['Condition', normalizeCondition(product.condition)],
                   ['Seller Location', 'Global'],
-                  ['Shipping from', 'EMART Warehouse'],
+                  ['Shipping from', 'Marcari23 Warehouse'],
                   ['Seller Type', normalizeSellerType(product.sellerType)],
                   ['Marketplace', product.source],
                   ['Item Code', `EM-${product.id.toUpperCase()}-${Math.round(product.price)}`],
@@ -736,7 +736,7 @@ const ProductDetails: React.FC = () => {
           <div className="space-y-4">
             <Card>
               <CardContent className="p-5 space-y-4">
-                <h3 className="font-bold">Shopping Safely with EMART</h3>
+                <h3 className="font-bold">Shopping Safely with Marcari23</h3>
                 <ul className="space-y-3">
                   {[
                     ['Free 45-Day Storage', 'Store items and consolidate'],

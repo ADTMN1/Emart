@@ -2,7 +2,7 @@
 
 ## ✅ Implementation Complete!
 
-A premium 3D product carousel has been successfully integrated into the EMART homepage hero section.
+A premium 3D product carousel has been successfully integrated into the Marcari23 homepage hero section.
 
 ## 🚀 What Was Added
 

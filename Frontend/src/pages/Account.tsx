@@ -134,7 +134,7 @@ const Account: React.FC = () => {
   const [uploadPercent, setUploadPercent] = React.useState(0)
   const [preparedDocument, setPreparedDocument] = React.useState<PreparedIdentityDocument | null>(null)
 
-  // Phase 8: EMART Seller Agreement. The version/text come from the server;
+  // Phase 8: Marcari23 Seller Agreement. The version/text come from the server;
   // acceptance is recorded server-side and gates application submission.
   const [agreement, setAgreement] = React.useState<SellerAgreement | null>(null)
   const [agreementLoading, setAgreementLoading] = React.useState(true)
@@ -358,7 +358,7 @@ const Account: React.FC = () => {
       toast({
         variant: 'error',
         title: 'Seller Agreement required',
-        description: 'Please read and accept the current EMART Seller Agreement first.',
+        description: 'Please read and accept the current Marcari23 Seller Agreement first.',
       })
       return
     }
@@ -496,7 +496,7 @@ const Account: React.FC = () => {
       toast({
         variant: 'success',
         title: 'Agreement accepted',
-        description: `You accepted the EMART Seller Agreement (v${res.version}).`,
+        description: `You accepted the Marcari23 Seller Agreement (v${res.version}).`,
       })
     } catch (err: any) {
       toast({
@@ -524,8 +524,8 @@ const Account: React.FC = () => {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             {sellerAgreed
-              ? 'You have accepted the current EMART Seller Agreement.'
-              : 'Read and accept the EMART Seller Agreement to enable submission.'}
+              ? 'You have accepted the current Marcari23 Seller Agreement.'
+              : 'Read and accept the Marcari23 Seller Agreement to enable submission.'}
           </p>
         </div>
       </div>
@@ -1175,7 +1175,7 @@ const Account: React.FC = () => {
                   <div className="p-5 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 text-white relative overflow-hidden min-h-[180px] flex flex-col justify-between shadow-xl">
                     <div className="absolute -top-16 -right-16 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
                     <div className="flex items-center justify-between relative">
-                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">EMART PAY</div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Marcari23 PAY</div>
                       <Badge variant="accent" size="sm" className="gap-0.5">
                         <CheckCircle2 className="h-2.5 w-2.5" />
                         Default
@@ -1210,7 +1210,7 @@ const Account: React.FC = () => {
                 <div className="p-4 rounded-xl bg-muted/40 text-xs flex items-start gap-2.5">
                   <ShieldCheck className="h-4 w-4 text-success shrink-0 mt-0.5" />
                   <span className="text-foreground/70 leading-relaxed">
-                    <span className="font-bold text-foreground">Your data is secure.</span> Payments are processed by PCI-DSS Level 1 certified providers. EMART never stores your full card information.
+                    <span className="font-bold text-foreground">Your data is secure.</span> Payments are processed by PCI-DSS Level 1 certified providers. Marcari23 never stores your full card information.
                   </span>
                 </div>
               </CardContent>
@@ -1475,7 +1475,7 @@ const Account: React.FC = () => {
                 ) : (
                   <form onSubmit={handleSellerSubmit} className="space-y-4" noValidate>
                     <p className="text-sm text-muted-foreground">
-                      Apply to open a store on EMART. Our team reviews every application.
+                      Apply to open a store on Marcari23. Our team reviews every application.
                     </p>
                     {sellerApplicationFields}
                     {sellerAgreementSection}
@@ -1613,7 +1613,7 @@ const Account: React.FC = () => {
                   <section>
                     <h3 className="font-semibold text-foreground mb-1">1. Overview</h3>
                     <p>
-                      EMART supports USD Coin (USDC) as a digital-dollar payment and settlement option
+                      Marcari23 supports USD Coin (USDC) as a digital-dollar payment and settlement option
                       on the platform. This policy explains how USDC is used for crypto payments, wallet
                       balances, and seller settlement, and the responsibilities that come with it.
                     </p>
@@ -1630,10 +1630,10 @@ const Account: React.FC = () => {
                   </section>
 
                   <section>
-                    <h3 className="font-semibold text-foreground mb-1">3. How EMART uses USDC</h3>
+                    <h3 className="font-semibold text-foreground mb-1">3. How Marcari23 uses USDC</h3>
                     <ul className="list-disc pl-5 space-y-1">
-                      <li>Buyers may fund orders and wallet balances using USDC on the networks EMART lists at checkout.</li>
-                      <li>Wallet USDC balances are credited to your EMART wallet after the required network confirmations.</li>
+                      <li>Buyers may fund orders and wallet balances using USDC on the networks Marcari23 lists at checkout.</li>
+                      <li>Wallet USDC balances are credited to your Marcari23 wallet after the required network confirmations.</li>
                       <li>Seller earnings may be settled in USDC to the payout details associated with the seller account.</li>
                     </ul>
                   </section>
@@ -1643,7 +1643,7 @@ const Account: React.FC = () => {
                     <p>
                       Crypto transfers are only final after the network confirms them. Sending USDC on an
                       unsupported network, to an incorrect address, or with insufficient network fees may
-                      result in permanent loss of funds. EMART cannot reverse a confirmed blockchain
+                      result in permanent loss of funds. Marcari23 cannot reverse a confirmed blockchain
                       transaction. You are responsible for verifying the network and address shown at checkout.
                     </p>
                   </section>
@@ -1651,8 +1651,8 @@ const Account: React.FC = () => {
                   <section>
                     <h3 className="font-semibold text-foreground mb-1">5. Fees</h3>
                     <p>
-                      Blockchain network fees (gas) are set by the network and are outside EMART's control.
-                      EMART platform and service fees are disclosed in the order summary and the seller
+                      Blockchain network fees (gas) are set by the network and are outside Marcari23's control.
+                      Marcari23 platform and service fees are disclosed in the order summary and the seller
                       dashboard before you confirm a transaction.
                     </p>
                   </section>
@@ -1660,7 +1660,7 @@ const Account: React.FC = () => {
                   <section>
                     <h3 className="font-semibold text-foreground mb-1">6. Refunds and reversals</h3>
                     <p>
-                      Where a refund is approved for an order paid in USDC, EMART will return funds in USDC
+                      Where a refund is approved for an order paid in USDC, Marcari23 will return funds in USDC
                       (or the original asset where required) to the wallet used for the payment, net of any
                       network fees that cannot be recovered. Refund timing depends on network confirmation.
                     </p>
@@ -1669,10 +1669,10 @@ const Account: React.FC = () => {
                   <section>
                     <h3 className="font-semibold text-foreground mb-1">7. Custody and security</h3>
                     <p>
-                      Your EMART wallet is a ledger balance maintained by EMART. For external wallets, you
-                      alone control your private keys and recovery phrase; EMART never has access to them and
+                      Your Marcari23 wallet is a ledger balance maintained by Marcari23. For external wallets, you
+                      alone control your private keys and recovery phrase; Marcari23 never has access to them and
                       cannot restore wallets or reverse transfers. You are responsible for securing access to
-                      your EMART account and any linked wallet.
+                      your Marcari23 account and any linked wallet.
                     </p>
                   </section>
 
@@ -1680,7 +1680,7 @@ const Account: React.FC = () => {
                     <h3 className="font-semibold text-foreground mb-1">8. Compliance</h3>
                     <p>
                       USDC transactions may be subject to identity verification, sanctions screening, and
-                      anti-money-laundering controls. EMART may delay, refuse, or reverse a transaction, or
+                      anti-money-laundering controls. Marcari23 may delay, refuse, or reverse a transaction, or
                       request additional information, where required by law or by its payment partners.
                     </p>
                   </section>
@@ -1689,7 +1689,7 @@ const Account: React.FC = () => {
                     <h3 className="font-semibold text-foreground mb-1">9. Risks and limitation of liability</h3>
                     <p>
                       USDC and blockchain networks carry risks including network congestion, protocol failures,
-                      issuer-related risk, and regulatory change. To the maximum extent permitted by law, EMART
+                      issuer-related risk, and regulatory change. To the maximum extent permitted by law, Marcari23
                       is not liable for losses arising from those risks or from incorrect wallet details supplied
                       by a user.
                     </p>
@@ -1698,7 +1698,7 @@ const Account: React.FC = () => {
                   <section>
                     <h3 className="font-semibold text-foreground mb-1">10. Changes to this policy</h3>
                     <p>
-                      EMART may update this policy as its USDC features and applicable rules evolve. Material
+                      Marcari23 may update this policy as its USDC features and applicable rules evolve. Material
                       changes will be published on this page with a new "Last updated" date.
                     </p>
                   </section>
@@ -1904,7 +1904,7 @@ const Account: React.FC = () => {
       <Modal
         isOpen={agreementOpen}
         onClose={() => setAgreementOpen(false)}
-        title={agreement?.title || 'EMART Seller Agreement'}
+        title={agreement?.title || 'Marcari23 Seller Agreement'}
         description={agreement ? `Version ${agreement.version}` : undefined}
         size="lg"
         onBodyScroll={handleAgreementScroll}

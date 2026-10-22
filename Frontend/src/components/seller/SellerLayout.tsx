@@ -428,13 +428,13 @@ export const SellerCenterLayout: React.FC = () => {
       >
         {/* Brand */}
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
-          <Link to="/seller" className="flex min-w-0 items-center gap-2" onClick={() => setSidebarOpen(false)} title="EMART Seller Center">
+          <Link to="/seller" className="flex min-w-0 items-center gap-2" onClick={() => setSidebarOpen(false)} title="Marcari23 Seller Center">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
               <span className="text-sm font-bold text-white">EM</span>
             </div>
             {!sidebarCollapsed && (
               <div className="min-w-0">
-                <p className="font-display text-lg font-bold leading-none">EMART</p>
+                <p className="font-display text-lg font-bold leading-none">Marcari23</p>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Seller Center</p>
               </div>
             )}

@@ -2,7 +2,7 @@
 
 ## Important Understanding
 
-EMART is a **proxy shopping service**. We purchase items on your behalf from third-party sellers. Our return and refund policy is governed by:
+Marcari23 is a **proxy shopping service**. We purchase items on your behalf from third-party sellers. Our return and refund policy is governed by:
 1. The original seller's return policy
 2. Whether the item has left our warehouse
 3. The reason for the return
@@ -79,7 +79,7 @@ EMART is a **proxy shopping service**. We purchase items on your behalf from thi
 ## Return Process
 
 ### Step 1: Contact Support Immediately
-- Email: support@emart.com
+- Email: support@marcari23emart.com
 - Provide order number and detailed reason
 - Include photos if item is damaged or wrong
 - Do this within 48 hours of warehouse arrival
@@ -124,7 +124,7 @@ Once approved:
 
 ## Seller Return Policies
 
-Since EMART buys from third-party sellers, their policies vary:
+Since Marcari23 buys from third-party sellers, their policies vary:
 
 ### Mercari Japan
 - Returns only if item significantly misrepresented
@@ -165,7 +165,7 @@ Since EMART buys from third-party sellers, their policies vary:
 - Timeline: 2-4 weeks
 
 ### Wrong Size/Color (Customer Error)
-- Not eligible for refund through EMART
+- Not eligible for refund through Marcari23
 - You may contact seller directly
 - Success depends on seller's goodwill
 - Return shipping costs apply
@@ -193,7 +193,7 @@ Since EMART buys from third-party sellers, their policies vary:
 
 ### Before Ordering
 1. **Read listing carefully** - Check all details, measurements, condition
-2. **Request photos** - Ask seller questions through EMART
+2. **Request photos** - Ask seller questions through Marcari23
 3. **Check seller ratings** - Choose reputable sellers
 4. **Understand item condition** - New, used, junk, etc.
 5. **Verify compatibility** - Size, voltage, region locks
@@ -214,7 +214,7 @@ If you disagree with our decision:
 ## Contact Information
 
 **For Returns and Refunds:**
-- Email: returns@emart.com
+- Email: returns@marcari23emart.com
 - Priority Support: Available for urgent issues
 - Response Time: Within 24 hours (business days)
 - Include: Order number, photos, detailed explanation

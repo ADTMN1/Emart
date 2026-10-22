@@ -217,7 +217,7 @@ export const SellerPayments: React.FC = () => {
       <div className="space-y-6">
         <SellerPageHeader
           title="Payments"
-          description="Your EMART wallet balance, transaction history, and payout methods."
+          description="Your Marcari23 wallet balance, transaction history, and payout methods."
         />
         <Skeleton className="h-36 w-full" />
         <Skeleton className="h-72 w-full" />
@@ -232,7 +232,7 @@ export const SellerPayments: React.FC = () => {
     <div className="space-y-6">
       <SellerPageHeader
         title="Payments"
-        description="Your EMART wallet balance, transaction history, and payout methods."
+        description="Your Marcari23 wallet balance, transaction history, and payout methods."
       />
 
       {/* Wallet Balance */}

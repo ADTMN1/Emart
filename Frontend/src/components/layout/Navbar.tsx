@@ -131,7 +131,7 @@ export const Navbar: React.FC = () => {
                 </div>
                 <div className="flex flex-col leading-none">
                   <span className="font-display text-xl font-extrabold tracking-tight text-foreground">
-                    EMART
+                    Marcari23
                   </span>
                   <span className="text-[10px] font-semibold text-muted-foreground tracking-widest uppercase">
                     Global Proxy
@@ -289,7 +289,7 @@ export const Navbar: React.FC = () => {
                       onMouseLeave={() => setUserDropdownOpen(false)}
                     >
                       <div className="px-4 py-2 border-b border-border mb-1">
-                        <p className="text-xs font-semibold text-foreground truncate">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'EMART User'}</p>
+                        <p className="text-xs font-semibold text-foreground truncate">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Marcari23 User'}</p>
                         <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
                       </div>
                       <Link
@@ -367,7 +367,7 @@ export const Navbar: React.FC = () => {
             <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-primary text-white">
               <span className="font-display font-extrabold text-lg">E</span>
             </div>
-            <span className="font-display text-xl font-extrabold tracking-tight">EMART</span>
+            <span className="font-display text-xl font-extrabold tracking-tight">Marcari23</span>
           </Link>
           <button
             onClick={() => setMobileOpen(false)}
@@ -445,7 +445,7 @@ export const Navbar: React.FC = () => {
                   {user.firstName ? user.firstName[0].toUpperCase() : user.email[0].toUpperCase()}
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold text-foreground">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'EMART User'}</span>
+                  <span className="text-sm font-bold text-foreground">{user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Marcari23 User'}</span>
                   <span className="text-xs text-muted-foreground">{user.email}</span>
                 </div>
               </div>

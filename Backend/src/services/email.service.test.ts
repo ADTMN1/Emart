@@ -6,7 +6,7 @@ import { EmailService, EmailServiceOptions, SELLER_APPROVAL_SUBJECT } from './em
 const OPTS: EmailServiceOptions = {
   apiKey: 'xkeysib-dummy-test-key',
   from: 'no-reply@emart.com',
-  fromName: 'EMART',
+  fromName: 'Marcari23',
   frontendUrl: 'http://localhost:5173',
 };
 
@@ -36,7 +36,7 @@ test('send: returns the message id and a clean success result', async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].to, 'seller@example.com');
   assert.equal(calls[0].from, 'no-reply@emart.com');
-  assert.equal(calls[0].fromName, 'EMART');
+  assert.equal(calls[0].fromName, 'Marcari23');
   assert.equal(calls[0].subject, 'Hello');
   assert.ok(calls[0].html.includes('<p>Hi</p>'));
   assert.ok(calls[0].text === 'Hi');
@@ -90,7 +90,7 @@ test('sendSellerApprovalEmail: builds branded HTML + plain-text with the configu
   assert.equal(result.sent, true);
   assert.equal(calls[0].subject, SELLER_APPROVAL_SUBJECT);
   assert.equal(calls[0].to, 'seller@example.com');
-  assert.ok(calls[0].html.includes('EMART'));
+  assert.ok(calls[0].html.includes('Marcari23'));
   assert.ok(calls[0].html.includes('Go to Seller Dashboard'));
   assert.ok(calls[0].html.includes('http://localhost:5173/seller'));
   assert.ok(calls[0].text.includes('http://localhost:5173/seller'));

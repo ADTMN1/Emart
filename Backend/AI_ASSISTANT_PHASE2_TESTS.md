@@ -1,4 +1,4 @@
-# EMART AI Assistant - Phase 2 Test Report
+# Marcari23 AI Assistant - Phase 2 Test Report
 
 ## Test Summary
 
@@ -37,7 +37,7 @@ Each document verified for:
 **Expected:** Should return ¥500 fee from knowledge base  
 **Result:** ✓ PASS
 ```
-Response: "For an item that costs ¥3,000, the EMART proxy fee is **¥500**. 
+Response: "For an item that costs ¥3,000, the Marcari23 proxy fee is **¥500**. 
 According to our fee structure, all items priced between **¥0 and ¥5,000** 
 have a flat proxy fee of ¥500 per item."
 ```
@@ -54,7 +54,7 @@ have a flat proxy fee of ¥500 per item."
 **Expected:** Should provide specific costs from knowledge base  
 **Result:** ✓ PASS
 ```
-Response: "Based on the EMART Knowledge Base, shipping a 1kg package to 
+Response: "Based on the Marcari23 Knowledge Base, shipping a 1kg package to 
 the USA via EMS costs **¥3,500**."
 ```
 **Verification:**
@@ -70,7 +70,7 @@ the USA via EMS costs **¥3,500**."
 **Expected:** Should return 60 days from knowledge base  
 **Result:** ✓ PASS
 ```
-Response: "You can store your items at the EMART warehouse for **60 days 
+Response: "You can store your items at the Marcari23 warehouse for **60 days 
 for free** from the date your first item arrives. If you need to store 
 your items longer..."
 ```
@@ -117,11 +117,11 @@ timeframe and process..."
 ---
 
 ### Test 6: Payment Methods ✅ PASS
-**Query:** "What payment methods does EMART accept?"  
+**Query:** "What payment methods does Marcari23 accept?"  
 **Expected:** Should list credit cards, PayPal, etc. from knowledge base  
 **Result:** ✓ PASS
 ```
-Response: "EMART accepts the following payment methods:
+Response: "Marcari23 accepts the following payment methods:
 * **Credit Cards:** Visa, Mastercard, American Express, JCB, and Discover
 * **PayPal:** Personal or Business accounts accepted
 * **Bank Transfer:** International wire transfer
@@ -159,7 +159,7 @@ is packaged:
 **Expected:** Should mention free for 5 items, ¥200 beyond  
 **Result:** ✓ PASS
 ```
-Response: "Based on the EMART knowledge base, package consolidation is 
+Response: "Based on the Marcari23 knowledge base, package consolidation is 
 **free for up to 5 items**, and costs **¥200 for each additional item**.
 For 7 packages, the breakdown is:
 - First 5 items: Free
@@ -194,14 +194,14 @@ Total consolidation cost: ¥400"
 ---
 
 ### Test 10: Question NOT in Knowledge Base ✅ PASS
-**Query:** "What are the specific operating hours of EMART customer service on Tuesdays?"  
+**Query:** "What are the specific operating hours of Marcari23 customer service on Tuesdays?"  
 **Expected:** Should admit it doesn't have that specific information  
 **Result:** ✓ PASS
 ```
-Response: "I don't have specific information about EMART's exact operating 
+Response: "I don't have specific information about Marcari23's exact operating 
 hours in my knowledge base. However, customer support is available via:
 * **Live Chat**: Available on your dashboard
-* **Email**: support@emart.com (response time is usually within 24 hours)"
+* **Email**: support@marcari23emart.com (response time is usually within 24 hours)"
 ```
 **Verification:**
 - ✓ Admits lack of specific information
@@ -319,7 +319,7 @@ All Phase 1 tests re-run to ensure no breakage:
 - [x] Created `Backend/ai/knowledge/` directory
 - [x] 10 comprehensive knowledge documents
 - [x] Structured markdown format
-- [x] Covers all major EMART topics
+- [x] Covers all major Marcari23 topics
 
 ### Knowledge Documents Created ✅
 - [x] company.md - Company information
@@ -504,7 +504,7 @@ All requirements successfully implemented:
 **Regression Tests:** 6/6 (100%)  
 **Overall Success Rate:** 14/14 (100%)
 
-Phase 2 is production-ready for EMART knowledge-based queries.
+Phase 2 is production-ready for Marcari23 knowledge-based queries.
 
 ---
 

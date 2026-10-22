@@ -1,8 +1,8 @@
-# EMART Proxy Fees
+# Marcari23 Proxy Fees
 
 ## Proxy Service Fee Structure
 
-EMART charges a service fee for purchasing items on your behalf. This fee covers:
+Marcari23 charges a service fee for purchasing items on your behalf. This fee covers:
 - Purchasing the item with local payment methods
 - Communication with sellers
 - Package receiving and verification

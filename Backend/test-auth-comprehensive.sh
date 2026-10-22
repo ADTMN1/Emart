@@ -13,7 +13,7 @@ TEST_PASSWORD="TestPass123@"
 TOKEN=""
 
 echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     EMART Authentication System Comprehensive Test         ║${NC}"
+echo -e "${BLUE}║     Marcari23 Authentication System Comprehensive Test         ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 

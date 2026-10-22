@@ -61,9 +61,9 @@ export const importCJCategoryValidation = [
   body('emartCategoryId')
     .trim()
     .notEmpty()
-    .withMessage('EMART category ID is required')
+    .withMessage('Marcari23 category ID is required')
     .isUUID()
-    .withMessage('EMART category ID must be a valid UUID'),
+    .withMessage('Marcari23 category ID must be a valid UUID'),
   body('priceMarkupPercent')
     .optional()
     .isInt({ min: 0, max: 500 })

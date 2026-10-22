@@ -103,7 +103,7 @@ const Register: React.FC = () => {
     try {
       setIsSubmitting(true)
       await register({ email, password, firstName, lastName })
-      toast({ variant: 'success', title: 'Account created!', description: 'Welcome to EMART. Start exploring global markets.' })
+      toast({ variant: 'success', title: 'Account created!', description: 'Welcome to Marcari23. Start exploring global markets.' })
       navigate('/')
     } catch (err: any) {
       setErrorMsg(err.message || 'Registration failed. Please try again.')
@@ -126,7 +126,7 @@ const Register: React.FC = () => {
               <span className="font-display font-extrabold text-xl">E</span>
             </div>
             <div className="flex flex-col leading-none">
-              <span className="font-display text-xl font-extrabold tracking-tight">EMART</span>
+              <span className="font-display text-xl font-extrabold tracking-tight">Marcari23</span>
               <span className="text-[10px] font-semibold text-primary-200 tracking-widest uppercase">Global Proxy Shopping</span>
             </div>
           </Link>
@@ -158,7 +158,7 @@ const Register: React.FC = () => {
           </div>
 
           <p className="text-xs text-primary-300/80">
-            © {new Date().getFullYear()} EMART Co., Ltd. All rights reserved.
+            © {new Date().getFullYear()} Marcari23 Co., Ltd. All rights reserved.
           </p>
         </div>
       </div>
@@ -169,7 +169,7 @@ const Register: React.FC = () => {
             <div className="flex items-center justify-center h-9 w-9 rounded-full bg-primary text-white">
               <span className="font-display font-extrabold text-lg">E</span>
             </div>
-            <span className="font-display text-xl font-extrabold tracking-tight">EMART</span>
+            <span className="font-display text-xl font-extrabold tracking-tight">Marcari23</span>
           </Link>
 
           <div className="mb-8">

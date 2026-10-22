@@ -1,7 +1,7 @@
 # 3D Product Carousel Implementation
 
 ## Overview
-A premium 3D product carousel built with React Three Fiber (R3F) and Three.js, featuring Japanese shopping products in an immersive, interactive WebGL-powered carousel on the EMART homepage hero section.
+A premium 3D product carousel built with React Three Fiber (R3F) and Three.js, featuring Japanese shopping products in an immersive, interactive WebGL-powered carousel on the Marcari23 homepage hero section.
 
 ## Features Implemented
 

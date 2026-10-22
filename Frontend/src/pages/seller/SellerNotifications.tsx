@@ -103,7 +103,7 @@ export const SellerNotifications: React.FC = () => {
         <div>
           <h1 className="font-display text-xl font-bold">Notifications</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Order requests and messages from EMART
+            Order requests and messages from Marcari23
             {total > 0 ? ` · ${total} total` : ''}
           </p>
         </div>
@@ -138,7 +138,7 @@ export const SellerNotifications: React.FC = () => {
               <Inbox className="h-10 w-10 text-muted-foreground mb-4" />
               <p className="font-semibold">No notifications yet</p>
               <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Order requests and messages from EMART will appear here.
+                Order requests and messages from Marcari23 will appear here.
               </p>
             </div>
           ) : (

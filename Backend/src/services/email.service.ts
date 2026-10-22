@@ -1,7 +1,7 @@
 import { BrevoClient } from '@getbrevo/brevo';
 import config from '../config/env';
 
-export const SELLER_APPROVAL_SUBJECT = 'Your EMART Seller Application Has Been Approved';
+export const SELLER_APPROVAL_SUBJECT = 'Your Marcari23 Seller Application Has Been Approved';
 
 export interface SendEmailResult {
   sent: boolean;
@@ -95,14 +95,14 @@ function approvalHtml(name: string, storeName: string | undefined, url: string):
   return [
     '<!doctype html><html><body style="margin:0;padding:0;background-color:#f4f5f7;font-family:Arial,Helvetica,sans-serif;">',
     '<div style="max-width:600px;margin:24px auto;background:#ffffff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">',
-    '<div style="background:#111827;padding:20px 28px;"><span style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:1px;">EMART</span></div>',
+    '<div style="background:#111827;padding:20px 28px;"><span style="color:#ffffff;font-size:22px;font-weight:800;letter-spacing:1px;">Marcari23</span></div>',
     '<div style="padding:32px 28px;color:#111827;">',
     `<h1 style="margin:0 0 12px;font-size:22px;">Congratulations, ${escapeHtml(name)}!</h1>`,
-    `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Your seller application${storeLine} has been <strong>approved</strong>. You can now access your Seller Dashboard, manage your products, and start selling on EMART.</p>`,
+    `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Your seller application${storeLine} has been <strong>approved</strong>. You can now access your Seller Dashboard, manage your products, and start selling on Marcari23.</p>`,
     `<p style="margin:0 0 24px;"><a href="${escapeHtml(url)}" style="display:inline-block;background:#10b981;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;">Go to Seller Dashboard</a></p>`,
     '<p style="margin:0 0 8px;font-size:14px;color:#6b7280;">If the button does not work, copy and open this link in your browser:</p>',
     `<p style="margin:0 0 24px;font-size:14px;"><a href="${escapeHtml(url)}" style="color:#2563eb;word-break:break-all;">${escapeHtml(url)}</a></p>`,
-    '<p style="margin:0;font-size:13px;color:#9ca3af;">This is an automated message from EMART. Do not reply to this email.</p>',
+    '<p style="margin:0;font-size:13px;color:#9ca3af;">This is an automated message from Marcari23. Do not reply to this email.</p>',
     '</div></div></body></html>',
   ].join('');
 }
@@ -110,16 +110,16 @@ function approvalHtml(name: string, storeName: string | undefined, url: string):
 function approvalText(name: string, storeName: string | undefined, url: string): string {
   const storeLine = storeName ? ` for ${storeName}` : '';
   return [
-    'Your EMART Seller Application Has Been Approved',
+    'Your Marcari23 Seller Application Has Been Approved',
     '',
     `Hi ${name},`,
     '',
-    `Your seller application${storeLine} has been approved. You can now access your Seller Dashboard, manage your products, and start selling on EMART.`,
+    `Your seller application${storeLine} has been approved. You can now access your Seller Dashboard, manage your products, and start selling on Marcari23.`,
     '',
     `Go to Seller Dashboard: ${url}`,
     `(If the button doesn't work, copy the link above into your browser.)`,
     '',
-    '- EMART',
+    '- Marcari23',
   ].join('\n');
 }
 

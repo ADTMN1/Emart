@@ -3,7 +3,7 @@
 BASE_URL="http://localhost:5000/api/v1/ai/chat"
 
 echo "=========================================="
-echo "EMART AI Chat Endpoint Test Suite"
+echo "Marcari23 AI Chat Endpoint Test Suite"
 echo "=========================================="
 echo ""
 
@@ -32,9 +32,9 @@ echo "Error: $(echo $RESPONSE | grep -o '"error":"[^"]*' | cut -d'"' -f4)"
 echo ""
 
 # Test 4: AI refuses to invent product information
-echo "Test 4: AI refuses to invent specific EMART product data"
-echo "Request: What products does EMART sell and at what price?"
-RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What products does EMART sell and at what price?"}')
+echo "Test 4: AI refuses to invent specific Marcari23 product data"
+echo "Request: What products does Marcari23 sell and at what price?"
+RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What products does Marcari23 sell and at what price?"}')
 echo "Status: $(echo $RESPONSE | grep -o '"success":[^,]*' | cut -d':' -f2)"
 echo "Response contains 'don'\''t have access': $(echo $RESPONSE | grep -i "don't have access" > /dev/null && echo "YES" || echo "NO")"
 echo ""
@@ -47,10 +47,10 @@ echo "Status: $(echo $RESPONSE | grep -o '"success":[^,]*' | cut -d':' -f2)"
 echo "Response mentions factors/variables: $(echo $RESPONSE | grep -iE "(depend|vary|factor)" > /dev/null && echo "YES" || echo "NO")"
 echo ""
 
-# Test 6: Valid question about EMART concept
-echo "Test 6: Valid question about EMART service concept"
-echo "Request: What is EMART?"
-RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What is EMART?"}')
+# Test 6: Valid question about Marcari23 concept
+echo "Test 6: Valid question about Marcari23 service concept"
+echo "Request: What is Marcari23?"
+RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What is Marcari23?"}')
 echo "Status: $(echo $RESPONSE | grep -o '"success":[^,]*' | cut -d':' -f2)"
 echo "Response mentions 'proxy' or 'shopping': $(echo $RESPONSE | grep -iE "(proxy|shopping)" > /dev/null && echo "YES" || echo "NO")"
 echo ""

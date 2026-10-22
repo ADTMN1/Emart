@@ -1,4 +1,4 @@
-# EMART 3D Showcase - Customization Guide
+# Marcari23 3D Showcase - Customization Guide
 
 ## Quick Customization Reference
 

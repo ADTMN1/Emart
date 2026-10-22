@@ -182,7 +182,7 @@ export const Dashboard: React.FC = () => {
       {/* Header */}
       <div>
         <h1 className="font-display text-2xl lg:text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Overview of your EMART operations</p>
+        <p className="text-muted-foreground mt-1">Overview of your Marcari23 operations</p>
       </div>
 
       {/* Stats Grid */}

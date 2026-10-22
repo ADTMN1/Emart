@@ -67,7 +67,7 @@ class CJMapperService {
     });
 
     if (!defaultCategory) {
-      throw new BadRequestError('No categories exist in EMART. Please create at least one category first.');
+      throw new BadRequestError('No categories exist in Marcari23. Please create at least one category first.');
     }
 
     return defaultCategory.id;
@@ -254,7 +254,7 @@ class CJMapperService {
     });
 
     if (existing) {
-      throw new ConflictError(`Product already imported (EMART ID: ${existing.id})`);
+      throw new ConflictError(`Product already imported (Marcari23 ID: ${existing.id})`);
     }
 
     const normalizedProduct = await this.fetchNormalizedProduct(cjProductId);

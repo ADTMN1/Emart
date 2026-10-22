@@ -46,7 +46,7 @@ export class CJCategoryImportService {
       select: { id: true },
     });
     if (!category) {
-      throw new BadRequestError('EMART category not found');
+      throw new BadRequestError('Marcari23 category not found');
     }
 
     const run = await prisma.importRun.create({
@@ -276,7 +276,7 @@ export class CJCategoryImportService {
 
     if (!savedOptions?.emartCategoryId) {
       throw new BadRequestError(
-        'This run has no stored EMART category. Start a fresh category import instead so products land in the right category.'
+        'This run has no stored Marcari23 category. Start a fresh category import instead so products land in the right category.'
       );
     }
 

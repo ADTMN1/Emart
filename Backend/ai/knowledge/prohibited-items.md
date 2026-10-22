@@ -2,7 +2,7 @@
 
 ## Items We Cannot Purchase or Ship
 
-For legal, safety, and shipping regulation reasons, EMART cannot handle certain items.
+For legal, safety, and shipping regulation reasons, Marcari23 cannot handle certain items.
 
 ## Absolutely Prohibited
 
@@ -200,7 +200,7 @@ These items have strict limitations and may require special approval:
 1. **Check item description carefully**
 2. **Review this prohibited items list**
 3. **Check your country's customs regulations**
-4. **Ask EMART support if unsure** - support@emart.com
+4. **Ask Marcari23 support if unsure** - support@marcari23emart.com
 
 ### Resources
 - Your country's customs website
@@ -233,7 +233,7 @@ These items have strict limitations and may require special approval:
 ## Questions?
 
 If you're unsure whether an item is allowed:
-- **Email**: support@emart.com
+- **Email**: support@marcari23emart.com
 - **Subject**: "Prohibited Item Check - [Item Description]"
 - **Include**: Link to item listing, destination country
 - **Response Time**: Within 24 hours

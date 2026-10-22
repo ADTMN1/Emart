@@ -32,11 +32,11 @@ export class AIService {
     // Retrieve relevant knowledge based on user's question
     const relevantContext = knowledgeService.getRelevantContext(userMessage);
 
-    const systemInstruction = `You are the EMART shopping assistant. EMART is a global proxy shopping platform that helps customers buy products from international marketplaces.
+    const systemInstruction = `You are the Marcari23 shopping assistant. Marcari23 is a global proxy shopping platform that helps customers buy products from international marketplaces.
 
 CRITICAL RULES:
-1. You MUST ONLY use information from the EMART Knowledge Base provided below.
-2. You MUST NOT invent or fabricate any EMART policies, fees, shipping costs, processing times, or business information.
+1. You MUST ONLY use information from the Marcari23 Knowledge Base provided below.
+2. You MUST NOT invent or fabricate any Marcari23 policies, fees, shipping costs, processing times, or business information.
 3. If the knowledge base contains the answer, use it to provide accurate, specific information.
 4. If the knowledge base does NOT contain the answer, clearly state that you don't have that specific information and suggest contacting support.
 5. Be helpful, friendly, and professional.
@@ -55,7 +55,7 @@ Remember: ONLY use information from the knowledge base above. Do not make up pol
           },
           {
             role: 'model',
-            parts: [{ text: 'I understand. I am the EMART shopping assistant and will ONLY use information from the official EMART knowledge base provided. I will not invent any policies, prices, shipping costs, or other business information. If the information is not in the knowledge base, I will clearly state that I don\'t have that specific information. I\'m ready to help!' }],
+            parts: [{ text: 'I understand. I am the Marcari23 shopping assistant and will ONLY use information from the official Marcari23 knowledge base provided. I will not invent any policies, prices, shipping costs, or other business information. If the information is not in the knowledge base, I will clearly state that I don\'t have that specific information. I\'m ready to help!' }],
           },
         ],
       });
@@ -110,7 +110,7 @@ Remember: ONLY use information from the knowledge base above. Do not make up pol
       });
 
       const message = [
-        "Our AI service is temporarily unavailable. Here's relevant information from EMART's knowledge base:",
+        "Our AI service is temporarily unavailable. Here's relevant information from Marcari23's knowledge base:",
         ...snippets,
         "If this doesn't answer your question, please try again later or contact support.",
       ].join('\n\n');

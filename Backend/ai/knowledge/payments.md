@@ -1,8 +1,8 @@
-# EMART Payment Information
+# Marcari23 Payment Information
 
 ## Accepted Payment Methods
 
-EMART accepts multiple payment methods for your convenience:
+Marcari23 accepts multiple payment methods for your convenience:
 
 ### Credit Cards
 - **Visa** ✓
@@ -23,7 +23,7 @@ Fees: No additional fees
 ### PayPal
 - Personal or Business accounts accepted
 - Processing time: Instant
-- Fees: No additional fees from EMART (PayPal may charge currency conversion fees)
+- Fees: No additional fees from Marcari23 (PayPal may charge currency conversion fees)
 - Buyer protection available
 
 ### Bank Transfer
@@ -49,16 +49,16 @@ Fees: No additional fees
 
 ## What You Pay For
 
-Your EMART payment covers:
+Your Marcari23 payment covers:
 
 ### 1. Item Purchase Price
 The cost of the item as listed by the seller
 
 ### 2. Domestic Shipping
-Shipping from seller to EMART warehouse in Japan
+Shipping from seller to Marcari23 warehouse in Japan
 
 ### 3. Proxy Service Fee
-EMART's fee for purchasing on your behalf (see Proxy Fees document)
+Marcari23's fee for purchasing on your behalf (see Proxy Fees document)
 
 ### 4. International Shipping
 Shipping from our warehouse to your address (chosen by you)
@@ -183,7 +183,7 @@ For businesses making frequent purchases:
 - Net-30 terms for qualified businesses
 - Volume discounts on proxy fees
 - Dedicated account manager
-- Contact sales@emart.com for details
+- Contact sales@marcari23emart.com for details
 
 ## Payment FAQ
 

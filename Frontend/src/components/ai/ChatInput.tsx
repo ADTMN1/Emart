@@ -11,7 +11,7 @@ interface ChatInputProps {
 const ChatInput = ({
   onSend,
   disabled = false,
-  placeholder = 'Ask me anything about EMART...',
+  placeholder = 'Ask me anything about Marcari23...',
 }: ChatInputProps) => {
   const [message, setMessage] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);

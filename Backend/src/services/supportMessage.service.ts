@@ -55,7 +55,7 @@ export class SupportMessageService {
       const sender = senderMap.get(m.senderUserId);
       const isAdmin = sender?.role === 'ADMIN';
       const senderName = isAdmin
-        ? 'EMART Support'
+        ? 'Marcari23 Support'
         : sender
           ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'You'
           : 'Unknown';
@@ -247,7 +247,7 @@ export class SupportMessageService {
       select: { id: true, firstName: true, lastName: true, role: true },
     });
     const isAdmin = sender?.role === 'ADMIN';
-    const senderName = isAdmin ? 'EMART Support' : `${sender?.firstName || ''} ${sender?.lastName || ''}`.trim() || 'You';
+    const senderName = isAdmin ? 'Marcari23 Support' : `${sender?.firstName || ''} ${sender?.lastName || ''}`.trim() || 'You';
 
     return {
       id: message.id,
@@ -283,7 +283,7 @@ export class SupportMessageService {
     await this.notifications.create({
       userId: conversation.userId,
       type: NotificationType.SUPPORT_MESSAGE,
-      title: 'New reply from EMART Support',
+      title: 'New reply from Marcari23 Support',
       body: `New message in your support conversation`,
       supportConversationId: conversationId,
       supportMessageId: message.id,

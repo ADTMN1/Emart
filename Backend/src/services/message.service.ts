@@ -151,7 +151,7 @@ export class MessageService {
           body: m.body,
           senderUserId: m.senderUserId,
           senderRole: isAdmin ? 'admin' : 'seller',
-          senderName: isAdmin ? 'EMART Admin' : seller?.storeName || 'Seller',
+          senderName: isAdmin ? 'Marcari23 Admin' : seller?.storeName || 'Seller',
           readAt: m.readAt,
           createdAt: m.createdAt,
         };
@@ -286,7 +286,7 @@ export class MessageService {
     await this.notifications.create({
       userId: conversation.seller.userId,
       type: NotificationType.MESSAGE,
-      title: 'New message from EMART Admin',
+      title: 'New message from Marcari23 Admin',
       body: `New message regarding Order ${conversation.order.orderNumber}`,
       orderId: conversation.orderId,
       conversationId,

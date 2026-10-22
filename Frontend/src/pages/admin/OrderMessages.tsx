@@ -197,7 +197,7 @@ export const AdminOrderMessages: React.FC = () => {
             Order {data.order.orderNumber}
           </h1>
           <p className="text-muted-foreground mt-1">
-            Messaging between EMART admin and sellers on this order
+            Messaging between Marcari23 admin and sellers on this order
           </p>
         </div>
         <Badge variant="info" className="text-sm px-3 py-1">

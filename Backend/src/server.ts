@@ -115,7 +115,7 @@ async function startServer() {
     console.log(`
 ╔════════════════════════════════════════╗
 ║                                        ║
-║   🚀 EMART Backend Server Started     ║
+║   🚀 Marcari23 Backend Server Started     ║
 ║                                        ║
 ║   Environment: ${config.env.padEnd(24)}║
 ║   Port: ${PORT.toString().padEnd(31)}║

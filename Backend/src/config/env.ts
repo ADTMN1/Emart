@@ -46,7 +46,7 @@ export const config = {
   email: {
     apiKey: process.env.BREVO_API_KEY || '',
     from: process.env.EMAIL_FROM || '',
-    fromName: (process.env.EMAIL_FROM_NAME || 'EMART').trim(),
+    fromName: (process.env.EMAIL_FROM_NAME || 'Marcari23').trim(),
   },
 
   /**

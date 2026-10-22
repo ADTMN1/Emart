@@ -198,7 +198,7 @@ export const SupplierCatalog: React.FC = () => {
       toast({
         variant: 'success',
         title: 'Product Imported',
-        description: `"${result.name}" has been imported to EMART successfully.`,
+        description: `"${result.name}" has been imported to Marcari23 successfully.`,
       });
 
       setDetailModalOpen(false);
@@ -208,7 +208,7 @@ export const SupplierCatalog: React.FC = () => {
         toast({
           variant: 'warning',
           title: 'Already Imported',
-          description: 'This product has already been imported to EMART.',
+          description: 'This product has already been imported to Marcari23.',
         });
       } else {
         toast({
@@ -244,7 +244,7 @@ export const SupplierCatalog: React.FC = () => {
       toast({
         variant: 'error',
         title: 'Selection Required',
-        description: 'Please select both a CJ category and an EMART category.',
+        description: 'Please select both a CJ category and a Marcari23 category.',
       });
       return;
     }
@@ -345,7 +345,7 @@ export const SupplierCatalog: React.FC = () => {
               <h2 className="font-semibold text-lg">Category Import</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              Import all products from a CJ category into an EMART category.
+              Import all products from a CJ category into a Marcari23 category.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -366,13 +366,13 @@ export const SupplierCatalog: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-sm font-medium mb-1 block">EMART Category</label>
+                <label className="text-sm font-medium mb-1 block">Marcari23 Category</label>
                 <select
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                   value={selectedEmartCategory}
                   onChange={(e) => setSelectedEmartCategory(e.target.value)}
                 >
-                  <option value="">Select EMART category...</option>
+                  <option value="">Select Marcari23 category...</option>
                   {emartCategories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
@@ -700,7 +700,7 @@ export const SupplierCatalog: React.FC = () => {
                 Cancel
               </Button>
               <Button onClick={() => handleImport(selectedProduct.id)} isLoading={importing}>
-                Import to EMART
+                Import to Marcari23
               </Button>
             </div>
           </div>

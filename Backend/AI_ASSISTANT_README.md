@@ -1,12 +1,12 @@
-# EMART AI Shopping Assistant
+# Marcari23 AI Shopping Assistant
 
 ## Overview
 
-The EMART AI Shopping Assistant is a server-side Google Gemini-powered chatbot that helps customers with general questions about EMART's proxy shopping service.
+The Marcari23 AI Shopping Assistant is a server-side Google Gemini-powered chatbot that helps customers with general questions about Marcari23's proxy shopping service.
 
 ## Phase 1 Features
 
-- General Q&A about EMART and proxy shopping
+- General Q&A about Marcari23 and proxy shopping
 - Refuses to invent product information, prices, or policies
 - Timeout handling (30 seconds)
 - Request validation
@@ -41,7 +41,7 @@ POST /api/v1/ai/chat
 ### Request
 ```json
 {
-  "message": "What is EMART?"
+  "message": "What is Marcari23?"
 }
 ```
 
@@ -51,7 +51,7 @@ POST /api/v1/ai/chat
   "success": true,
   "message": "AI response generated successfully",
   "data": {
-    "message": "EMART is a global proxy shopping platform..."
+    "message": "Marcari23 is a global proxy shopping platform..."
   }
 }
 ```
@@ -95,9 +95,9 @@ curl -X POST http://localhost:5000/api/v1/ai/chat \
 
 ### System Instructions
 The AI is configured to:
-- Act as the EMART shopping assistant
+- Act as the Marcari23 shopping assistant
 - NOT invent products, prices, shipping costs, orders, or policies
-- Only answer general questions about EMART and proxy shopping
+- Only answer general questions about Marcari23 and proxy shopping
 - Direct users to appropriate channels for specific information
 
 ## Security

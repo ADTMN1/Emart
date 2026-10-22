@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🚀 Starting EMART Application..."
+echo "🚀 Starting Marcari23 Application..."
 echo ""
 
 # Check if backend is running
@@ -21,7 +21,7 @@ fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎉 EMART Application Status"
+echo "🎉 Marcari23 Application Status"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📱 Frontend:  http://localhost:5173"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Provision the EMART local storage tree on a production host.
+# Provision the Marcari23 local storage tree on a production host.
 #
 # Creates the three storage namespaces with the permissions the backend
 # expects and prints the matching Nginx configuration. It is idempotent and

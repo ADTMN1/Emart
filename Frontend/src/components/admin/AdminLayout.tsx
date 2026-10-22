@@ -120,7 +120,7 @@ export const AdminLayout: React.FC = () => {
               <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                 <span className="text-white font-bold text-sm">EM</span>
               </div>
-              <span className="font-display font-bold text-lg">EMART Admin</span>
+              <span className="font-display font-bold text-lg">Marcari23 Admin</span>
             </Link>
           )}
           {sidebarCollapsed && (

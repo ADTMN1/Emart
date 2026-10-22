@@ -1,4 +1,4 @@
-# 🎨 EMART 3D Product Showcase
+# 🎨 Marcari23 3D Product Showcase
 
 ## ✅ COMPLETED - Production Ready
 

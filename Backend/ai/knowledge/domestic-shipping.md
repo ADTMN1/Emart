@@ -2,7 +2,7 @@
 
 ## What is Domestic Shipping?
 
-Domestic shipping is the cost for the seller to ship the item from their location in Japan to our EMART warehouse in Japan. This is separate from international shipping.
+Domestic shipping is the cost for the seller to ship the item from their location in Japan to our Marcari23 warehouse in Japan. This is separate from international shipping.
 
 ## Cost Information
 
@@ -57,7 +57,7 @@ Most domestic shipments include tracking. We monitor all incoming packages and u
 
 ## Important Notes
 
-- Domestic shipping is charged by the seller, not EMART
+- Domestic shipping is charged by the seller, not Marcari23
 - We cannot control or negotiate domestic shipping prices
 - Some sellers only ship via specific carriers
 - Domestic shipping is separate from international shipping costs

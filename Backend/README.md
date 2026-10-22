@@ -1,6 +1,6 @@
-# EMART Backend API
+# Marcari23 Backend API
 
-Node.js + Express + TypeScript + PostgreSQL + Prisma backend for EMART Global Proxy Shopping platform.
+Node.js + Express + TypeScript + PostgreSQL + Prisma backend for Marcari23 Global Proxy Shopping platform.
 
 ## 🚀 Features
 

@@ -6,7 +6,7 @@ import { ValidationError } from '../utils/errors';
 import { SELLER_AGREEMENT_VERSION } from '../config/sellerAgreement';
 
 /**
- * Unit tests for the EMART Seller foundation & Agreement (Phases 5 + 8). The
+ * Unit tests for the Marcari23 Seller foundation & Agreement (Phases 5 + 8). The
  * service takes an injectable Prisma client, so every test runs fully in
  * memory — no database. Coverage:
  *  - agreement is served from the server-controlled version/text
@@ -194,11 +194,11 @@ const VALID = {
 test('getAgreement: serves the server-controlled version and text', async () => {
   const { service } = makeApp();
   const agreement = await service.getAgreement('user-1');
-  assert.equal(agreement.title, 'EMART Seller Agreement');
+  assert.equal(agreement.title, 'Marcari23 Seller Agreement');
   assert.equal(agreement.version, SELLER_AGREEMENT_VERSION);
   assert.equal(agreement.accepted, false);
   assert.equal(agreement.acceptedVersion, null);
-  assert.ok(agreement.text.includes('EMART'));
+  assert.ok(agreement.text.includes('Marcari23'));
 });
 
 test('getAgreement: reflects an existing current-version acceptance', async () => {

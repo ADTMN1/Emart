@@ -1,12 +1,12 @@
-# How EMART Works
+# How Marcari23 Works
 
-## The EMART Process - Step by Step
+## The Marcari23 Process - Step by Step
 
 ### Step 1: Find Your Item
 Browse international marketplaces like Mercari Japan, Rakuten, Yahoo! Auctions Japan, or Amazon Japan. Find the product you want to purchase.
 
 ### Step 2: Submit Purchase Request
-Copy the product URL and paste it into your EMART account. Add any special instructions or requirements. Our system will calculate estimated costs.
+Copy the product URL and paste it into your Marcari23 account. Add any special instructions or requirements. Our system will calculate estimated costs.
 
 ### Step 3: We Purchase For You
 Once you approve the quote and pay the proxy fee, our team purchases the item on your behalf using local payment methods. We handle all communication with the seller in their native language.
@@ -42,7 +42,7 @@ Reduce shipping costs by removing excess packaging, boxes, or bundling items mor
 
 ## Account Dashboard
 
-Your EMART dashboard shows:
+Your Marcari23 dashboard shows:
 - Pending purchase requests
 - Items in warehouse
 - Packages in transit

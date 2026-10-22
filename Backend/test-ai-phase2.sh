@@ -3,7 +3,7 @@
 BASE_URL="http://localhost:5000/api/v1/ai/chat"
 
 echo "=========================================="
-echo "EMART AI Phase 2 - Knowledge RAG Tests"
+echo "Marcari23 AI Phase 2 - Knowledge RAG Tests"
 echo "=========================================="
 echo ""
 
@@ -73,7 +73,7 @@ echo ""
 # Test 6: Payment Methods
 echo "Test 6: Accepted payment methods"
 echo "Expected: Should list credit cards, PayPal, etc. from knowledge base"
-RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What payment methods does EMART accept?"}')
+RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What payment methods does Marcari23 accept?"}')
 echo "Response: $(echo $RESPONSE | jq -r '.data.message' | head -c 150)..."
 check_response "$RESPONSE" "credit\|visa\|paypal\|mastercard" "Payment methods"
 if [ $? -eq 0 ]; then PASS_COUNT=$((PASS_COUNT + 1)); else FAIL_COUNT=$((FAIL_COUNT + 1)); fi
@@ -99,8 +99,8 @@ echo ""
 
 # Test 9: Company Information
 echo "Test 9: Company information"
-echo "Expected: Should provide EMART description from knowledge base"
-RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"Tell me about EMART company"}')
+echo "Expected: Should provide Marcari23 description from knowledge base"
+RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"Tell me about Marcari23 company"}')
 echo "Response: $(echo $RESPONSE | jq -r '.data.message' | head -c 150)..."
 check_response "$RESPONSE" "proxy\|shopping\|platform" "Company info"
 if [ $? -eq 0 ]; then PASS_COUNT=$((PASS_COUNT + 1)); else FAIL_COUNT=$((FAIL_COUNT + 1)); fi
@@ -109,7 +109,7 @@ echo ""
 # Test 10: Question NOT in knowledge base
 echo "Test 10: Question not covered in knowledge base"
 echo "Expected: Should say it doesn't have that information"
-RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What are the specific operating hours of EMART customer service on Tuesdays?"}')
+RESPONSE=$(curl -s -X POST "$BASE_URL" -H "Content-Type: application/json" -d '{"message":"What are the specific operating hours of Marcari23 customer service on Tuesdays?"}')
 echo "Response: $(echo $RESPONSE | jq -r '.data.message' | head -c 150)..."
 check_response "$RESPONSE" "don't have\|not have\|don't know\|specific information" "Out of scope"
 if [ $? -eq 0 ]; then PASS_COUNT=$((PASS_COUNT + 1)); else FAIL_COUNT=$((FAIL_COUNT + 1)); fi

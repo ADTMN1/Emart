@@ -1,7 +1,7 @@
-# EMART 3D Product Showcase Implementation
+# Marcari23 3D Product Showcase Implementation
 
 ## Overview
-Premium 3D floating product objects have been added to the EMART homepage hero section, showcasing Japanese shopping products with realistic materials, lighting, and animations.
+Premium 3D floating product objects have been added to the Marcari23 homepage hero section, showcasing Japanese shopping products with realistic materials, lighting, and animations.
 
 ## Features Implemented
 

@@ -315,7 +315,7 @@ export class SellerService {
   }
 
   /**
-   * GET the current EMART Seller Agreement plus the caller's acceptance
+   * GET the current Marcari23 Seller Agreement plus the caller's acceptance
    * state. The version and text are server-controlled constants — the client
    * only reads them. `accepted` is true when the stored acceptance matches
    * the current server version.
@@ -362,7 +362,7 @@ export class SellerService {
     });
     if (!acceptance || acceptance.version !== SELLER_AGREEMENT_VERSION) {
       throw new ValidationError(
-        'You must read and accept the current EMART Seller Agreement before submitting your application.',
+        'You must read and accept the current Marcari23 Seller Agreement before submitting your application.',
       );
     }
   }
