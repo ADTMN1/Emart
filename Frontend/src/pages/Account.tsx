@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import type { AccountOutletContext } from '@/components/account/AccountLayout'
+import { LoanRequestForm } from '@/components/account/LoanRequestForm'
 import {
   ChevronRight,
   User,
@@ -2077,7 +2078,7 @@ const Account: React.FC = () => {
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="font-bold text-lg">{formatETB(loan.requestedAmount)}</span>
                                   <Badge variant={statusVariant(loan.status)} size="sm" className="gap-1">
-                                    {loan.status === 'PENDING' && <Loader2 className="h-3 w-3 animate-spin" />}
+                                    {loan.status === 'PENDING' && <Clock className="h-3 w-3" />}
                                     {loan.status}
                                   </Badge>
                                 </div>
@@ -2313,126 +2314,22 @@ const Account: React.FC = () => {
 
       {/* Loan Request Modal */}
       {showLoanRequestModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => setShowLoanRequestModal(false)}
-          />
-
-          {/* Modal */}
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-xl font-bold flex items-center gap-2">
-                <Plus className="h-5 w-5 text-primary" />
-                New Loan Request
-              </h3>
-              <button
-                onClick={() => setShowLoanRequestModal(false)}
-                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitLoanRequest} className="space-y-4">
-              {/* Amount Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
-                  <DollarSign className="h-4 w-4" />
-                  Requested Amount <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
-                    $
-                  </span>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="0.01"
-                    value={loanAmount}
-                    onChange={(e) => setLoanAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="pl-8 text-lg font-semibold"
-                    required
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">Minimum amount: $1.00</p>
-              </div>
-
-              {/* Purpose Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
-                  <FileText className="h-4 w-4" />
-                  Loan Purpose <span className="text-destructive">*</span>
-                </label>
-                <textarea
-                  value={loanPurpose}
-                  onChange={(e) => setLoanPurpose(e.target.value)}
-                  placeholder="e.g. Business expansion, inventory purchase, equipment upgrade..."
-                  rows={3}
-                  required
-                  maxLength={500}
-                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-                />
-                <p className="text-xs text-muted-foreground">{loanPurpose.length}/500 characters</p>
-              </div>
-
-              {/* Repayment Period Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
-                  <CalendarDays className="h-4 w-4" />
-                  Repayment Period (months, optional)
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="120"
-                  value={repaymentPeriod}
-                  onChange={(e) => setRepaymentPeriod(e.target.value)}
-                  placeholder="e.g. 12"
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">Leave empty if not specified (1-120 months)</p>
-              </div>
-
-              {/* Info Notice */}
-              <div className="p-4 rounded-xl bg-info/10 border border-info/20 text-xs flex items-start gap-2">
-                <ShieldCheck className="h-4 w-4 text-info shrink-0 mt-0.5" />
-                <span className="text-foreground/70 leading-relaxed">
-                  Submitting a loan request does not guarantee approval. All requests are reviewed by our team.
-                  Approved requests do not automatically disburse funds; disbursement follows separate procedures.
-                </span>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowLoanRequestModal(false)
-                    setLoanAmount('')
-                    setLoanPurpose('')
-                    setRepaymentPeriod('')
-                  }}
-                  disabled={submittingLoanRequest}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  className="flex-1"
-                  type="submit"
-                  isLoading={submittingLoanRequest}
-                >
-                  <Plus className="h-4 w-4" />
-                  Submit Request
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <LoanRequestForm
+          amount={loanAmount}
+          purpose={loanPurpose}
+          repaymentPeriod={repaymentPeriod}
+          submitting={submittingLoanRequest}
+          onAmountChange={setLoanAmount}
+          onPurposeChange={setLoanPurpose}
+          onRepaymentPeriodChange={setRepaymentPeriod}
+          onSubmit={handleSubmitLoanRequest}
+          onCancel={() => {
+            setShowLoanRequestModal(false)
+            setLoanAmount('')
+            setLoanPurpose('')
+            setRepaymentPeriod('')
+          }}
+        />
       )}
 
       {/* Loan Detail Modal */}
@@ -2470,7 +2367,7 @@ const Account: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold">Repayment Period</p>
-                <p>{showLoanDetailModal.repaymentPeriod ? `${showLoanDetailModal.repaymentPeriod} months` : 'Not specified (default 6)'}</p>
+                <p>{showLoanDetailModal.repaymentPeriod ? `${showLoanDetailModal.repaymentPeriod} months` : 'Not specified'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold">Due Date</p>
