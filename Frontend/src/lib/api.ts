@@ -1200,7 +1200,7 @@ export const cjSupplierApi = {
 
 export type LoanRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
-export interface LoanRequestCustomer {
+export interface LoanRequestBase {
   id: string;
   requestedAmount: number;
   loanPurpose: string;
@@ -1219,7 +1219,41 @@ export interface LoanRequestCustomer {
   updatedAt: string;
 }
 
-export interface LoanRequestAdmin extends LoanRequestCustomer {
+export interface LoanCalculationDetails {
+  interestRate?: number;
+  interestAmount?: number;
+  totalRepaymentBeforePenalties?: number;
+  dueDate?: string | null;
+  outstandingPrincipal?: number;
+  accruedPenalty?: number;
+  overdueDays?: number;
+  isOverdue?: boolean;
+  isFullyRepaid?: boolean;
+  principalRepaid?: number;
+  interestRepaid?: number;
+  penaltyRepaid?: number;
+}
+
+// Financial fields stored in DB (optional, populated on approval)
+export interface LoanFinancialFields {
+  interestRate?: number;
+  interestAmount?: number;
+  totalRepaymentBeforePenalties?: number;
+  dueDate?: string | null;
+  outstandingPrincipal?: number;
+  accruedPenalty?: number;
+  lastPenaltyCalculatedAt?: string | null;
+  fullyRepaidAt?: string | null;
+  principalRepaid?: number;
+  interestRepaid?: number;
+  penaltyRepaid?: number;
+}
+
+export interface LoanRequestCustomer extends LoanRequestBase, LoanFinancialFields {}
+
+export interface LoanRequestCustomerWithDetails extends LoanRequestCustomer, LoanCalculationDetails {}
+
+export interface LoanRequestAdmin extends LoanRequestBase, LoanFinancialFields {
   customer: {
     id: string;
     email: string;
@@ -1235,8 +1269,21 @@ export interface LoanRequestAdmin extends LoanRequestCustomer {
   };
 }
 
+export interface LoanRequestAdminWithDetails extends LoanRequestAdmin, LoanCalculationDetails {}
+
 export interface LoanRequestListResponse {
   loanRequests: LoanRequestCustomer[] | LoanRequestAdmin[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+export interface LoanRequestListResponseWithDetails {
+  loanRequests: (LoanRequestCustomerWithDetails | LoanRequestAdminWithDetails)[];
   pagination: {
     total: number;
     page: number;
@@ -1264,6 +1311,10 @@ export interface DecideLoanRequestInput {
   decisionNote?: string;
 }
 
+export interface RecordRepaymentInput {
+  amount: number;
+}
+
 export const loanApi = {
   // Customer endpoints
   submit: (input: SubmitLoanRequestInput) =>
@@ -1275,11 +1326,14 @@ export const loanApi = {
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     const query = qs.toString();
-    return api.get<LoanRequestListResponse>(`/loans${query ? `?${query}` : ''}`);
+    return api.get<LoanRequestListResponseWithDetails>(`/loans${query ? `?${query}` : ''}`);
   },
 
   get: (id: string) =>
-    api.get<LoanRequestCustomer>(`/loans/${id}`),
+    api.get<LoanRequestCustomerWithDetails>(`/loans/${id}`),
+
+  repay: (id: string, input: RecordRepaymentInput) =>
+    api.post<LoanRequestCustomerWithDetails>(`/loans/${id}/repay`, input),
 
   // Admin endpoints
   adminStats: () =>
@@ -1295,8 +1349,11 @@ export const loanApi = {
   },
 
   adminGet: (id: string) =>
-    api.get<LoanRequestAdmin>(`/admin/loans/${id}`),
+    api.get<LoanRequestAdminWithDetails>(`/admin/loans/${id}`),
 
   adminDecide: (id: string, input: DecideLoanRequestInput) =>
-    api.post<LoanRequestAdmin>(`/admin/loans/${id}/decide`, input),
+    api.post<LoanRequestAdminWithDetails>(`/admin/loans/${id}/decide`, input),
+
+  adminCalculatePenalties: (id: string) =>
+    api.post<LoanRequestAdminWithDetails>(`/admin/loans/${id}/calculate-penalties`, {}),
 };

@@ -6,6 +6,7 @@ import {
   submitLoanRequestValidation,
   loanRequestQueryValidation,
   loanRequestIdParamValidation,
+  recordRepaymentValidation,
 } from '../middleware/validations/loan.validation';
 
 const router = Router();
@@ -43,6 +44,17 @@ router.get(
   loanRequestIdParamValidation,
   validate,
   loanRequestController.getCustomerLoanRequestById.bind(loanRequestController)
+);
+
+/**
+ * POST /loans/:id/repay - Record a repayment
+ */
+router.post(
+  '/:id/repay',
+  loanRequestIdParamValidation,
+  recordRepaymentValidation,
+  validate,
+  loanRequestController.recordRepayment.bind(loanRequestController)
 );
 
 export default router;

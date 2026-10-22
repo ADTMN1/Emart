@@ -25,14 +25,14 @@ export class LoanRequestController {
   }
 
   /**
-   * GET /loans - Customer lists their loan requests
+   * GET /loans - Customer lists their loan requests with calculated details
    */
   async getCustomerLoanRequests(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const customerId = req.user!.id;
       const { status, page, limit } = req.query;
 
-      const result = await loanRequestService.getCustomerLoanRequests(customerId, {
+      const result = await loanRequestService.getCustomerLoanRequestsWithDetails(customerId, {
         status: status as string,
         page: page ? parseInt(page as string, 10) : 1,
         limit: limit ? parseInt(limit as string, 10) : 20,
@@ -45,16 +45,34 @@ export class LoanRequestController {
   }
 
   /**
-   * GET /loans/:id - Customer gets a specific loan request
+   * GET /loans/:id - Customer gets a specific loan request with calculated details
    */
   async getCustomerLoanRequestById(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const customerId = req.user!.id;
       const { id } = req.params;
 
-      const loanRequest = await loanRequestService.getCustomerLoanRequestById(customerId, id);
+      const loanRequest = await loanRequestService.getCustomerLoanRequestWithDetails(customerId, id);
 
       sendSuccess(res, loanRequest, 'Loan request retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /loans/:id/repay - Customer makes a repayment
+   * NOTE: Records the accounting entry only; does NOT verify actual payment received.
+   */
+  async recordRepayment(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const customerId = req.user!.id;
+      const { id } = req.params;
+      const { amount } = req.body;
+
+      const updatedLoanRequest = await loanRequestService.recordRepayment(customerId, id, Number(amount));
+
+      sendSuccess(res, updatedLoanRequest, 'Repayment recorded successfully');
     } catch (error) {
       next(error);
     }
@@ -80,13 +98,13 @@ export class LoanRequestController {
   }
 
   /**
-   * GET /admin/loans/:id - Admin gets loan request details
+   * GET /admin/loans/:id - Admin gets loan request details with calculated financial details
    */
   async getAdminLoanRequestById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
 
-      const loanRequest = await loanRequestService.getAdminLoanRequestById(id);
+      const loanRequest = await loanRequestService.getAdminLoanRequestWithDetails(id);
 
       sendSuccess(res, loanRequest, 'Loan request retrieved successfully');
     } catch (error) {
@@ -109,6 +127,21 @@ export class LoanRequestController {
       });
 
       sendSuccess(res, loanRequest, `Loan request ${decision.toLowerCase()} successfully`);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /admin/loans/:id/calculate-penalties - Admin triggers penalty calculation for a loan
+   */
+  async calculatePenalties(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const loanRequest = await loanRequestService.calculateAndUpdatePenalties(id);
+
+      sendSuccess(res, loanRequest, 'Penalties calculated and updated successfully');
     } catch (error) {
       next(error);
     }

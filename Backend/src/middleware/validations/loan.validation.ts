@@ -47,3 +47,10 @@ export const loanRequestIdParamValidation = [
     .isUUID()
     .withMessage('Invalid loan request ID'),
 ];
+
+export const recordRepaymentValidation = [
+  body('amount')
+    .isFloat({ min: 0.01 })
+    .withMessage('Repayment amount must be at least $0.01')
+    .toFloat(),
+];

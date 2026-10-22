@@ -11,6 +11,9 @@ import {
   FileText,
   Eye,
   AlertTriangle,
+  Calculator,
+  AlertCircle,
+  CheckCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -18,7 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import { api, loanApi, type LoanRequestAdmin, type LoanRequestStats } from '@/lib/api';
+import { api, loanApi, type LoanRequestAdmin, type LoanRequestStats, type LoanRequestAdminWithDetails } from '@/lib/api';
 import { cn, formatCurrency } from '@/lib/utils';
 
 const statusOptions = [
@@ -48,6 +51,17 @@ interface AdminLoanRequestListResponse {
   };
 }
 
+interface AdminLoanRequestListResponseWithDetails {
+  loanRequests: LoanRequestAdminWithDetails[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
 export const AdminLoanRequests: React.FC = () => {
   const { toast } = useToast();
   const [statusFilter, setStatusFilter] = React.useState('');
@@ -56,10 +70,11 @@ export const AdminLoanRequests: React.FC = () => {
   const [stats, setStats] = React.useState<LoanRequestStats | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [selected, setSelected] = React.useState<LoanRequestAdmin | null>(null);
+  const [selected, setSelected] = React.useState<LoanRequestAdminWithDetails | null>(null);
   const [actionModal, setActionModal] = React.useState<'approve' | 'reject' | null>(null);
   const [decisionNote, setDecisionNote] = React.useState('');
   const [acting, setActing] = React.useState(false);
+  const [calculatingPenalties, setCalculatingPenalties] = React.useState<string | null>(null);
 
   const fetchLoanRequests = React.useCallback(async () => {
     try {
@@ -78,6 +93,28 @@ export const AdminLoanRequests: React.FC = () => {
     }
   }, [statusFilter, page]);
 
+  const fetchLoanDetails = React.useCallback(async (id: string) => {
+    try {
+      const res = await loanApi.adminGet(id);
+      setSelected(res);
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Failed to load details', description: err.message });
+    }
+  }, [toast]);
+
+  const handleCalculatePenalties = async (id: string) => {
+    setCalculatingPenalties(id);
+    try {
+      const res = await loanApi.adminCalculatePenalties(id);
+      setSelected(res);
+      toast({ variant: 'success', title: 'Penalties calculated', description: 'Late payment penalties have been updated.' });
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Failed to calculate penalties', description: err.message });
+    } finally {
+      setCalculatingPenalties(null);
+    }
+  };
+
   const fetchStats = React.useCallback(async () => {
     try {
       const res = await loanApi.adminStats();
@@ -92,7 +129,7 @@ export const AdminLoanRequests: React.FC = () => {
     fetchStats();
   }, [fetchLoanRequests, fetchStats]);
 
-  const openAction = (loan: LoanRequestAdmin, action: 'approve' | 'reject') => {
+  const openAction = (loan: LoanRequestAdmin | LoanRequestAdminWithDetails, action: 'approve' | 'reject') => {
     setSelected(loan);
     setDecisionNote('');
     setActionModal(action);
@@ -200,21 +237,25 @@ export const AdminLoanRequests: React.FC = () => {
             </div>
           ) : (
             <div className="overflow-auto">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[1200px] text-sm">
                 <thead className="bg-muted text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="p-4 font-semibold">Customer</th>
-                    <th className="p-4 font-semibold">Amount</th>
+                    <th className="p-4 font-semibold">Principal</th>
+                    <th className="p-4 font-semibold">Interest</th>
+                    <th className="p-4 font-semibold">Total</th>
                     <th className="p-4 font-semibold">Purpose</th>
                     <th className="p-4 font-semibold">Repayment</th>
+                    <th className="p-4 font-semibold">Due Date</th>
                     <th className="p-4 font-semibold">Status</th>
+                    <th className="p-4 font-semibold">Overdue</th>
                     <th className="p-4 font-semibold">Submitted</th>
                     <th className="p-4 font-semibold">Reviewed</th>
                     <th className="p-4 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((loan) => (
+                  {rows.map((loan: any) => (
                     <tr key={loan.id} className="border-t border-border align-middle">
                       <td className="p-4">
                         <p className="font-medium">
@@ -222,8 +263,14 @@ export const AdminLoanRequests: React.FC = () => {
                         </p>
                         <p className="text-xs text-muted-foreground truncate max-w-xs">{loan.customer.email}</p>
                       </td>
-                      <td className="p-4 font-semibold text-lg">
+                      <td className="p-4 font-semibold">
                         {formatCurrency(loan.requestedAmount, 'USD')}
+                      </td>
+                      <td className="p-4 text-info">
+                        {loan.interestAmount !== undefined ? formatCurrency(loan.interestAmount, 'USD') : '—'}
+                      </td>
+                      <td className="p-4 font-semibold">
+                        {loan.totalRepaymentBeforePenalties !== undefined ? formatCurrency(loan.totalRepaymentBeforePenalties, 'USD') : '—'}
                       </td>
                       <td className="p-4 max-w-xs truncate" title={loan.loanPurpose}>
                         {loan.loanPurpose}
@@ -231,10 +278,22 @@ export const AdminLoanRequests: React.FC = () => {
                       <td className="p-4 text-muted-foreground">
                         {loan.repaymentPeriod ? `${loan.repaymentPeriod} months` : '—'}
                       </td>
+                      <td className="p-4 text-muted-foreground">
+                        {loan.dueDate ? new Date(loan.dueDate).toLocaleDateString() : '—'}
+                      </td>
                       <td className="p-4">
                         <Badge variant={statusVariant(loan.status)} size="sm">
                           {loan.status}
                         </Badge>
+                      </td>
+                      <td className="p-4">
+                        {loan.status === 'APPROVED' && loan.overdueDays !== undefined && loan.overdueDays > 0 ? (
+                          <span className="text-destructive font-medium">{loan.overdueDays} days</span>
+                        ) : loan.status === 'APPROVED' && loan.isFullyRepaid ? (
+                          <span className="text-success font-medium">Paid</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="p-4 text-muted-foreground">
                         {new Date(loan.submittedAt).toLocaleDateString()}
@@ -244,7 +303,7 @@ export const AdminLoanRequests: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <div className="flex flex-wrap justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setSelected(loan)}>
+                          <Button size="sm" variant="outline" onClick={() => fetchLoanDetails(loan.id)}>
                             <Eye className="h-3.5 w-3.5 mr-1.5" />
                             Details
                           </Button>
@@ -259,6 +318,23 @@ export const AdminLoanRequests: React.FC = () => {
                                 Reject
                               </Button>
                             </>
+                          )}
+                          {loan.status === 'APPROVED' && !loan.isFullyRepaid && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCalculatePenalties(loan.id)}
+                              disabled={calculatingPenalties === loan.id}
+                            >
+                              {calculatingPenalties === loan.id ? (
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <Calculator className="h-3.5 w-3.5 mr-1.5" />
+                                  Calc. Penalties
+                                </>
+                              )}
+                            </Button>
                           )}
                         </div>
                       </td>
@@ -294,7 +370,7 @@ export const AdminLoanRequests: React.FC = () => {
       </Card>
 
       {/* Detail modal */}
-      <Modal isOpen={!!selected && !actionModal} onClose={() => setSelected(null)} title="Loan Request Details">
+      <Modal isOpen={!!selected && !actionModal} onClose={() => setSelected(null)} title="Loan Request Details" size="lg">
         {selected && (
           <div className="space-y-4 text-sm">
             <div className="flex items-center justify-between">
@@ -324,12 +400,28 @@ export const AdminLoanRequests: React.FC = () => {
                 <p>{new Date(selected.customer.createdAt).toLocaleDateString()}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase font-semibold">Requested Amount</p>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Principal Amount</p>
                 <p className="font-bold text-lg">{formatCurrency(selected.requestedAmount, 'USD')}</p>
               </div>
               <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Interest Rate</p>
+                <p className="font-medium text-info">{selected.interestRate ? (selected.interestRate * 100).toFixed(1) + '%' : '0.1%'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Interest Amount</p>
+                <p className="font-bold">{formatCurrency(selected.interestAmount ?? 0, 'USD')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Total Before Penalties</p>
+                <p className="font-bold text-lg">{formatCurrency(selected.totalRepaymentBeforePenalties ?? 0, 'USD')}</p>
+              </div>
+              <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold">Repayment Period</p>
-                <p>{selected.repaymentPeriod ? `${selected.repaymentPeriod} months` : 'Not specified'}</p>
+                <p>{selected.repaymentPeriod ? `${selected.repaymentPeriod} months` : 'Not specified (default 6)'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Due Date</p>
+                <p>{selected.dueDate ? new Date(selected.dueDate).toLocaleDateString() : '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground uppercase font-semibold">Submitted</p>
@@ -340,6 +432,50 @@ export const AdminLoanRequests: React.FC = () => {
                 <p>{selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleString() : '—'}</p>
               </div>
             </div>
+
+            {selected.status === 'APPROVED' && (
+              <div className="p-3 rounded-lg bg-muted/30 border border-border space-y-2">
+                <p className="text-xs text-muted-foreground uppercase font-semibold mb-2">Repayment Status</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Outstanding Principal</p>
+                    <p className="font-bold text-lg text-primary">{formatCurrency(selected.outstandingPrincipal ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Principal Repaid</p>
+                    <p className="font-bold">{formatCurrency(selected.principalRepaid ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Interest Repaid</p>
+                    <p className="font-bold">{formatCurrency(selected.interestRepaid ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Penalty Repaid</p>
+                    <p className="font-bold">{formatCurrency(selected.penaltyRepaid ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Accrued Penalty</p>
+                    <p className="font-bold text-destructive">{formatCurrency(selected.accruedPenalty ?? 0, 'USD')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Overdue Days</p>
+                    <p className="font-bold {selected.isOverdue ? 'text-destructive' : 'text-success'}">{selected.overdueDays ?? 0}</p>
+                  </div>
+                </div>
+                {selected.isFullyRepaid && (
+                  <div className="flex items-center gap-2 text-success font-medium pt-2 border-t border-border/50">
+                    <CheckCheck className="h-4 w-4" />
+                    Loan fully repaid on {selected.fullyRepaidAt ? new Date(selected.fullyRepaidAt).toLocaleDateString() : 'unknown date'}
+                  </div>
+                )}
+                {selected.isOverdue && !selected.isFullyRepaid && (
+                  <div className="flex items-center gap-2 text-destructive font-medium pt-2 border-t border-border/50">
+                    <AlertCircle className="h-4 w-4" />
+                    Loan is overdue. Penalties accrue daily at 1% of outstanding principal.
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <p className="text-xs text-muted-foreground uppercase font-semibold">Loan Purpose</p>
@@ -387,6 +523,23 @@ export const AdminLoanRequests: React.FC = () => {
                     Reject
                   </Button>
                 </>
+              )}
+              {selected.status === 'APPROVED' && !selected.isFullyRepaid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleCalculatePenalties(selected.id)}
+                  disabled={calculatingPenalties === selected.id}
+                >
+                  {calculatingPenalties === selected.id ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Calculator className="h-3.5 w-3.5 mr-1.5" />
+                      Calc. Penalties
+                    </>
+                  )}
+                </Button>
               )}
             </div>
           </div>

@@ -40,6 +40,7 @@ import {
   Upload,
   Trash2,
   ArrowLeft,
+  Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -50,7 +51,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
-import { ApiError, api, notificationApi, sellerAgreementApi, sellerApplicationApi, orderApi, supportApi, type NotificationItem, type SellerAgreement, type SupportConversationSummary, type SupportMessage, type SupportConversationPayload } from '@/lib/api'
+import { ApiError, api, notificationApi, sellerAgreementApi, sellerApplicationApi, orderApi, supportApi, loanApi, type NotificationItem, type SellerAgreement, type SupportConversationSummary, type SupportMessage, type SupportConversationPayload } from '@/lib/api'
 import { prepareIdentityDocument, type PreparedIdentityDocument } from '@/lib/identityDocument'
 import {
   notificationsChanged,
@@ -328,16 +329,19 @@ const Account: React.FC = () => {
   const [loanRequestsLoading, setLoanRequestsLoading] = React.useState(false)
   const [loanRequestsError, setLoanRequestsError] = React.useState<string | null>(null)
   const [showLoanRequestModal, setShowLoanRequestModal] = React.useState(false)
+  const [showLoanDetailModal, setShowLoanDetailModal] = React.useState<any | null>(null)
   const [loanAmount, setLoanAmount] = React.useState('')
   const [loanPurpose, setLoanPurpose] = React.useState('')
   const [repaymentPeriod, setRepaymentPeriod] = React.useState('')
   const [submittingLoanRequest, setSubmittingLoanRequest] = React.useState(false)
+  const [repayingLoanId, setRepayingLoanId] = React.useState<string | null>(null)
+  const [repayAmount, setRepayAmount] = React.useState('')
 
   const fetchLoanRequests = React.useCallback(async () => {
     try {
       setLoanRequestsLoading(true)
       setLoanRequestsError(null)
-      const res = await api.get<any>(`/loans?page=${loanRequestsPage}&limit=10`)
+      const res = await loanApi.list({ page: loanRequestsPage, limit: 10 })
       setLoanRequests(res.loanRequests || [])
       setLoanRequestsTotal(res.pagination?.total ?? 0)
       setLoanRequestsTotalPages(res.pagination?.totalPages || 1)
@@ -367,7 +371,7 @@ const Account: React.FC = () => {
 
     try {
       setSubmittingLoanRequest(true)
-      await api.post('/loans', {
+      await loanApi.submit({
         requestedAmount: amount,
         loanPurpose: loanPurpose.trim(),
         repaymentPeriod: repaymentPeriod ? parseInt(repaymentPeriod, 10) : undefined,
@@ -388,6 +392,41 @@ const Account: React.FC = () => {
       setSubmittingLoanRequest(false)
     }
   }
+
+  const handleViewLoanDetails = async (loan: any) => {
+    try {
+      const detail = await loanApi.get(loan.id)
+      setShowLoanDetailModal(detail)
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Failed to load details', description: err.message })
+    }
+  }
+
+  const handleRepayLoan = async (loan: any) => {
+    setRepayingLoanId(loan.id)
+    setRepayAmount('')
+  }
+
+  const handleSubmitRepayment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!repayingLoanId) return
+    const amount = parseFloat(repayAmount)
+    if (isNaN(amount) || amount <= 0) {
+      toast({ variant: 'error', title: 'Invalid Amount', description: 'Please enter a valid repayment amount' })
+      return
+    }
+    try {
+      await loanApi.repay(repayingLoanId, { amount })
+      toast({ variant: 'success', title: 'Repayment Recorded', description: 'Your repayment has been processed.' })
+      setRepayingLoanId(null)
+      setRepayAmount('')
+      await fetchLoanRequests()
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Repayment Failed', description: err.message || 'Unable to process repayment.' })
+    }
+  }
+
+  const formatETB = (amount: number) => formatCurrency(amount, 'ETB')
 
   // Open the hidden native file input from a type="button" trigger. File inputs
   // cannot be programmatically re-filled, so selection is validated into React
@@ -2036,29 +2075,70 @@ const Account: React.FC = () => {
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-bold text-lg">{formatCurrency(loan.requestedAmount, 'USD')}</span>
+                                  <span className="font-bold text-lg">{formatETB(loan.requestedAmount)}</span>
                                   <Badge variant={statusVariant(loan.status)} size="sm" className="gap-1">
                                     {loan.status === 'PENDING' && <Loader2 className="h-3 w-3 animate-spin" />}
                                     {loan.status}
                                   </Badge>
                                 </div>
                                 <p className="text-sm text-muted-foreground truncate max-w-xs">{loan.loanPurpose}</p>
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground mt-1">
                                   <span>Submitted: {new Date(loan.submittedAt).toLocaleDateString()}</span>
-                                  {loan.repaymentPeriod && <span>Repayment: {loan.repaymentPeriod} months</span>}
+                                  {loan.repaymentPeriod && <span>Term: {loan.repaymentPeriod} months</span>}
+                                  {loan.dueDate && <span>Due: {new Date(loan.dueDate).toLocaleDateString()}</span>}
                                   {loan.reviewedAt && <span>Reviewed: {new Date(loan.reviewedAt).toLocaleDateString()}</span>}
+                                  {loan.status === 'APPROVED' && loan.overdueDays !== undefined && loan.overdueDays > 0 && (
+                                    <span className="text-destructive font-medium">Overdue: {loan.overdueDays} days</span>
+                                  )}
                                 </div>
+                                {loan.status === 'APPROVED' && (
+                                  <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+                                    <span className="font-medium">Principal: {formatETB(loan.requestedAmount)}</span>
+                                    {loan.interestAmount !== undefined && (
+                                      <span className="font-medium text-info">Interest (0.1%): {formatETB(loan.interestAmount)}</span>
+                                    )}
+                                    {loan.totalRepaymentBeforePenalties !== undefined && (
+                                      <span className="font-bold">Total: {formatETB(loan.totalRepaymentBeforePenalties)}</span>
+                                    )}
+                                    {loan.accruedPenalty !== undefined && loan.accruedPenalty > 0 && (
+                                      <span className="font-medium text-destructive">Penalty: {formatETB(loan.accruedPenalty)}</span>
+                                    )}
+                                    {loan.outstandingPrincipal !== undefined && (
+                                      <span className="font-bold text-lg text-primary">Outstanding: {formatETB(loan.outstandingPrincipal)}</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
-                            {loan.status === 'PENDING' && (
-                              <span className="text-xs text-amber-600 font-medium">Under Review</span>
-                            )}
-                            {loan.status === 'APPROVED' && (
-                              <span className="text-xs text-green-600 font-medium">Approved</span>
-                            )}
-                            {loan.status === 'REJECTED' && (
-                              <span className="text-xs text-red-600 font-medium">Rejected</span>
-                            )}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {loan.status === 'PENDING' && (
+                                <span className="text-xs text-amber-600 font-medium">Under Review</span>
+                              )}
+                              {loan.status === 'APPROVED' && (
+                                <span className="text-xs text-green-600 font-medium">Approved</span>
+                              )}
+                              {loan.status === 'REJECTED' && (
+                                <span className="text-xs text-red-600 font-medium">Rejected</span>
+                              )}
+                              {loan.status === 'APPROVED' && !loan.isFullyRepaid && (
+                                <Button size="sm" variant="outline" onClick={() => handleViewLoanDetails(loan)}>
+                                  <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                  Details
+                                </Button>
+                              )}
+                              {loan.status === 'APPROVED' && !loan.isFullyRepaid && (
+                                <Button size="sm" onClick={() => handleRepayLoan(loan)}>
+                                  <ArrowDownLeft className="h-3.5 w-3.5 mr-1.5" />
+                                  Repay
+                                </Button>
+                              )}
+                              {loan.isFullyRepaid && (
+                                <Badge variant="success" size="sm">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Fully Repaid
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           {(loan.decisionNote || loan.reviewedByAdmin) && (
                             <div className="mt-4 pt-4 border-t border-border/50 text-sm text-muted-foreground">
@@ -2353,6 +2433,183 @@ const Account: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Loan Detail Modal */}
+      {showLoanDetailModal && (
+        <Modal
+          isOpen={!!showLoanDetailModal}
+          onClose={() => setShowLoanDetailModal(null)}
+          title="Loan Details"
+          size="lg"
+        >
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-lg font-bold">Loan Request #{showLoanDetailModal.id.slice(0, 8)}</h3>
+              <Badge variant={statusVariant(showLoanDetailModal.status)} size="sm">
+                {showLoanDetailModal.status}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Principal Amount</p>
+                <p className="font-bold text-lg">{formatETB(showLoanDetailModal.requestedAmount)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Interest Rate</p>
+                <p className="font-medium text-info">{showLoanDetailModal.interestRate ? (showLoanDetailModal.interestRate * 100).toFixed(1) + '%' : '0.1%'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Interest Amount</p>
+                <p className="font-bold">{formatETB(showLoanDetailModal.interestAmount ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Total Before Penalties</p>
+                <p className="font-bold text-lg">{formatETB(showLoanDetailModal.totalRepaymentBeforePenalties ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Repayment Period</p>
+                <p>{showLoanDetailModal.repaymentPeriod ? `${showLoanDetailModal.repaymentPeriod} months` : 'Not specified (default 6)'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Due Date</p>
+                <p>{showLoanDetailModal.dueDate ? new Date(showLoanDetailModal.dueDate).toLocaleDateString() : '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Submitted</p>
+                <p>{new Date(showLoanDetailModal.submittedAt).toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase font-semibold">Reviewed</p>
+                <p>{showLoanDetailModal.reviewedAt ? new Date(showLoanDetailModal.reviewedAt).toLocaleString() : '—'}</p>
+              </div>
+            </div>
+
+            {showLoanDetailModal.status === 'APPROVED' && (
+              <div className="p-3 rounded-lg bg-muted/30 border border-border space-y-2">
+                <p className="text-xs text-muted-foreground uppercase font-semibold mb-2">Repayment Status</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Outstanding Principal</p>
+                    <p className="font-bold text-lg text-primary">{formatETB(showLoanDetailModal.outstandingPrincipal ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Principal Repaid</p>
+                    <p className="font-bold">{formatETB(showLoanDetailModal.principalRepaid ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Interest Repaid</p>
+                    <p className="font-bold">{formatETB(showLoanDetailModal.interestRepaid ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Penalty Repaid</p>
+                    <p className="font-bold">{formatETB(showLoanDetailModal.penaltyRepaid ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Accrued Penalty</p>
+                    <p className="font-bold text-destructive">{formatETB(showLoanDetailModal.accruedPenalty ?? 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Overdue Days</p>
+                    <p className="font-bold {showLoanDetailModal.isOverdue ? 'text-destructive' : 'text-success'}">{showLoanDetailModal.overdueDays ?? 0}</p>
+                  </div>
+                </div>
+                {showLoanDetailModal.isFullyRepaid && (
+                  <div className="flex items-center gap-2 text-success font-medium pt-2 border-t border-border/50">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Loan fully repaid on {showLoanDetailModal.fullyRepaidAt ? new Date(showLoanDetailModal.fullyRepaidAt).toLocaleDateString() : 'unknown date'}
+                  </div>
+                )}
+                {showLoanDetailModal.isOverdue && !showLoanDetailModal.isFullyRepaid && (
+                  <div className="flex items-center gap-2 text-destructive font-medium pt-2 border-t border-border/50">
+                    <AlertCircle className="h-4 w-4" />
+                    Loan is overdue. Penalties accrue daily at 1% of outstanding principal.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div>
+              <p className="text-xs text-muted-foreground uppercase font-semibold">Loan Purpose</p>
+              <p className="whitespace-pre-wrap">{showLoanDetailModal.loanPurpose}</p>
+            </div>
+
+            {showLoanDetailModal.decisionNote && (
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Decision Note</p>
+                <p>{showLoanDetailModal.decisionNote}</p>
+              </div>
+            )}
+
+            {showLoanDetailModal.reviewedByAdmin && (
+              <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                <p className="text-xs text-muted-foreground uppercase font-semibold mb-1">Reviewed By</p>
+                <p>
+                  {[showLoanDetailModal.reviewedByAdmin.firstName, showLoanDetailModal.reviewedByAdmin.lastName].filter(Boolean).join(' ') || showLoanDetailModal.reviewedByAdmin.email}
+                </p>
+                <p className="text-xs text-muted-foreground">{showLoanDetailModal.reviewedByAdmin.email}</p>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Repayment Modal */}
+      {repayingLoanId && (
+        <Modal
+          isOpen={!!repayingLoanId}
+          onClose={() => { setRepayingLoanId(null); setRepayAmount(''); }}
+          title="Make Repayment"
+          size="md"
+        >
+          <form onSubmit={handleSubmitRepayment} className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Enter the amount you wish to repay. Payments are applied in order: penalties first, then interest, then principal.
+            </p>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
+                <DollarSign className="h-4 w-4" />
+                Repayment Amount (ETB)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+                  ETB
+                </span>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={repayAmount}
+                  onChange={(e) => setRepayAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="pl-8 text-lg font-semibold"
+                  required
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Minimum repayment: ETB 0.01</p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setRepayingLoanId(null); setRepayAmount(''); }}
+                disabled={repayAmount === ''}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                className="flex-1"
+                type="submit"
+                isLoading={repayAmount === ''}
+              >
+                <ArrowDownLeft className="h-4 w-4" />
+                Submit Repayment
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

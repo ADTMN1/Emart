@@ -53,4 +53,14 @@ router.post(
   loanRequestController.decideLoanRequest.bind(loanRequestController)
 );
 
+/**
+ * POST /admin/loans/:id/calculate-penalties - Calculate and update penalties for a loan
+ */
+router.post(
+  '/:id/calculate-penalties',
+  loanRequestIdParamValidation,
+  validate,
+  loanRequestController.calculatePenalties.bind(loanRequestController)
+);
+
 export default router;

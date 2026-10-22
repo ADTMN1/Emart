@@ -775,23 +775,37 @@ enum LoanRequestStatus {
 }
 
 model LoanRequest {
-  id                 String             @id @default(uuid())
-  customerId         String
-  requestedAmount    Float
-  loanPurpose        String
-  repaymentPeriod    Int?
-  status             LoanRequestStatus  @default(PENDING)
-  submittedAt        DateTime           @default(now())
-  reviewedAt         DateTime?
-  reviewedByAdminId  String?
-  decisionNote       String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  customer           User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  reviewedByAdmin    User?              @relation("LoanRequestReviewedBy", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  id                          String             @id @default(uuid())
+  customerId                  String
+  requestedAmount             Float
+  loanPurpose                 String
+  repaymentPeriod             Int?
+  status                      LoanRequestStatus  @default(PENDING)
+  submittedAt                 DateTime           @default(now())
+  reviewedAt                  DateTime?
+  reviewedByAdminId           String?
+  decisionNote                String?
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+
+  interestRate                Float              @default(0.001)
+  interestAmount              Float              @default(0)
+  totalRepaymentBeforePenalties Float            @default(0)
+  dueDate                     DateTime?
+  outstandingPrincipal        Float              @default(0)
+  accruedPenalty              Float              @default(0)
+  lastPenaltyCalculatedAt     DateTime?
+  fullyRepaidAt               DateTime?
+  principalRepaid             Float              @default(0)
+  interestRepaid              Float              @default(0)
+  penaltyRepaid               Float              @default(0)
+
+  customer                    User               @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reviewedByAdmin             User?              @relation("LoanRequestReviewedBy", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
 
   @@index([customerId])
   @@index([status])
   @@index([submittedAt])
+  @@index([dueDate])
   @@map("loan_requests")
 }
