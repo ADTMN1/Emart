@@ -1193,3 +1193,110 @@ export const cjSupplierApi = {
       level: number;
     }>>('/admin/suppliers/cj/categories'),
 };
+
+// -------------------------------------------------------------------
+// Loan Request API (Customer + Admin)
+// -------------------------------------------------------------------
+
+export type LoanRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface LoanRequestCustomer {
+  id: string;
+  requestedAmount: number;
+  loanPurpose: string;
+  repaymentPeriod: number | null;
+  status: LoanRequestStatus;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewedByAdmin: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  } | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoanRequestAdmin extends LoanRequestCustomer {
+  customer: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phone: string | null;
+    createdAt: string;
+    wallet: {
+      balance: number;
+      currency: string;
+      isActive: boolean;
+    } | null;
+  };
+}
+
+export interface LoanRequestListResponse {
+  loanRequests: LoanRequestCustomer[] | LoanRequestAdmin[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+export interface LoanRequestStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+}
+
+export interface SubmitLoanRequestInput {
+  requestedAmount: number;
+  loanPurpose: string;
+  repaymentPeriod?: number;
+}
+
+export interface DecideLoanRequestInput {
+  decision: 'APPROVED' | 'REJECTED';
+  decisionNote?: string;
+}
+
+export const loanApi = {
+  // Customer endpoints
+  submit: (input: SubmitLoanRequestInput) =>
+    api.post<LoanRequestCustomer>('/loans', input),
+
+  list: (params?: { status?: LoanRequestStatus; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return api.get<LoanRequestListResponse>(`/loans${query ? `?${query}` : ''}`);
+  },
+
+  get: (id: string) =>
+    api.get<LoanRequestCustomer>(`/loans/${id}`),
+
+  // Admin endpoints
+  adminStats: () =>
+    api.get<LoanRequestStats>('/admin/loans/stats'),
+
+  adminList: (params?: { status?: LoanRequestStatus; page?: number; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set('status', params.status);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString();
+    return api.get<LoanRequestListResponse>(`/admin/loans${query ? `?${query}` : ''}`);
+  },
+
+  adminGet: (id: string) =>
+    api.get<LoanRequestAdmin>(`/admin/loans/${id}`),
+
+  adminDecide: (id: string, input: DecideLoanRequestInput) =>
+    api.post<LoanRequestAdmin>(`/admin/loans/${id}/decide`, input),
+};

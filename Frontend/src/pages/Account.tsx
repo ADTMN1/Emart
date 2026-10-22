@@ -90,6 +90,15 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+const statusVariant = (status: string): 'warning' | 'success' | 'destructive' | 'default' => {
+  const map: Record<string, any> = {
+    PENDING: 'warning',
+    APPROVED: 'success',
+    REJECTED: 'destructive',
+  };
+  return map[status] || 'default';
+};
+
 const Account: React.FC = () => {
   const { user, updateProfile } = useAuth()
   const { toast } = useToast()
@@ -170,7 +179,9 @@ const Account: React.FC = () => {
                 ? 'usdc-policy'
                 : accountPath.startsWith('/account/support')
                   ? 'support'
-                  : 'overview'
+                  : accountPath.startsWith('/account/loans')
+                    ? 'loans'
+                    : 'overview'
 
   const fetchWallet = React.useCallback(async () => {
     try {
@@ -308,6 +319,75 @@ const Account: React.FC = () => {
     }, 5000)
     return () => clearInterval(interval)
   }, [activeSupportConversation])
+
+  // Loan Requests tab
+  const [loanRequests, setLoanRequests] = React.useState<any[]>([])
+  const [loanRequestsPage, setLoanRequestsPage] = React.useState(1)
+  const [loanRequestsTotalPages, setLoanRequestsTotalPages] = React.useState(1)
+  const [loanRequestsTotal, setLoanRequestsTotal] = React.useState(0)
+  const [loanRequestsLoading, setLoanRequestsLoading] = React.useState(false)
+  const [loanRequestsError, setLoanRequestsError] = React.useState<string | null>(null)
+  const [showLoanRequestModal, setShowLoanRequestModal] = React.useState(false)
+  const [loanAmount, setLoanAmount] = React.useState('')
+  const [loanPurpose, setLoanPurpose] = React.useState('')
+  const [repaymentPeriod, setRepaymentPeriod] = React.useState('')
+  const [submittingLoanRequest, setSubmittingLoanRequest] = React.useState(false)
+
+  const fetchLoanRequests = React.useCallback(async () => {
+    try {
+      setLoanRequestsLoading(true)
+      setLoanRequestsError(null)
+      const res = await api.get<any>(`/loans?page=${loanRequestsPage}&limit=10`)
+      setLoanRequests(res.loanRequests || [])
+      setLoanRequestsTotal(res.pagination?.total ?? 0)
+      setLoanRequestsTotalPages(res.pagination?.totalPages || 1)
+    } catch (err: any) {
+      setLoanRequestsError(err.message || 'Failed to load loan requests')
+    } finally {
+      setLoanRequestsLoading(false)
+    }
+  }, [loanRequestsPage])
+
+  React.useEffect(() => {
+    if (tab !== 'loans') return
+    fetchLoanRequests()
+  }, [tab, fetchLoanRequests])
+
+  const handleSubmitLoanRequest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const amount = parseFloat(loanAmount)
+    if (isNaN(amount) || amount < 1) {
+      toast({ variant: 'error', title: 'Invalid Amount', description: 'Please enter a valid amount (minimum $1)' })
+      return
+    }
+    if (!loanPurpose.trim()) {
+      toast({ variant: 'error', title: 'Missing Purpose', description: 'Please provide a loan purpose' })
+      return
+    }
+
+    try {
+      setSubmittingLoanRequest(true)
+      await api.post('/loans', {
+        requestedAmount: amount,
+        loanPurpose: loanPurpose.trim(),
+        repaymentPeriod: repaymentPeriod ? parseInt(repaymentPeriod, 10) : undefined,
+      })
+      toast({
+        variant: 'success',
+        title: 'Loan Request Submitted',
+        description: 'Your loan request has been submitted and is pending review.',
+      })
+      setShowLoanRequestModal(false)
+      setLoanAmount('')
+      setLoanPurpose('')
+      setRepaymentPeriod('')
+      await fetchLoanRequests()
+    } catch (err: any) {
+      toast({ variant: 'error', title: 'Submission Failed', description: err.message || 'Unable to submit loan request.' })
+    } finally {
+      setSubmittingLoanRequest(false)
+    }
+  }
 
   // Open the hidden native file input from a type="button" trigger. File inputs
   // cannot be programmatically re-filled, so selection is validated into React
@@ -1899,6 +1979,121 @@ const Account: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Loan Requests */}
+          {tab === 'loans' && (
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <h2 className="font-display text-xl font-bold flex items-center gap-2">
+                    <CreditCard className="h-6 w-6 text-primary" />
+                    Loan Requests
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">Submit and track your loan requests.</p>
+                </div>
+                <Button onClick={() => setShowLoanRequestModal(true)} disabled={submittingLoanRequest}>
+                  <Plus className="h-4 w-4" />
+                  New Request
+                </Button>
+              </div>
+
+              {loanRequestsError && (
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-sm text-destructive">{loanRequestsError}</p>
+                    <Button variant="outline" size="sm" onClick={fetchLoanRequests} className="mt-2">
+                      Retry
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Loan Requests List */}
+              <Card>
+                <CardContent className="p-0">
+                  {loanRequestsLoading && loanRequests.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+                      <p className="mt-4 text-sm text-muted-foreground">Loading loan requests...</p>
+                    </div>
+                  ) : loanRequests.length === 0 ? (
+                    <div className="p-10 text-center">
+                      <CreditCard className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                      <p className="mt-3 font-semibold">No loan requests yet</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Submit your first loan request using the button above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {loanRequests.map((loan: any) => (
+                        <div key={loan.id} className="p-5 hover:bg-muted/30 transition-colors">
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                                <CreditCard className="h-5 w-5 text-primary" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-lg">{formatCurrency(loan.requestedAmount, 'USD')}</span>
+                                  <Badge variant={statusVariant(loan.status)} size="sm" className="gap-1">
+                                    {loan.status === 'PENDING' && <Loader2 className="h-3 w-3 animate-spin" />}
+                                    {loan.status}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground truncate max-w-xs">{loan.loanPurpose}</p>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                                  <span>Submitted: {new Date(loan.submittedAt).toLocaleDateString()}</span>
+                                  {loan.repaymentPeriod && <span>Repayment: {loan.repaymentPeriod} months</span>}
+                                  {loan.reviewedAt && <span>Reviewed: {new Date(loan.reviewedAt).toLocaleDateString()}</span>}
+                                </div>
+                              </div>
+                            </div>
+                            {loan.status === 'PENDING' && (
+                              <span className="text-xs text-amber-600 font-medium">Under Review</span>
+                            )}
+                            {loan.status === 'APPROVED' && (
+                              <span className="text-xs text-green-600 font-medium">Approved</span>
+                            )}
+                            {loan.status === 'REJECTED' && (
+                              <span className="text-xs text-red-600 font-medium">Rejected</span>
+                            )}
+                          </div>
+                          {(loan.decisionNote || loan.reviewedByAdmin) && (
+                            <div className="mt-4 pt-4 border-t border-border/50 text-sm text-muted-foreground">
+                              {loan.decisionNote && <p><span className="font-medium">Decision Note:</span> {loan.decisionNote}</p>}
+                              {loan.reviewedByAdmin && (
+                                <p><span className="font-medium">Reviewed by:</span> {[loan.reviewedByAdmin.firstName, loan.reviewedByAdmin.lastName].filter(Boolean).join(' ') || loan.reviewedByAdmin.email}</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {loanRequestsTotalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-border p-3">
+                      <span className="text-sm text-muted-foreground">
+                        Page {loanRequestsPage} of {loanRequestsTotalPages} ({loanRequestsTotal} total)
+                      </span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" disabled={loanRequestsPage <= 1} onClick={() => setLoanRequestsPage(p => p - 1)}>
+                          Previous
+                        </Button>
+                        <Button size="sm" variant="outline" disabled={loanRequestsPage >= loanRequestsTotalPages} onClick={() => setLoanRequestsPage(p => p + 1)}>
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
       {/* Seller Agreement Modal — the Agree button appears only after the
           full agreement has been read (scrolled to the end). */}
       <Modal
@@ -2032,6 +2227,130 @@ const Account: React.FC = () => {
                 Add Funds
               </Button>
             </div>
+          </div>
+</div>
+       )}
+
+      {/* Loan Request Modal */}
+      {showLoanRequestModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowLoanRequestModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-xl font-bold flex items-center gap-2">
+                <Plus className="h-5 w-5 text-primary" />
+                New Loan Request
+              </h3>
+              <button
+                onClick={() => setShowLoanRequestModal(false)}
+                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitLoanRequest} className="space-y-4">
+              {/* Amount Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  Requested Amount <span className="text-destructive">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+                    $
+                  </span>
+                  <Input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={loanAmount}
+                    onChange={(e) => setLoanAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="pl-8 text-lg font-semibold"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Minimum amount: $1.00</p>
+              </div>
+
+              {/* Purpose Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
+                  <FileText className="h-4 w-4" />
+                  Loan Purpose <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  value={loanPurpose}
+                  onChange={(e) => setLoanPurpose(e.target.value)}
+                  placeholder="e.g. Business expansion, inventory purchase, equipment upgrade..."
+                  rows={3}
+                  required
+                  maxLength={500}
+                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                />
+                <p className="text-xs text-muted-foreground">{loanPurpose.length}/500 characters</p>
+              </div>
+
+              {/* Repayment Period Input */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-muted-foreground flex items-center gap-1">
+                  <CalendarDays className="h-4 w-4" />
+                  Repayment Period (months, optional)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={repaymentPeriod}
+                  onChange={(e) => setRepaymentPeriod(e.target.value)}
+                  placeholder="e.g. 12"
+                  className="w-full"
+                />
+                <p className="text-xs text-muted-foreground">Leave empty if not specified (1-120 months)</p>
+              </div>
+
+              {/* Info Notice */}
+              <div className="p-4 rounded-xl bg-info/10 border border-info/20 text-xs flex items-start gap-2">
+                <ShieldCheck className="h-4 w-4 text-info shrink-0 mt-0.5" />
+                <span className="text-foreground/70 leading-relaxed">
+                  Submitting a loan request does not guarantee approval. All requests are reviewed by our team.
+                  Approved requests do not automatically disburse funds; disbursement follows separate procedures.
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowLoanRequestModal(false)
+                    setLoanAmount('')
+                    setLoanPurpose('')
+                    setRepaymentPeriod('')
+                  }}
+                  disabled={submittingLoanRequest}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  type="submit"
+                  isLoading={submittingLoanRequest}
+                >
+                  <Plus className="h-4 w-4" />
+                  Submit Request
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -58,6 +58,7 @@ const AdminSellerApplications = lazy(() => import('./pages/admin/SellerApplicati
 const AdminOrderMessages = lazy(() => import('./pages/admin/OrderMessages').then((module) => ({ default: module.AdminOrderMessages })))
 const AdminNotifications = lazy(() => import('./pages/admin/Notifications').then((module) => ({ default: module.AdminNotifications })))
 const AdminSupport = lazy(() => import('./pages/admin/Support').then((module) => ({ default: module.AdminSupport })))
+const AdminLoanRequests = lazy(() => import('./pages/admin/LoanRequests').then((module) => ({ default: module.AdminLoanRequests })))
 const SupplierCatalog = lazy(() => import('./pages/admin/SupplierCatalog').then((module) => ({ default: module.SupplierCatalog })))
 const SellerMessages = lazy(() => import('./pages/seller/SellerMessages').then((module) => ({ default: module.SellerMessages })))
 const SellerMessageThread = lazy(() => import('./pages/seller/SellerMessageThread').then((module) => ({ default: module.SellerMessageThread })))
@@ -92,6 +93,7 @@ function App() {
             <Route path="notifications" element={<Account />} />
             <Route path="usdc-policy" element={<Account />} />
             <Route path="support" element={<Account />} />
+            <Route path="loans" element={<Account />} />
           </Route>
           {/* Buyer orders + shipping share the account shell, so they use the
               Outlet form of the guard. */}
@@ -150,6 +152,7 @@ function App() {
               <Route path="notifications" element={<AdminNotifications />} />
           <Route path="reports" element={<AdminReports />} />
           <Route path="sellers" element={<AdminSellerApplications />} />
+          <Route path="loans" element={<AdminLoanRequests />} />
           <Route path="warehouse" element={<AdminWarehouse />} />
           <Route path="shipping" element={<AdminShipping />} />
           <Route path="customers" element={<AdminCustomers />} />

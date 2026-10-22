@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import {
   Bell,
   ChevronRight,
+  CreditCard,
   FileText,
   Gift,
   Headphones,
@@ -65,6 +66,13 @@ const navItems: NavItem[] = [
     icon: Bell,
     path: '/account/notifications',
     match: (p) => p.startsWith('/account/notifications'),
+  },
+  {
+    key: 'loans',
+    label: 'Loan Requests',
+    icon: CreditCard,
+    path: '/account/loans',
+    match: (p) => p.startsWith('/account/loans'),
   },
   {
     key: 'seller',
@@ -175,7 +183,7 @@ export const AccountLayout: React.FC = () => {
 
   const sellerActive = sellerApp?.status === 'APPROVED' || sellerApp?.status === 'SUSPENDED'
 
-  const crumbs = React.useMemo(() => {
+const crumbs = React.useMemo(() => {
     const acc: Array<{ label: string; to?: string }> = [{ label: 'My Account' }]
     if (path === '/account') return acc
     if (path.startsWith('/account/overview')) acc.push({ label: 'Overview' })
@@ -183,8 +191,9 @@ export const AccountLayout: React.FC = () => {
     else if (path.startsWith('/account/addresses')) acc.push({ label: 'Addresses' })
     else if (path.startsWith('/account/payments')) acc.push({ label: 'Payment Methods' })
     else if (path.startsWith('/account/notifications')) acc.push({ label: 'Notifications' })
-    else if (path.startsWith('/account/usdc-policy')) acc.push({ label: 'USDC Policy' })
+    else if (path.startsWith('/account/loans')) acc.push({ label: 'Loan Requests' })
     else if (path.startsWith('/account/seller')) acc.push({ label: sellerActive ? 'Seller Center' : 'Seller' })
+    else if (path.startsWith('/account/usdc-policy')) acc.push({ label: 'USDC Policy' })
     else if (path.startsWith('/account/support')) acc.push({ label: 'Support & FAQ' })
     else if (path.startsWith('/orders')) {
       acc.push({ label: 'My Orders', to: '/orders' })

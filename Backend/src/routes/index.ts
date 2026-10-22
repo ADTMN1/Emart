@@ -14,6 +14,8 @@ import sellerDocumentRoutes from './seller-document.routes';
 import notificationRoutes from './notification.routes';
 import supportMessageRoutes from './supportMessage.routes';
 import cjSupplierRoutes from './cj-supplier.routes';
+import loanRoutes from './loan.routes';
+import adminLoanRoutes from './admin-loan.routes';
 
 const router = Router();
 
@@ -33,6 +35,8 @@ router.use('/seller-documents', sellerDocumentRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/support', supportMessageRoutes);
 router.use('/admin/suppliers/cj', cjSupplierRoutes);
+router.use('/loans', loanRoutes);
+router.use('/admin/loans', adminLoanRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
